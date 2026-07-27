@@ -1,0 +1,106 @@
+# ---------------------------------------------------------------------------
+# AI-System environment and secrets
+# ---------------------------------------------------------------------------
+AI-System/.env
+AI-System/.env.*
+!AI-System/.env.example
+
+# ---------------------------------------------------------------------------
+# Python virtual environments
+# ---------------------------------------------------------------------------
+AI-System/.venv/
+AI-System/venv/
+AI-System/env/
+AI-System/ENV/
+
+# ---------------------------------------------------------------------------
+# Python cache and bytecode
+# ---------------------------------------------------------------------------
+__pycache__/
+*.py[cod]
+*$py.class
+*.pyo
+*.pyd
+
+# ---------------------------------------------------------------------------
+# Python package/build outputs
+# ---------------------------------------------------------------------------
+AI-System/build/
+AI-System/dist/
+AI-System/*.egg-info/
+AI-System/.eggs/
+AI-System/*.egg
+
+# ---------------------------------------------------------------------------
+# Python test, lint, and type-check caches
+# ---------------------------------------------------------------------------
+AI-System/.pytest_cache/
+AI-System/.mypy_cache/
+AI-System/.ruff_cache/
+AI-System/.pyre/
+AI-System/.tox/
+AI-System/.nox/
+AI-System/.coverage
+AI-System/.coverage.*
+AI-System/htmlcov/
+
+# ---------------------------------------------------------------------------
+# Jupyter notebooks cache
+# ---------------------------------------------------------------------------
+AI-System/.ipynb_checkpoints/
+
+# ---------------------------------------------------------------------------
+# AI logs, temporary files, and generated outputs
+# ---------------------------------------------------------------------------
+AI-System/logs/
+AI-System/tmp/
+AI-System/temp/
+AI-System/cache/
+AI-System/output/
+AI-System/outputs/
+AI-System/generated/
+AI-System/artifacts/
+
+# ---------------------------------------------------------------------------
+# LangChain / LangSmith local files
+# ---------------------------------------------------------------------------
+AI-System/.langchain/
+AI-System/.langsmith/
+
+# ---------------------------------------------------------------------------
+# Vector databases, embeddings, and model artifacts
+# ---------------------------------------------------------------------------
+AI-System/chroma/
+AI-System/chroma_db/
+AI-System/faiss_index/
+AI-System/vectorstore/
+AI-System/vectorstores/
+AI-System/embeddings/
+AI-System/models/
+AI-System/model_cache/
+
+# ---------------------------------------------------------------------------
+# Local AI databases
+# ---------------------------------------------------------------------------
+AI-System/*.db
+AI-System/*.sqlite
+AI-System/*.sqlite3
+
+# ---------------------------------------------------------------------------
+# AI data files
+# ---------------------------------------------------------------------------
+AI-System/data/raw/
+AI-System/data/processed/
+AI-System/data/cache/
+
+# Optional: ignore large data files anywhere
+*.csv
+*.tsv
+*.parquet
+*.pkl
+*.pickle
+
+# Keep sample data if you use it
+!AI-System/data/sample/
+!AI-System/data/sample/**
+!AI-System/data/.gitkeep
