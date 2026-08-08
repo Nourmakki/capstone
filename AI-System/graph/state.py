@@ -1,40 +1,71 @@
-from typing import TypedDict, Any, Optional, Dict, List
+from typing import TypedDict, Any, Optional, Dict, Literal
+
 class RoadmapNode(TypedDict):
     id: int
     title: str
     description: Optional[str]
 
-# class RoadmapEdge(TypedDict):
-#     from_node_id: int
-#     to_node_id: int
+class RoadmapEdge(TypedDict):
+    from_node_id: int
+    to_node_id: int
 
 class TechTrend(TypedDict):
+    # Assigned by the workflow
+    trend_id: str
+
     title: str
     description: str
-    reason: str
     confidence_score: float
+    sources: list[Dict[str, Any]]
 
-# class NodeSuggestion(TypedDict):
-#     title: str
-#     description: str
-#     difficulty: str
-#     based_on_trend: str
-#     reason: str
+class NodeSuggestion(TypedDict):
+    # Assigned by the workflow
+    suggestion_id: str
 
-# class PlacementSuggestion(TypedDict):
-#     suggested_node_title: str
+    title: str
+    description: str
+    difficulty: str
+    based_on_trend: str
 
-#     # Existing nodes that should come before the new node
-#     prerequisite_node_ids: list[int]
+class PlacementSuggestion(TypedDict):
+    suggested_node_id: int
+    suggested_node_title: str
+    direct_prerequisite_node_ids: list[int]
+    direct_successor_node_ids: list[int]
+    recommended_predecessor_node_ids: list[int]
+    explanation: str
 
-#     # Existing nodes that should come after the new node
-#     successor_node_ids: list[int]
+class ExistingEdgeRemoval(TypedDict):
+    from_node_id: int
+    to_node_id: int
 
-#     explanation: str
+
+
+WorkflowStatus = Literal[
+    "starting",
+    "running_trend_agent",
+    "awaiting_trend_review",
+    "running_node_agent",
+    "awaiting_node_review",
+    "running_placement_agent",
+    "awaiting_placement_review",
+    "ready_for_commit",
+    "rejected",
+    "failed",
+]
+
+ReviewStage = Literal[
+    "trends",
+    "nodes",
+    "placement",
+]
 
 
 class AgentState(TypedDict, total=False):
-    # Input data from Laravel later
+    # One unique execution of the complete workflow.
+    workflow_id: str
+
+    # Input received from Laravel.
     roadmap_id: int
     roadmap_title: str
     roadmap_topic: str
@@ -42,20 +73,30 @@ class AgentState(TypedDict, total=False):
     version_number: str
 
     nodes: list[RoadmapNode]
-    # edges: list[RoadmapEdge]
+    edges: list[RoadmapEdge]
 
-    # Trend Agent output
+    # Generated Tech Trend Agent output.
     trends: list[TechTrend]
 
-    # Node Suggestion Agent output
-    # node_suggestions: list[NodeSuggestion]
+    # Admin-approved or admin-edited trends.
+    approved_trends: list[TechTrend]
 
-    # # Placement Agent output
-    # placement_suggestions: list[PlacementSuggestion]
+    # Generated Node Suggestion Agent output.
+    node_suggestions: list[NodeSuggestion]
 
-    # # Later for human-in-the-loop
-    # admin_decision: Optional[dict[str, Any]]
+    # Admin-approved or admin-edited node suggestions.
+    approved_node_suggestions: list[NodeSuggestion]
 
-    # General workflow tracking
-    status: str
-    error: Optional[str]
+    # Generated Placement Agent output.
+    placement_suggestions: list[PlacementSuggestion]
+    existing_edges_to_remove: list[ExistingEdgeRemoval]
+
+    # Admin-approved or admin-edited placement output.
+    approved_placement_suggestions: list[PlacementSuggestion]
+    approved_existing_edges_to_remove: list[ExistingEdgeRemoval]
+
+    # Workflow tracking.
+    status: WorkflowStatus
+    review_stage: ReviewStage | None
+    rejection_feedback: str | None
+    error: str | None
