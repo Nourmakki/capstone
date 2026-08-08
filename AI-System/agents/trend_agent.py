@@ -11,7 +11,7 @@ from dotenv import load_dotenv
 from langchain.agents import create_agent
 from langchain.tools import tool
 
-from llm import llm
+from .llm import llm
 
 
 load_dotenv()
@@ -713,6 +713,7 @@ Output rules:
 - Do not include evidence summaries.
 - Do not include placement.
 - Do not include node suggestions.
+-Trend descriptions must clearly define the topic's technical scope and must not use vague or promotional wording.
 
 Return ONLY this JSON format:
 
@@ -720,7 +721,7 @@ Return ONLY this JSON format:
   "trends": [
     {
       "title": "Trend title",
-      "description": "Short explanation of the trend",
+      "description": "A precise technical description explaining what the trend is, what it does, and which technologies or systems it applies to.",
       "confidence_score": 75,
       "sources": [
         {
@@ -821,7 +822,7 @@ def extract_json_object(content: Any) -> dict[str, Any]:
 def run_tech_trends_agent(
     roadmap_title: str,
     roadmap_topic: str,
-    nodes: list[dict[str, Any]],
+    existing_nodes: list[dict[str, Any]],
 ) -> dict[str, Any]:
     """
     Run the Tech Trends Agent.
@@ -849,7 +850,7 @@ Roadmap topic:
 {roadmap_topic}
 
 Existing roadmap nodes:
-{json.dumps(nodes, ensure_ascii=False)}
+{json.dumps(existing_nodes, ensure_ascii=False)}
 
 Suggested web_search queries:
 {json.dumps(web_search_suggestions, ensure_ascii=False)}
@@ -1136,7 +1137,7 @@ if __name__ == "__main__":
         "backend": {
     "roadmap_title": "Backend Development Roadmap",
     "roadmap_topic": "backend engineering",
-    "nodes": [
+    "existing_nodes": [
         {
             "id": 1,
             "title": "HTTP and Web Fundamentals",
@@ -1289,7 +1290,7 @@ if __name__ == "__main__":
     result = run_tech_trends_agent(
         roadmap_title=selected_case["roadmap_title"],
         roadmap_topic=selected_case["roadmap_topic"],
-        nodes=selected_case["nodes"],
+        existing_nodes=selected_case["nodes"],
     )
 
     print(f"\n=== Test case: {case_name} ===\n")

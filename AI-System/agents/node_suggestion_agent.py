@@ -3,7 +3,7 @@ import re
 from collections import Counter
 from typing import Any
 
-from llm import llm
+from .llm import llm
 
 
 ALLOWED_DIFFICULTIES = {
@@ -562,7 +562,7 @@ def validate_node_suggestions(parsed_output: dict[str, Any],trends: list[dict[st
     }
 
 
-def run_node_suggestion_agent(roadmap_topic: str,trends: list[dict[str, Any]],) -> dict[str, Any]:
+def run_node_suggestion_agent(roadmap_topic: str,approved_trends: list[dict[str, Any]],) -> dict[str, Any]:
     """
     Convert verified technology trends into independent roadmap
     node suggestions.
@@ -577,7 +577,7 @@ def run_node_suggestion_agent(roadmap_topic: str,trends: list[dict[str, Any]],) 
         )
 
 
-    if not isinstance(trends, list):
+    if not isinstance(approved_trends, list):
         raise TypeError(
             "trends must be a list."
         )
@@ -589,7 +589,7 @@ def run_node_suggestion_agent(roadmap_topic: str,trends: list[dict[str, Any]],) 
             "roadmap_topic cannot be empty."
         )
 
-    if not trends:
+    if not approved_trends:
         return {
             "node_suggestions": []
         }
@@ -601,7 +601,7 @@ ROADMAP TOPIC
 
 VERIFIED TECHNOLOGY TRENDS
 
-{json.dumps(trends,indent=2,ensure_ascii=False,
+{json.dumps(approved_trends,indent=2,ensure_ascii=False,
 )}
 
 TASK
@@ -646,7 +646,7 @@ Mandatory requirements:
 
         return validate_node_suggestions(
             parsed_output=parsed_output,
-            trends=trends,
+            trends=approved_trends,
         )
 
     except Exception as error:

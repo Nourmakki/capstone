@@ -2,7 +2,7 @@ import json
 import re
 from collections import defaultdict, deque
 from typing import Any
-from llm import llm
+from .llm import llm
 
 def extract_json_object(content: Any) -> dict[str, Any]:
     """
