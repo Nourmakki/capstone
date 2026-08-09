@@ -10,19 +10,8 @@ from agents.placement_agent import run_placement_agent
 # HELPERS
 # =====================================================================
 
+
 def require_admin_decision(decision: Any,) -> dict[str, Any]:
-    """
-    Validate the decision received from Laravel.
-
-    Expected:
-        {"action": "approve"}
-
-        {"action": "edit", "data": {...}}
-
-        {"action": "regenerate"}
-
-        {"action": "reject", "feedback": "..."}
-    """
 
     if not isinstance(decision, dict):
         raise ValueError(
@@ -38,13 +27,48 @@ def require_admin_decision(decision: Any,) -> dict[str, Any]:
         "reject",
     }:
         raise ValueError(
-            "Invalid admin decision. "
-            f"Received action={action!r}, "
-            f"decision={decision!r}"
-    )
+            "Invalid admin decision action."
+        )
+
+    if action in {
+        "edit",
+        "regenerate",
+    }:
+        stage = decision.get("stage")
+
+        if stage not in {
+            "trends",
+            "nodes",
+            "placement",
+        }:
+            raise ValueError(
+                "Edit and regenerate decisions must "
+                "contain stage='trends', 'nodes', "
+                "or 'placement'."
+            )
+
+    if action == "edit":
+        data = decision.get("data")
+
+        if not isinstance(data, dict):
+            raise ValueError(
+                "Edit decisions must contain a data object."
+            )
+
+        regenerate_after_edit = decision.get(
+            "regenerate_after_edit",
+            False,
+        )
+
+        if not isinstance(
+            regenerate_after_edit,
+            bool,
+        ):
+            raise ValueError(
+                "regenerate_after_edit must be boolean."
+            )
 
     return decision
-
 
 def require_edited_list(decision: dict[str, Any],field_name: str,) -> list[dict[str, Any]]:
     """
@@ -72,12 +96,9 @@ def require_edited_list(decision: dict[str, Any],field_name: str,) -> list[dict[
 # TECH TREND AGENT NODE
 # =====================================================================
 
-def detect_tech_trends(
-    state: AgentState,
-) -> Command:
+def detect_tech_trends(state: AgentState,) -> Command:
     try:
         result = run_tech_trends_agent(
-            roadmap_title=state["roadmap_title"],
             roadmap_topic=state["roadmap_topic"],
             existing_nodes=state["nodes"],
         )
@@ -92,11 +113,14 @@ def detect_tech_trends(
         return Command(
             update={
                 "trends": trends,
-                "status": "awaiting_trend_review",
-                "review_stage": "trends",
+                "node_suggestions": [],
+                "placement_suggestions": [],
+                "existing_edges_to_remove": [],
+                "status": "running_node_agent",
+                "review_stage": None,
                 "error": None,
             },
-            goto="review_trends",
+            goto="suggest_nodes",
         )
 
     except Exception as error:
@@ -111,84 +135,7 @@ def detect_tech_trends(
             },
             goto="failed",
         )
-
-
-# =====================================================================
-# TREND REVIEW NODE
-# =====================================================================
-
-def review_trends(
-    state: AgentState,
-) -> Command:
-    """
-    Pause until the admin approves, edits,regenerates or rejects the trends.
-
-    Important:
-    Do not perform database writes before interrupt().
-    This node starts again from the beginning when resumed.
-    """
-
-    decision = interrupt(
-        {
-            "review_stage": "trends",
-            "instruction": (
-                "Review the detected technology trends."
-            ),
-            "trends": state["trends"],
-            "allowed_actions": [
-                "approve",
-                "edit",
-                "regenerate",
-                "reject",
-            ],
-        }
-    )
-
-    decision = require_admin_decision(decision)
-    action = decision["action"]
-
-    if action == "regenerate":
-        return Command(
-            update={
-                "status": "running_trend_agent",
-                "review_stage": None,
-                "error": None,
-                "rejection_feedback": None,
-            },
-            goto="detect_tech_trends",
-    )
-
-    if action == "reject":
-        return Command(
-            update={
-                "status": "rejected",
-                "review_stage": None,
-                "rejection_feedback": decision.get(
-                    "feedback"
-                ),
-            },
-            goto="rejected",
-        )
-
-    if action == "edit":
-        approved_trends = require_edited_list(
-            decision=decision,
-            field_name="trends",
-        )
-    else:
-        approved_trends = state["trends"]
-
-    return Command(
-        update={
-            "approved_trends": approved_trends,
-            "status": "running_node_agent",
-            "review_stage": None,
-            "rejection_feedback": None,
-        },
-        goto="suggest_nodes",
-    )
-
-
+    
 # =====================================================================
 # NODE SUGGESTION AGENT NODE
 # =====================================================================
@@ -197,7 +144,7 @@ def suggest_nodes(state: AgentState,) -> Command:
     try:
         result = run_node_suggestion_agent(
             roadmap_topic=state["roadmap_topic"],
-            approved_trends=state["approved_trends"],
+            approved_trends=state["trends"],
         )
 
         suggestions = result.get(
@@ -213,11 +160,13 @@ def suggest_nodes(state: AgentState,) -> Command:
         return Command(
             update={
                 "node_suggestions": suggestions,
-                "status": "awaiting_node_review",
-                "review_stage": "nodes",
+                "placement_suggestions": [],
+                "existing_edges_to_remove": [],
+                "status": "running_placement_agent",
+                "review_stage": None,
                 "error": None,
             },
-            goto="review_nodes",
+            goto="place_nodes",
         )
 
     except Exception as error:
@@ -233,79 +182,6 @@ def suggest_nodes(state: AgentState,) -> Command:
             goto="failed",
         )
 
-
-# =====================================================================
-# NODE SUGGESTION REVIEW
-# =====================================================================
-
-def review_nodes(state: AgentState,) -> Command:
-    decision = interrupt(
-        {
-            "review_stage": "nodes",
-            "instruction": (
-                "Review the generated roadmap node suggestions."
-            ),
-            "node_suggestions": state[
-                "node_suggestions"
-            ],
-            "allowed_actions": [
-                "approve",
-                "edit",
-                "regenerate",
-                "reject",
-            ],
-        }
-    )
-
-    decision = require_admin_decision(decision)
-    action = decision["action"]
-
-    if action == "regenerate":
-        return Command(
-            update={
-                "status": "running_node_agent",
-                "review_stage": None,
-                "error": None,
-                "rejection_feedback": None,
-            },
-            goto="suggest_nodes",
-        )
-
-    if action == "reject":
-        return Command(
-            update={
-                "status": "rejected",
-                "review_stage": None,
-                "rejection_feedback": decision.get(
-                    "feedback"
-                ),
-            },
-            goto="rejected",
-        )
-
-    if action == "edit":
-        approved_suggestions = require_edited_list(
-            decision=decision,
-            field_name="node_suggestions",
-        )
-    else:
-        approved_suggestions = state[
-            "node_suggestions"
-        ]
-
-    return Command(
-        update={
-            "approved_node_suggestions": (
-                approved_suggestions
-            ),
-            "status": "running_placement_agent",
-            "review_stage": None,
-            "rejection_feedback": None,
-        },
-        goto="place_nodes",
-    )
-
-
 # =====================================================================
 # PLACEMENT AGENT NODE
 # =====================================================================
@@ -317,7 +193,7 @@ def place_nodes(state: AgentState,) -> Command:
             existing_nodes=state["nodes"],
             existing_edges=state["edges"],
             suggested_nodes=state[
-                "approved_node_suggestions"
+                "node_suggestions"
             ],
         )
 
@@ -347,11 +223,11 @@ def place_nodes(state: AgentState,) -> Command:
                 "existing_edges_to_remove": (
                     edges_to_remove
                 ),
-                "status": "awaiting_placement_review",
-                "review_stage": "placement",
+                "status": "awaiting_review",
+                "review_stage": "full_review",
                 "error": None,
             },
-            goto="review_placement",
+            goto="review_all",
         )
 
     except Exception as error:
@@ -367,47 +243,53 @@ def place_nodes(state: AgentState,) -> Command:
             goto="failed",
         )
 
-
-# =====================================================================
-# PLACEMENT REVIEW
-# =====================================================================
-
-def review_placement(state: AgentState,) -> Command:
+def review_all(state: AgentState,) -> Command:
     decision = interrupt(
         {
-            "review_stage": "placement",
+            "review_stage": "full_review",
             "instruction": (
-                "Review the final node placements and "
-                "existing edges proposed for removal."
+                "Review the complete AI roadmap update proposal."
             ),
+            "trends": state["trends"],
+            "node_suggestions": state[
+                "node_suggestions"
+            ],
             "placement_suggestions": state[
                 "placement_suggestions"
             ],
             "existing_edges_to_remove": state[
                 "existing_edges_to_remove"
             ],
-            "allowed_actions": [
-                "approve",
-                "edit",
-                "regenerate",
-                "reject",
-            ],
+            "allowed_actions": {
+                "workflow": [
+                    "approve",
+                    "reject",
+                ],
+                "trends": [
+                    "edit",
+                    "regenerate",
+                ],
+                "nodes": [
+                    "edit",
+                    "regenerate",
+                ],
+                "placement": [
+                    "edit",
+                    "regenerate",
+                ],
+            },
         }
     )
 
-    decision = require_admin_decision(decision)
+    decision = require_admin_decision(
+        decision
+    )
+
     action = decision["action"]
 
-    if action == "regenerate":
-        return Command(
-            update={
-                "status": "running_placement_agent",
-                "review_stage": None,
-                "error": None,
-                "rejection_feedback": None,
-            },
-            goto="place_nodes",
-        )
+    # -------------------------------------------------
+    # REJECT COMPLETE WORKFLOW
+    # -------------------------------------------------
 
     if action == "reject":
         return Command(
@@ -421,40 +303,161 @@ def review_placement(state: AgentState,) -> Command:
             goto="rejected",
         )
 
-    if action == "edit":
-        approved_placements = require_edited_list(
-            decision=decision,
-            field_name="placement_suggestions",
+    # -------------------------------------------------
+    # APPROVE EVERYTHING
+    # -------------------------------------------------
+
+    if action == "approve":
+        return Command(
+            update={
+                "approved_trends": state[
+                    "trends"
+                ],
+                "approved_node_suggestions": state[
+                    "node_suggestions"
+                ],
+                "approved_placement_suggestions": state[
+                    "placement_suggestions"
+                ],
+                "approved_existing_edges_to_remove": state[
+                    "existing_edges_to_remove"
+                ],
+                "status": "ready_for_commit",
+                "review_stage": None,
+                "rejection_feedback": None,
+            },
+            goto="complete",
         )
 
-        approved_edges = require_edited_list(
-            decision=decision,
-            field_name="existing_edges_to_remove",
-        )
-    else:
-        approved_placements = state[
-            "placement_suggestions"
-        ]
+    stage = decision["stage"]
 
-        approved_edges = state[
-            "existing_edges_to_remove"
-        ]
+    # -------------------------------------------------
+    # REGENERATE
+    # -------------------------------------------------
+
+    if action == "regenerate":
+
+        if stage == "trends":
+            return Command(
+                update={
+                    "status": "running_trend_agent",
+                    "review_stage": None,
+                },
+                goto="detect_tech_trends",
+            )
+
+        if stage == "nodes":
+            return Command(
+                update={
+                    "status": "running_node_agent",
+                    "review_stage": None,
+                },
+                goto="suggest_nodes",
+            )
+
+        return Command(
+            update={
+                "status": "running_placement_agent",
+                "review_stage": None,
+            },
+            goto="place_nodes",
+        )
+
+    # -------------------------------------------------
+    # EDIT TRENDS
+    # -------------------------------------------------
+
+    if stage == "trends":
+        edited_trends = require_edited_list(
+            decision,
+            "trends",
+        )
+
+        regenerate_after_edit = decision.get(
+            "regenerate_after_edit",
+            False,
+        )
+
+        if regenerate_after_edit:
+            return Command(
+                update={
+                    "trends": edited_trends,
+                    "status": "running_node_agent",
+                    "review_stage": None,
+                },
+                goto="suggest_nodes",
+            )
+
+        return Command(
+            update={
+                "trends": edited_trends,
+                "status": "awaiting_review",
+                "review_stage": "full_review",
+            },
+            goto="review_all",
+        )
+
+    # -------------------------------------------------
+    # EDIT NODES
+    # -------------------------------------------------
+
+    if stage == "nodes":
+        edited_nodes = require_edited_list(
+            decision,
+            "node_suggestions",
+        )
+
+        regenerate_after_edit = decision.get(
+            "regenerate_after_edit",
+            False,
+        )
+
+        if regenerate_after_edit:
+            return Command(
+                update={
+                    "node_suggestions": edited_nodes,
+                    "status": "running_placement_agent",
+                    "review_stage": None,
+                },
+                goto="place_nodes",
+            )
+
+        return Command(
+            update={
+                "node_suggestions": edited_nodes,
+                "status": "awaiting_review",
+                "review_stage": "full_review",
+            },
+            goto="review_all",
+        )
+
+    # -------------------------------------------------
+    # EDIT PLACEMENT
+    # -------------------------------------------------
+
+    edited_placements = require_edited_list(
+        decision,
+        "placement_suggestions",
+    )
+
+    edited_edges = require_edited_list(
+        decision,
+        "existing_edges_to_remove",
+    )
 
     return Command(
         update={
-            "approved_placement_suggestions": (
-                approved_placements
+            "placement_suggestions": (
+                edited_placements
             ),
-            "approved_existing_edges_to_remove": (
-                approved_edges
+            "existing_edges_to_remove": (
+                edited_edges
             ),
-            "status": "ready_for_commit",
-            "review_stage": None,
-            "rejection_feedback": None,
+            "status": "awaiting_review",
+            "review_stage": "full_review",
         },
-        goto="complete",
+        goto="review_all",
     )
-
 
 # =====================================================================
 # TERMINAL NODES
@@ -507,20 +510,12 @@ def build_roadmap_workflow(
         detect_tech_trends,
     )
 
-    builder.add_node(
-        "review_trends",
-        review_trends,
-    )
 
     builder.add_node(
         "suggest_nodes",
         suggest_nodes,
     )
 
-    builder.add_node(
-        "review_nodes",
-        review_nodes,
-    )
 
     builder.add_node(
         "place_nodes",
@@ -528,9 +523,10 @@ def build_roadmap_workflow(
     )
 
     builder.add_node(
-        "review_placement",
-        review_placement,
+        "review_all",
+        review_all,
     )
+
 
     builder.add_node(
         "complete",

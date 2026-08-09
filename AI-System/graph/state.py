@@ -10,18 +10,12 @@ class RoadmapEdge(TypedDict):
     to_node_id: int
 
 class TechTrend(TypedDict):
-    # Assigned by the workflow
-    trend_id: str
-
     title: str
     description: str
     confidence_score: float
     sources: list[Dict[str, Any]]
 
 class NodeSuggestion(TypedDict):
-    # Assigned by the workflow
-    suggestion_id: str
-
     title: str
     description: str
     difficulty: str
@@ -44,20 +38,16 @@ class ExistingEdgeRemoval(TypedDict):
 WorkflowStatus = Literal[
     "starting",
     "running_trend_agent",
-    "awaiting_trend_review",
     "running_node_agent",
-    "awaiting_node_review",
     "running_placement_agent",
-    "awaiting_placement_review",
+    "awaiting_review",
     "ready_for_commit",
     "rejected",
     "failed",
 ]
 
 ReviewStage = Literal[
-    "trends",
-    "nodes",
-    "placement",
+   "full_review",
 ]
 
 

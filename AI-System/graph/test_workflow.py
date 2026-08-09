@@ -66,12 +66,14 @@ def start_test() -> None:
     )
 
 def resume_test() -> None:
-    thread_id = "07c786f3-fc48-41d0-af54-b81288d2bdbe"
+    thread_id = "6e1ab1c4-fd5f-4707-97ad-53a08a5adb4e"
 
     result = resume_roadmap_workflow(
         thread_id=thread_id,
         admin_decision={
-            "action": "approve",
+            "action": "reject",
+            "feedback": "Testing workflow rejection.",
+
         },
     )
 

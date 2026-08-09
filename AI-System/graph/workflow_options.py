@@ -7,7 +7,10 @@ from langgraph.types import Command
 
 from .postgresSaver_connection import open_checkpointer
 from .state import AgentState
-from .workflow import build_roadmap_workflow
+from .workflow import (
+    build_roadmap_workflow,
+    require_admin_decision,
+)
 
 
 def create_thread_config(thread_id: str,) -> dict[str, Any]:
@@ -28,7 +31,8 @@ def start_roadmap_workflow(
     """
     Start a new Trend -> Node -> Placement workflow.
 
-    It normally pauses at the trend review interrupt.
+    It runs all three agents and normally pauses
+    at the consolidated review interrupt.
     """
 
     thread_id = str(uuid4())
@@ -70,19 +74,9 @@ def resume_roadmap_workflow(
     Resume a paused workflow with an admin decision.
     """
 
-    action = admin_decision.get("action")
-
-    if action not in {
-        "approve",
-        "edit",
-        "regenerate",
-        "reject",
-    }:
-        raise ValueError(
-            "The admin decision action must be "
-            "'approve', 'edit', 'regenerate', or 'reject'."
-        )
-
+    require_admin_decision(
+        admin_decision
+    )
     config = create_thread_config(
         thread_id
     )
@@ -97,13 +91,10 @@ def resume_roadmap_workflow(
             "status"
         )
 
-        if status in {
-            "rejected",
-            "ready_for_commit",
-        }:
+        if status != "awaiting_review":
             raise ValueError(
-                f"Workflow cannot be resumed "
-                f"because its status is '{status}'."
+                "Workflow cannot accept an admin decision "
+                 f"because its status is '{status}'."
             )
 
         result = graph.invoke(
