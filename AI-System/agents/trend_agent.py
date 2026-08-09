@@ -409,7 +409,6 @@ Return fewer trends if necessary, but never return weakly supported trends.
 
 You receive:
 - roadmap title
-- roadmap topic
 - existing roadmap nodes
 - suggested web_search queries
 
@@ -613,8 +612,8 @@ Domain-aware source preferences:
 - These source preferences are only for evaluating evidence quality. Do not return a topic unless it fits the roadmap topic and connects naturally to the existing roadmap nodes.
 
 Roadmap relevance rules:
-- Search only for trends related to the roadmap_topic.
-- Return trends only if they belong to the roadmap_topic.
+- Search only for trends related to the roadmap_topic
+- Return trends only if they belong to the roadmap_topic
 - Ignore trends from unrelated Computer Science domains.
 - Return only trends that could reasonably become learnable roadmap nodes.
 - A returned trend must be teachable as a separate student learning topic.
@@ -820,7 +819,6 @@ def extract_json_object(content: Any) -> dict[str, Any]:
 # ---------------------------------------------------------------------------
 
 def run_tech_trends_agent(
-    roadmap_title: str,
     roadmap_topic: str,
     existing_nodes: list[dict[str, Any]],
 ) -> dict[str, Any]:
@@ -844,10 +842,8 @@ Current date:
 {current_date}
 
 Roadmap title:
-{roadmap_title}
-
-Roadmap topic:
 {roadmap_topic}
+
 
 Existing roadmap nodes:
 {json.dumps(existing_nodes, ensure_ascii=False)}
@@ -913,8 +909,7 @@ Source quality is the top priority:
 if __name__ == "__main__":
     TEST_CASES = {
         "ai": {
-            "roadmap_title": "Artificial Intelligence Roadmap",
-            "roadmap_topic": "artificial intelligence engineering",
+            "roadmap_topic": "Artificial Intelligence Roadmap",
             "nodes": [
                 {
                     "id": 1,
@@ -950,8 +945,7 @@ if __name__ == "__main__":
         },
 
         "web": {
-            "roadmap_title": "Frontend Development Roadmap",
-            "roadmap_topic": "Frontend development",
+            "roadmap_topic": "Frontend Development Roadmap",
             "nodes": [
                 {
                     "id": 1,
@@ -987,8 +981,8 @@ if __name__ == "__main__":
         },
 
         "mobile": {
-            "roadmap_title": "Mobile Development Roadmap",
-            "roadmap_topic": "mobile application development",
+            "roadmap_topic": "Mobile Development Roadmap",
+    
             "nodes": [
                 {
                     "id": 1,
@@ -1024,8 +1018,8 @@ if __name__ == "__main__":
         },
 
         "cybersecurity": {
-            "roadmap_title": "Cybersecurity Roadmap",
-            "roadmap_topic": "cybersecurity",
+            "roadmap_topic": "Cybersecurity Roadmap",
+
             "nodes": [
                 {
                     "id": 1,
@@ -1061,8 +1055,7 @@ if __name__ == "__main__":
         },
 
         "cloud": {
-            "roadmap_title": "Cloud Computing Roadmap",
-            "roadmap_topic": "cloud computing",
+            "roadmap_topic": "Cloud Computing Roadmap",
             "nodes": [
                 {
                     "id": 1,
@@ -1098,8 +1091,8 @@ if __name__ == "__main__":
         },
 
         "data_science": {
-            "roadmap_title": "Data Science Roadmap",
-            "roadmap_topic": "data science",
+            "roadmap_topic": "Data Science Roadmap",
+
             "nodes": [
                 {
                     "id": 1,
@@ -1135,8 +1128,7 @@ if __name__ == "__main__":
         },
 
         "backend": {
-    "roadmap_title": "Backend Development Roadmap",
-    "roadmap_topic": "backend engineering",
+    "roadmap_topic": "Backend Development Roadmap",
     "existing_nodes": [
         {
             "id": 1,
@@ -1207,8 +1199,7 @@ if __name__ == "__main__":
 },
 
         "devops": {
-            "roadmap_title": "DevOps Roadmap",
-            "roadmap_topic": "devops engineering",
+            "roadmap_topic": "DevOps Roadmap",
             "nodes": [
                 {
                     "id": 1,
@@ -1244,8 +1235,7 @@ if __name__ == "__main__":
         },
 
         "database": {
-            "roadmap_title": "Database Systems Roadmap",
-            "roadmap_topic": "database systems",
+            "roadmap_topic": "Database Systems Roadmap",
             "nodes": [
                 {
                     "id": 1,
@@ -1288,7 +1278,6 @@ if __name__ == "__main__":
     selected_case = TEST_CASES[case_name]
 
     result = run_tech_trends_agent(
-        roadmap_title=selected_case["roadmap_title"],
         roadmap_topic=selected_case["roadmap_topic"],
         existing_nodes=selected_case["nodes"],
     )
