@@ -1,6 +1,9 @@
 import "./App.css";
 import { BrowserRouter, Routes, Route } from "react-router-dom";
 
+import { AuthProvider } from "./context/AuthContext";
+import ProtectedRoute from "./components/ProtectedRoute";
+
 import HomePage from "./pages/HomePage";
 import Login from "./pages/Login";
 import Signup from "./pages/Signup";
@@ -9,8 +12,6 @@ import RoadmapOverview from "./pages/RoadmapOverview";
 import LearningPage from "./pages/LearningPage";
 import QuizPage from "./pages/QuizPage";
 import ProjectSubmissionPage from "./pages/ProjectSubmissionPage";
-import ProfilePage from "./pages/ProfilePage";
-import AIAssistant from "./pages/AIAssistant";
 import AdminProfessorPanel from "./pages/AdminProfessorPanel";
 import TodoPage from "./pages/TodoPage";
 import TeamsPage from "./pages/TeamsPage";
@@ -21,48 +22,51 @@ import AdminDashboard from "./pages/AdminDashboard";
 function App() {
     return (
         <BrowserRouter>
-            <Routes>
+            <AuthProvider>
+                <Routes>
 
-                <Route path="/" element={<HomePage />} />
+                    {/* Public */}
+                    <Route path="/" element={<HomePage />} />
+                    <Route path="/login" element={<Login />} />
+                    <Route path="/signup" element={<Signup />} />
+                    <Route path="/professor-pending" element={<WaitingApproval />} />
 
-                <Route path="/login" element={<Login />} />
+                    {/* Students */}
+                    <Route path="/dashboard" element={
+                        <ProtectedRoute roles={["Student"]}><Dashboard /></ProtectedRoute>
+                    } />
+                    <Route path="/roadmap/:roadmapId" element={
+                        <ProtectedRoute roles={["Student"]}><RoadmapOverview /></ProtectedRoute>
+                    } />
+                    <Route path="/learning/:versionNodeId" element={
+                        <ProtectedRoute roles={["Student"]}><LearningPage /></ProtectedRoute>
+                    } />
+                    <Route path="/quiz" element={
+                        <ProtectedRoute roles={["Student"]}><QuizPage /></ProtectedRoute>
+                    } />
+                    <Route path="/project" element={
+                        <ProtectedRoute roles={["Student"]}><ProjectSubmissionPage /></ProtectedRoute>
+                    } />
+                    <Route path="/todo" element={
+                        <ProtectedRoute roles={["Student"]}><TodoPage /></ProtectedRoute>
+                    } />
+                    <Route path="/teams" element={
+                        <ProtectedRoute roles={["Student"]}><TeamsPage /></ProtectedRoute>
+                    } />
 
-                <Route path="/signup" element={<Signup />} />
+                    {/* Staff */}
+                    <Route path="/professor-dashboard" element={
+                        <ProtectedRoute roles={["Professor"]}><ProfessorDashboard /></ProtectedRoute>
+                    } />
+                    <Route path="/admin-dashboard" element={
+                        <ProtectedRoute roles={["Admin"]}><AdminDashboard /></ProtectedRoute>
+                    } />
+                    <Route path="/admin" element={
+                        <ProtectedRoute roles={["Admin", "Professor"]}><AdminProfessorPanel /></ProtectedRoute>
+                    } />
 
-                <Route path="/dashboard" element={<Dashboard />} />
-
-                <Route path="/roadmap" element={<RoadmapOverview />} />
-
-                <Route path="/professor-dashboard" element={<ProfessorDashboard />} />
-                <Route path="/admin-dashboard" element={<AdminDashboard />} />
-                <Route path="/professor-pending" element={<WaitingApproval />} />
-
-                <Route
-                    path="/learning/:versionNodeId"
-                    element={<LearningPage />}
-                />
-
-                <Route path="/quiz" element={<QuizPage />} />
-
-                <Route
-                    path="/project"
-                    element={<ProjectSubmissionPage />}
-                />
-
-                <Route path="/profile" element={<ProfilePage />} />
-
-                <Route path="/assistant" element={<AIAssistant />} />
-
-                <Route
-                    path="/admin"
-                    element={<AdminProfessorPanel />}
-                />
-
-                <Route path="/todo" element={<TodoPage />} />
-
-                <Route path="/teams" element={<TeamsPage />} />
-
-            </Routes>
+                </Routes>
+            </AuthProvider>
         </BrowserRouter>
     );
 }

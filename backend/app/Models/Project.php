@@ -11,10 +11,12 @@ class Project extends Model
 {
     use HasFactory;
 
-    protected $fillable = [
+        protected $fillable = [
         'version_node_id',
         'title',
-        'description'
+        'description',
+        'difficulty',
+        'github_url',
     ];
 
     public function submissions()

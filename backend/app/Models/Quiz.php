@@ -20,7 +20,7 @@ class Quiz extends Model
 
     public function versionNode()
     {
-        return $this->belongsTo(VersionNode::class, 'version_nodes_id');
+        return $this->belongsTo(VersionNode::class, 'version_node_id');
     }
 
     public function submissions()

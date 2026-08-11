@@ -2,39 +2,31 @@
 
 namespace Database\Seeders;
 
-use Illuminate\Database\Seeder;
+use App\Models\Node;
+use App\Models\Roadmap;
+use App\Models\RoadmapVersion;
 use App\Models\VersionNode;
+use Illuminate\Database\Seeder;
 
 class VersionNodeSeeder extends Seeder
 {
     public function run(): void
     {
-        VersionNode::insert([
-    [
-        "id" => 1,
-        "roadmap_version_id" => 1,
-        "node_id" => 1,
-    ],
-    [
-        "id" => 2,
-        "roadmap_version_id" => 1,
-        "node_id" => 2,
-    ],
-    [
-        "id" => 3,
-        "roadmap_version_id" => 1,
-        "node_id" => 3,
-    ],
-    [
-        "id" => 4,
-        "roadmap_version_id" => 1,
-        "node_id" => 4,
-    ],
-    [
-        "id" => 5,
-        "roadmap_version_id" => 1,
-        "node_id" => 5,
-    ],
-]);
+        foreach (RoadmapFixtures::all() as $fixture) {
+            $roadmap = Roadmap::where('title', $fixture['title'])->firstOrFail();
+
+            $version = RoadmapVersion::where('roadmap_id', $roadmap->id)
+                ->where('version_number', 1)
+                ->firstOrFail();
+
+            $titles = array_column($fixture['nodes'], 'title');
+
+            foreach (Node::whereIn('title', $titles)->get() as $node) {
+                VersionNode::updateOrCreate([
+                    'roadmap_version_id' => $version->id,
+                    'node_id'            => $node->id,
+                ]);
+            }
+        }
     }
 }

@@ -1,54 +1,54 @@
-import React from "react";
+import React, { useEffect, useState } from "react";
 import { useNavigate } from "react-router-dom";
-import {Code2, Brain, Smartphone, Database, Cloud, Cpu, Gamepad2, Monitor, ArrowRight,} from "lucide-react";
+import api from "../api";
+import {
+    Code2, Brain, Smartphone, Database, Cloud, Cpu,
+    Gamepad2, Monitor, ArrowRight,
+} from "lucide-react";
 
-const roadmapCards=[
-    {
-        title:"Web Development",
-        description:"Frontend, backend, APIs, and the full stack engineering.",
-        icon: <Code2 size={28}/>,
-        color:"from-cyan-500 to-blue-500",
-    },
-    {
-        title: "AI / ML",
-        description: "Machine learning, deep learning, LLMs, and AI systems.",
-        icon: <Brain size={28} />,
-        color: "from-[#0097a7] to-green-400",
-    },
-    {
-        title: "Mobile Development",
-        description: "Android. iOS, Flutter, and React Native.",
-        icon: <Smartphone size={28} />,
-        color: "from-yellow-400 to-orange-500",
-    },
-    {
-        title: "DevOps / Cloud",
-        description: "CI/CD, Docker, Kubernetes, and cloud infrastructure.",
-        icon: <Cloud size={28} />,
-        color: "from-pink-500 to-rose-500",
-    },
-    {
-        title: "Embedded /IOT",
-        description:"Firmware systems and hardware programming.",
-        icon: <Gamepad2 size={28} />,
-        color: "from-orange-500 to-red-500",
-    },
-    {
-        title:"Desktop Apps",
-        description:"Modern desktop software with Electron and more.",
-        icon: <Monitor size={28} />,
-        color: "from-fuchsia-500 to-purple-600",
-    },
-];
+// Presentation only - the database stores content, not styling.
+const CARD_STYLES = {
+    "Web Development":   { icon: <Code2 size={28} />,      color: "from-cyan-500 to-blue-500" },
+    "AI / ML":           { icon: <Brain size={28} />,      color: "from-[#0097a7] to-green-400" },
+    "Mobile Development":{ icon: <Smartphone size={28} />, color: "from-yellow-400 to-orange-500" },
+    "DevOps / Cloud":    { icon: <Cloud size={28} />,      color: "from-pink-500 to-rose-500" },
+    "Embedded / IOT":    { icon: <Cpu size={28} />,        color: "from-orange-500 to-red-500" },
+    "Desktop Apps":      { icon: <Monitor size={28} />,    color: "from-fuchsia-500 to-purple-600" },
+    "Data Engineering":  { icon: <Database size={28} />,   color: "from-indigo-500 to-blue-600" },
+    "Game Development":  { icon: <Gamepad2 size={28} />,   color: "from-lime-500 to-emerald-500" },
+};
 
-function StudentHomePage(){
+const DEFAULT_STYLE = {
+    icon: <Code2 size={28} />,
+    color: "from-gray-500 to-gray-700",
+};
+
+function StudentHomePage() {
     const navigate = useNavigate();
+    const [roadmaps, setRoadmaps] = useState([]);
+    const [loading, setLoading] = useState(true);
+    const [error, setError] = useState(null);
+
+    useEffect(() => {
+        const loadRoadmaps = async () => {
+            try {
+                const response = await api.get("/roadmaps");
+                setRoadmaps(response.data.data ?? []);
+            } catch (err) {
+                console.error(err);
+                setError("Could not load roadmaps.");
+            } finally {
+                setLoading(false);
+            }
+        };
+
+        loadRoadmaps();
+    }, []);
+
     return (
         <div className="min-h-screen bg-black text-white overflow-hidden">
-            
-            <div className= "absolute top-0 left-0 w-full h-full bg-[radial-gradient(circle_at_center, rgba(0,255,200, 0.08), transparent_55%)] pointer-events-none">
-            </div>
-            
+            <div className="absolute top-0 left-0 w-full h-full bg-[radial-gradient(circle_at_center,rgba(0,255,200,0.08),transparent_55%)] pointer-events-none" />
+
             <section className="pt-20 relative z-10 px-8 lg:px-20 pb-24">
                 <div className="flex items-center justify-between mb-10">
                     <div>
@@ -60,62 +60,90 @@ function StudentHomePage(){
                         </p>
                     </div>
                 </div>
+
+                {loading && (
+                    <div className="text-gray-400 py-20 text-center">
+                        Loading roadmaps...
+                    </div>
+                )}
+
+                {error && (
+                    <div className="text-red-400 py-20 text-center">{error}</div>
+                )}
+
+                {!loading && !error && roadmaps.length === 0 && (
+                    <div className="text-gray-400 py-20 text-center">
+                        No roadmaps are available yet.
+                    </div>
+                )}
+
                 <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
-                    {roadmapCards.map((card, index) => (
-                        <div key={index} className="group relative rounded-3xl border border-white/10 bg-white/[0.03] backdrop-blur-md p-6 hover:border-[#0097a7]/40 transition duration-300 overflow-hidden">
-                            <div className={`absolute inset-0 opacity-0 group-hover:opacity-20 transition bg-gradient-to-br ${card.color}`}>
-                            </div>
-                            <div className={`w-14 h-14 rounded-2xl flex items-center justify-center bg-gradient-to-br ${card.color}`}>
-                                {card.icon}
-                            </div>
-                            <h3 className="mt-6 text-xl font-bold">
-                                {card.title}
-                            </h3>
-                            <p className="mt-3 text-sm text-gray-400 leading-relaxed">
-                                {card.description}
-                            </p>
-                            <button onClick={() => navigate("/roadmap")}
-                                className="mt-6 text-[#0097a7] text-sm flex items-center gap-2 group-hover:gap-3 transition-all"
+                    {roadmaps.map((roadmap) => {
+                        const style = CARD_STYLES[roadmap.title] ?? DEFAULT_STYLE;
+                        const available = Boolean(roadmap.latest_version);
+
+                        const open = () => {
+                            if (available) {
+                                navigate(`/roadmap/${roadmap.id}`);
+                            }
+                        };
+
+                        return (
+                            // The whole card is the click target, not just the link.
+                            <div
+                                key={roadmap.id}
+                                role="button"
+                                tabIndex={available ? 0 : -1}
+                                aria-disabled={!available}
+                                onClick={open}
+                                onKeyDown={(e) => {
+                                    if (e.key === "Enter" || e.key === " ") {
+                                        e.preventDefault();
+                                        open();
+                                    }
+                                }}
+                                className={`group relative rounded-3xl border border-white/10 bg-white/[0.03] backdrop-blur-md p-6 transition duration-300 overflow-hidden focus:outline-none focus:ring-2 focus:ring-[#0097a7]/50 ${
+                                    available
+                                        ? "cursor-pointer hover:border-[#0097a7]/40"
+                                        : "cursor-not-allowed opacity-60"
+                                }`}
                             >
-                                View Roadmap
-                                <ArrowRight size={16}/>
-                            </button>
-                        </div>
-                    ))}
+                                <div className={`absolute inset-0 opacity-0 group-hover:opacity-20 transition bg-gradient-to-br ${style.color}`} />
+
+                                <div className={`w-14 h-14 rounded-2xl flex items-center justify-center bg-gradient-to-br ${style.color}`}>
+                                    {style.icon}
+                                </div>
+
+                                <h3 className="mt-6 text-xl font-bold">
+                                    {roadmap.title}
+                                </h3>
+
+                                <p className="mt-3 text-sm text-gray-400 leading-relaxed">
+                                    {roadmap.description}
+                                </p>
+
+                                <p className="mt-4 text-xs text-gray-500">
+                                    {available
+                                        ? `${roadmap.node_count} modules · v${roadmap.latest_version.version_number}`
+                                        : "No published version yet"}
+                                </p>
+
+                                {/* Visual affordance only - the card itself handles the click. */}
+                                <span
+                                    className={`mt-6 text-sm flex items-center gap-2 transition-all ${
+                                        available
+                                            ? "text-[#0097a7] group-hover:gap-3"
+                                            : "text-gray-600"
+                                    }`}
+                                >
+                                    {available ? "View Roadmap" : "Unavailable"}
+                                    <ArrowRight size={16} />
+                                </span>
+                            </div>
+                        );
+                    })}
                 </div>
             </section>
-            
-            <section className="relative z-10 px-8 lg:px-20 pb-28">
-                    <div className="grid lg:grid-cols-3 gap-6">
-                        {[
-                            {
-                                title: "AI Guided Learning",
-                                text: "AI recommends tutorials, evaluates quizzes, and gives instant feedback.",
-                            },
-                            {
-                                title:"Mandatory Projects",
-                                text:"Students build projects and pass checkpoints before progressing.",
-                            },
-                            {
-                                title:"Team Collaboration",
-                                text:"Create teams, collaborate on projects, and help each other learn.",
-                            },
-                        ].map((feature, i)=>(
-                            <div key={i} className="rounded-3xl border border-white/10 bg-white/[0.03] p-8">
-                                <h3 className="text-2xl font-bold mb-4">
-                                    {feature.title}
-                                </h3>
-                                <p className="text-gray-400 leading-relaxed">
-                                    {feature.text}
-                                </p>
-                            </div>
-                        ))}
-                    </div>
-            </section>
-            
-           {/* <footer className="relative z-10 border-t border-white/10 px-8 lg:px-20 py-8 text-sm text-gray-500 flex flex-col md:flex-row items-center justify-between">
-
-            </footer>*/}
         </div>
     );
 }

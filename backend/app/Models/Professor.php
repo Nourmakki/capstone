@@ -10,9 +10,13 @@ class Professor extends Model
     use HasFactory;
 
     protected $fillable = [
-        'users_id',
+        'user_id',
         'qualification',
         'is_verified'
+    ];
+
+    protected $casts = [
+        'is_verified' => 'boolean',
     ];
 
     public function user()

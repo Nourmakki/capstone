@@ -1,46 +1,37 @@
 import React, {useState} from "react";
 import api from "../api";
 import { useNavigate } from "react-router-dom";
+import { useAuth } from "../context/AuthContext";
 
 const Login=() =>{
     const [email, setEmail]= useState("");
     const [password, setPassword]= useState("");
     const navigate = useNavigate();
 
-    const handleLogin = async (e) => {
+    const { login } = useAuth();
+
+const handleLogin = async (e) => {
     e.preventDefault();
 
     try {
+        const response = await api.post("/login", { email, password });
 
-        const response = await api.post("/login", {
-            email,
-            password,
-        });
-        const user = response.data.user;
-        if (response.data.pending) {
-            localStorage.setItem("user", JSON.stringify(user));
+        login(response.data.user, response.data.token);
+
+        const role = response.data.user.role;
+
+        if (role === "Student") navigate("/dashboard");
+        else if (role === "Professor") navigate("/professor-dashboard");
+        else if (role === "Admin") navigate("/admin-dashboard");
+    } catch (error) {
+        if (error.response?.status === 403 && error.response?.data?.pending) {
             navigate("/professor-pending");
             return;
         }
-        localStorage.setItem("user", JSON.stringify(user));
-        if (user.role === "Student") {
-            navigate("/dashboard");
-        }
-        else if (user.role === "Professor") {
-            navigate("/professor-dashboard");
-        }
-        else if (user.role === "Admin") {
-            navigate("/admin-dashboard");
-        }
-    } catch (error) {
-        console.error(error);
-        alert(
-            error.response?.data?.message ??
-            "Login failed."
-        );
+
+        alert(error.response?.data?.message ?? "Login failed.");
     }
 };
-
     return (
         <div className="min-h-screen flex items-center justify-center bg-black">
             <div className="w-full max-w-md bg-[#091617] p-8 rounded-2xl shadow-lg shadow-black/40">

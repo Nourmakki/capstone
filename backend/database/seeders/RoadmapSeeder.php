@@ -2,16 +2,18 @@
 
 namespace Database\Seeders;
 
-use Illuminate\Database\Seeder;
 use App\Models\Roadmap;
+use Illuminate\Database\Seeder;
 
 class RoadmapSeeder extends Seeder
 {
     public function run(): void
     {
-        Roadmap::create([
-            'title' => 'Web Development',
-            'description' => 'Complete roadmap for becoming a web developer.'
-        ]);
+        foreach (RoadmapFixtures::all() as $fixture) {
+            Roadmap::updateOrCreate(
+                ['title' => $fixture['title']],
+                ['description' => $fixture['description']]
+            );
+        }
     }
 }

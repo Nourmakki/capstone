@@ -1,5 +1,4 @@
 import React, {useState} from "react";
-import { useNavigate } from "react-router-dom";
 import {
     User,
     Mail,
@@ -10,23 +9,15 @@ import {
     Edit3,
     Award,
     Flame,
-    ArrowLeft,
 } from "lucide-react";
 
 function ProfilePage(){
-    const navigate = useNavigate();
     const [location, setLocation]=useState("Beirut, Lebanon");
     return (
         <div className="min-h-screen bg-black text-white overflow-hidden">
             <div className="absolute top-0 left-0 w-full h-full bg-[radial-gradient(circle_at_center,rgba(0,255,200,0.08), transparent_55%)] pointer-events-none">
             </div>
             <header className="relative z-10 px-8 lg:px-20 py-10 border-b border-white/10">
-                <button onClick={() => navigate("/dashboard")}
-                    className="flex items-center gap-2 text-gray-400 hover:text-[#0097a7] transition mb-6"
-                >
-                    <ArrowLeft size={18} />
-                    Back to Dashboard
-                </button>
                 <div className="flex flex-col lg:flex-row lg:items-center lg:justify-between gap-8">
                     <div className="flex items-center gap-5">
                         <div className="w-24 h-24 rounded-full bg-[#0097a7] text-black flex items-center justify-center font-black text-4xl">

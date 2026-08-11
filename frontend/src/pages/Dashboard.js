@@ -10,19 +10,22 @@ import {
 } from "lucide-react";
 import React, { useState } from "react";
 import { useNavigate } from "react-router-dom";
+import { useAuth } from "../context/AuthContext";
 
 import StudentHomePage from "./StudentHomePage";
 import TodoPage from "./TodoPage";
 import TeamsPage from "./TeamsPage";
 import ContinueLearningPage from "./ContinueLearningPage";
+import ProfilePage from "./ProfilePage";
 
 function Dashboard() {
     const [activePage, setActivePage] = useState("dashboard");
     const [collapsed, setCollapsed] = useState(false);
     const navigate = useNavigate();
 
-    const handleLogout = () => {
-        localStorage.removeItem("user");
+    const { logout } = useAuth();
+    const handleLogout = async () => {
+        await logout();
         navigate("/login");
     };
 
@@ -36,7 +39,7 @@ function Dashboard() {
                 }`}
             >
                 {collapsed ? (
-                    <div className="flex flex-col items-center mb-6">
+                    <div className="shrink-0 flex flex-col items-center mb-6">
                         <button
                             onClick={() => setCollapsed(!collapsed)}
                             className="self-end p-2 rounded-lg hover:bg-white/10 transition"
@@ -49,7 +52,7 @@ function Dashboard() {
                         </h1>
                     </div>
                 ) : (
-                    <div className="mb-6">
+                    <div className="shrink-0 mb-6">
                         <div className="flex justify-end">
                             <button
                                 onClick={() => setCollapsed(!collapsed)}
@@ -71,9 +74,9 @@ function Dashboard() {
                     </div>
                 )}
 
-                <div className="flex-1 flex flex-col justify-between overflow-y-auto">
+                <div className="flex-1 min-h-0 flex flex-col">
 
-                    <nav className="space-y-2">
+                    <nav className="flex-1 min-h-0 overflow-y-auto overscroll-contain space-y-2 pr-1">
 
                         <button
                             title="Dashboard"
@@ -137,10 +140,14 @@ function Dashboard() {
 
                         <button
                             title="My Profile"
-                            onClick={() => navigate("/profile")}
+                            onClick={() => setActivePage("profile")}
                             className={`w-full flex items-center ${
                                 collapsed ? "justify-center" : "gap-3"
-                            } px-4 py-2.5 rounded-2xl transition hover:bg-white/5 text-gray-300`}
+                            } px-4 py-2.5 rounded-2xl transition ${
+                                activePage === "profile"
+                                    ? "bg-[#0097a7]/10 border border-[#0097a7]/20 text-[#00b0c2]"
+                                    : "hover:bg-white/5 text-gray-300"
+                            }`}
                         >
                             <UserRound size={20} />
                             {!collapsed && "My Profile"}
@@ -148,9 +155,9 @@ function Dashboard() {
 
                     </nav>
 
-                    <div className="mt-6 space-y-4">
-                                                {!collapsed && (
-                            <div className="rounded-3xl border border-white/10 bg-white/[0.03] p-5">
+                    <div className="shrink-0 mt-6 space-y-4">
+                        {!collapsed && (
+                            <div className="hidden [@media(min-height:720px)]:block rounded-3xl border border-white/10 bg-white/[0.03] p-5">
                                 <div className="flex items-center gap-2 mb-3">
                                     <Trophy
                                         size={18}
@@ -196,6 +203,7 @@ function Dashboard() {
                 {activePage === "learning" && <ContinueLearningPage />}
                 {activePage === "todo" && <TodoPage />}
                 {activePage === "teams" && <TeamsPage />}
+                {activePage === "profile" && <ProfilePage />}
             </main>
         </div>
     );

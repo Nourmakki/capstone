@@ -9,7 +9,7 @@ use App\Models\RoadmapVersion;
 use App\Models\Tutorial;
 use App\Models\Project;
 use App\Models\Quiz;
-use App\Models\ExternalResource;
+use App\Models\ExternalResources;
 
 class VersionNode extends Model
 {
@@ -46,6 +46,6 @@ class VersionNode extends Model
 
     public function externalResources()
     {
-        return $this->hasMany(ExternalResource::class);
+        return $this->hasMany(ExternalResources::class);
     }
 }

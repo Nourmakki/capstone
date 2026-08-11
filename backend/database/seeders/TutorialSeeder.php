@@ -2,38 +2,56 @@
 
 namespace Database\Seeders;
 
-use Illuminate\Database\Seeder;
+use App\Models\Node;
+use App\Models\Roadmap;
+use App\Models\RoadmapVersion;
 use App\Models\Tutorial;
+use App\Models\VersionNode;
+use Illuminate\Database\Seeder;
 
 class TutorialSeeder extends Seeder
 {
     public function run(): void
     {
-        Tutorial::create([
-            'version_node_id' => 1,
-            'title' => 'React Crash Course',
-            'url' => 'https://www.youtube.com/watch?v=w7ejDZ8SWv8',
-            'description' => 'Complete introduction to React.',
-            'source_name' => 'Traversy Media',
-            'difficulty' => 'beginner'
-        ]);
+        foreach (RoadmapFixtures::all() as $fixture) {
+            $roadmap = Roadmap::where('title', $fixture['title'])->firstOrFail();
 
-        Tutorial::create([
-            'version_node_id' => 1,
-            'title' => 'React Components',
-            'url' => 'https://www.youtube.com/watch?v=Y2hgEGPzTZY',
-            'description' => 'Understanding components.',
-            'source_name' => 'Codevolution',
-            'difficulty' => 'beginner'
-        ]);
+            $version = RoadmapVersion::where('roadmap_id', $roadmap->id)
+                ->where('version_number', 1)
+                ->firstOrFail();
 
-        Tutorial::create([
-            'version_node_id' => 1,
-            'title' => 'State and Props',
-            'url' => 'https://www.youtube.com/watch?v=35lXWvCuM8o',
-            'description' => 'Learn State and Props.',
-            'source_name' => 'Net Ninja',
-            'difficulty' => 'beginner'
-        ]);
+            foreach ($fixture['nodes'] as $nodeFixture) {
+                if (empty($nodeFixture['tutorials'])) {
+                    continue;
+                }
+
+                $node = Node::where('title', $nodeFixture['title'])->first();
+
+                $versionNode = $node
+                    ? VersionNode::where('roadmap_version_id', $version->id)
+                        ->where('node_id', $node->id)
+                        ->first()
+                    : null;
+
+                if (! $versionNode) {
+                    continue;
+                }
+
+                foreach ($nodeFixture['tutorials'] as $tutorial) {
+                    Tutorial::updateOrCreate(
+                        [
+                            'version_node_id' => $versionNode->id,
+                            'url'             => $tutorial['url'],
+                        ],
+                        [
+                            'title'       => $tutorial['title'],
+                            'description' => $tutorial['description'],
+                            'source_name' => $tutorial['source_name'],
+                            'difficulty'  => $tutorial['difficulty'],
+                        ]
+                    );
+                }
+            }
+        }
     }
 }

@@ -1,49 +1,72 @@
 import React, {useState} from "react";
 import api from "../api";
 import { useNavigate } from "react-router-dom";
+import { useAuth } from "../context/AuthContext";
 
 const Signup=()=>{
     const[name, setName]=useState("");
     const[email, setEmail]=useState("");
     const[password, setPassword]=useState("");
+    const[passwordConfirmation, setPasswordConfirmation]=useState("");
     const[location, setLocation]=useState("");
     const[role, setRole]=useState("");
+    const[submitting, setSubmitting]=useState(false);
     const navigate = useNavigate();
+    const { login } = useAuth();
+
+    // Only flag a mismatch once the user has actually started typing the confirmation.
+    const passwordsMismatch =
+        passwordConfirmation.length > 0 && password !== passwordConfirmation;
 
     const handleSignup = async (e) => {
-    e.preventDefault();
+        e.preventDefault();
 
-    try {
-        const response = await api.post("/register", {
-            name,
-            email,
-            password,
-            location,
-            role,
-        });
-
-        localStorage.setItem(
-            "user",
-            JSON.stringify(response.data.user)
-        );
-
-        alert("Account created successfully!");
-
-        if (response.data.user.role === "Student") {
-            navigate("/dashboard");
-        } else if (response.data.user.role === "PendingProfessor") {
-            navigate("/professor-pending");
+        if (!role) {
+            alert("Please choose whether you are signing up as a student or a professor.");
+            return;
         }
 
-    } catch (error) {
-        console.error(error);
+        if (password !== passwordConfirmation) {
+            alert("The two passwords do not match.");
+            return;
+        }
 
-        alert(
-            error.response?.data?.message ||
-            "Registration failed."
-        );
-    }
-};
+        setSubmitting(true);
+
+        try {
+            const response = await api.post("/register", {
+                name,
+                email,
+                password,
+                password_confirmation: passwordConfirmation,
+                location,
+                role,
+            });
+
+            // Pending professors get no token - they wait for admin approval.
+            if (response.data.pending) {
+                navigate("/professor-pending");
+                return;
+            }
+
+            login(response.data.user, response.data.token);
+            navigate("/dashboard");
+
+        } catch (error) {
+            console.error(error);
+
+            // Laravel returns 422 with a field-keyed errors object.
+            const errors = error.response?.data?.errors;
+
+            alert(
+                errors
+                    ? Object.values(errors).flat().join("\n")
+                    : error.response?.data?.message ?? "Registration failed."
+            );
+        } finally {
+            setSubmitting(false);
+        }
+    };
 
     return (
         <div className="min-h-screen flex items-center justify-center bg-[#050B0D]">
@@ -70,7 +93,32 @@ const Signup=()=>{
                         <label className="block text-left text-sm mb-1 text-gray-300">
                             Password
                         </label>
-                        <input type="password" value={password} onChange={(e)=>setPassword(e.target.value)} placeholder="Create password" className="w-full p-2 border border-gray-600 bg-gray-700 text-white placeholder-gray-400 rounded-lg" />
+                        <input type="password" value={password} onChange={(e)=>setPassword(e.target.value)} placeholder="Create password" minLength={8} className="w-full p-2 border border-gray-600 bg-gray-700 text-white placeholder-gray-400 rounded-lg" />
+                        <p className="text-xs text-gray-500 mt-1 text-left">
+                            At least 8 characters.
+                        </p>
+                    </div>
+
+                    <div className="mb-4">
+                        <label className="block text-left text-sm mb-1 text-gray-300">
+                            Confirm Password
+                        </label>
+                        <input
+                            type="password"
+                            value={passwordConfirmation}
+                            onChange={(e)=>setPasswordConfirmation(e.target.value)}
+                            placeholder="Re-enter password"
+                            className={`w-full p-2 border bg-gray-700 text-white placeholder-gray-400 rounded-lg ${
+                                passwordsMismatch
+                                    ? "border-red-500"
+                                    : "border-gray-600"
+                            }`}
+                        />
+                        {passwordsMismatch && (
+                            <p className="text-xs text-red-400 mt-1 text-left">
+                                Passwords do not match.
+                            </p>
+                        )}
                     </div>
 
                     <div className="mb-4">
@@ -102,8 +150,12 @@ const Signup=()=>{
                         </div>
                     </div>
 
-                    <button type="submit" className="w-full bg-[#0097a7] text-white p-2 rounded-lg">
-                        Sign Up
+                    <button type="submit" disabled={submitting || passwordsMismatch} className={`w-full p-2 rounded-lg text-white transition ${
+                        submitting || passwordsMismatch
+                            ? "bg-gray-600 cursor-not-allowed"
+                            : "bg-[#0097a7] hover:brightness-110"
+                    }`}>
+                        {submitting ? "Creating account..." : "Sign Up"}
                     </button>
                 </form>
                 <p className="text-sm text-center mt-4 text-gray-300">

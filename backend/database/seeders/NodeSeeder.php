@@ -2,61 +2,24 @@
 
 namespace Database\Seeders;
 
-use Illuminate\Database\Seeder;
 use App\Models\Node;
+use Illuminate\Database\Seeder;
 
 class NodeSeeder extends Seeder
 {
-     public function run(): void
+    public function run(): void
     {
-        Node::updateOrCreate(
-            ['id' => 1],
-            [
-                'title' => 'React Basics',
-                'description' => 'Learn JSX and components.',
-                'difficulty' => 'beginner',
-                'status' => 'approved',
-            ]
-        );
-
-        Node::updateOrCreate(
-            ['id' => 2],
-            [
-                'title' => 'React Components',
-                'description' => 'Reusable UI components.',
-                'difficulty' => 'beginner',
-                'status' => 'approved',
-            ]
-        );
-
-        Node::updateOrCreate(
-            ['id' => 3],
-            [
-                'title' => 'React State',
-                'description' => 'Managing component state.',
-                'difficulty' => 'beginner',
-                'status' => 'approved',
-            ]
-        );
-
-        Node::updateOrCreate(
-            ['id' => 4],
-            [
-                'title' => 'React Hooks',
-                'description' => 'Using useState and useEffect.',
-                'difficulty' => 'intermediate',
-                'status' => 'approved',
-            ]
-        );
-
-        Node::updateOrCreate(
-            ['id' => 5],
-            [
-                'title' => 'React Router',
-                'description' => 'Navigation in React.',
-                'difficulty' => 'intermediate',
-                'status' => 'approved',
-            ]
-        );
+        foreach (RoadmapFixtures::all() as $fixture) {
+            foreach ($fixture['nodes'] as $node) {
+                Node::updateOrCreate(
+                    ['title' => $node['title']],
+                    [
+                        'description' => $node['description'],
+                        'difficulty'  => $node['difficulty'],
+                        'status'      => 'approved',
+                    ]
+                );
+            }
+        }
     }
 }

@@ -4,20 +4,21 @@ namespace App\Models;
 
 use Illuminate\Database\Eloquent\Factories\HasFactory;
 use Illuminate\Database\Eloquent\Model;
-use App\Models\RoadmapVersion;
+use App\Models\VersionNode;
 
 class ExternalResources extends Model
 {
     use HasFactory;
 
-    protected $fillable = [
-        'roadmap_versions_id',
+        protected $fillable = [
+        'version_node_id',
         'title',
-        'url'
+        'url',
+        'type',
     ];
 
-    public function roadmapVersion()
+    public function versionNode()
     {
-        return $this->belongsTo(RoadmapVersion::class);
+        return $this->belongsTo(VersionNode::class);
     }
 }
