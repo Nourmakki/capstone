@@ -15,26 +15,6 @@ def health_check() -> dict[str, str]:
         "status": "ok"
     }
 
-
-# @app.post("/test/start-request")
-# def test_start_request(
-#     request: StartWorkflowRequest,
-# ) -> dict:
-#     return {
-#         "message": "Start request is valid.",
-#         "data": request.model_dump(),
-#         # model_dump() converts the Pydantic model into a normal Python dictionary.
-#     }
-
-
-# @app.post("/test/admin-decision")
-# def test_admin_decision(
-#     decision: AdminDecisionRequest,
-# ) -> dict:
-#     return {
-#         "message": "Admin decision is valid.",
-#         "data": decision.model_dump(),
-#     }
 @app.post("/roadmap-workflows",response_model=WorkflowResponse,)
 def start_workflow(
     request: StartWorkflowRequest,
