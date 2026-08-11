@@ -57,7 +57,6 @@ class AgentState(TypedDict, total=False):
 
     # Input received from Laravel.
     roadmap_id: int
-    roadmap_title: str
     roadmap_topic: str
     version_id: int
     version_number: str
