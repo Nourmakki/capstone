@@ -79,9 +79,10 @@ class RoadmapController extends Controller
     {
         $version->load('roadmap');
 
+        // Field set must match AI-System/api/schema.py StartWorkflowRequest,
+        // which sets extra="forbid" - any additional key is rejected with a 422.
         return response()->json([
             'roadmap_id'     => $version->roadmap_id,
-            'roadmap_title'  => $version->roadmap->title,
             'roadmap_topic'  => strtolower($version->roadmap->title),
             'version_id'     => $version->id,
             'version_number' => (string) $version->version_number,

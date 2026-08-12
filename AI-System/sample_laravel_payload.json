@@ -1,0 +1,51 @@
+{
+    "roadmap_id": 1,
+    "roadmap_topic": "web development",
+    "version_id": 1,
+    "version_number": "1",
+    "nodes": [
+        {
+            "id": 1,
+            "title": "React Basics",
+            "description": "Learn JSX and components."
+        },
+        {
+            "id": 2,
+            "title": "React Components",
+            "description": "Reusable UI components."
+        },
+        {
+            "id": 3,
+            "title": "React State",
+            "description": "Managing component state."
+        },
+        {
+            "id": 4,
+            "title": "React Hooks",
+            "description": "Using useState and useEffect."
+        },
+        {
+            "id": 5,
+            "title": "React Router",
+            "description": "Navigation in React."
+        }
+    ],
+    "edges": [
+        {
+            "from_node_id": 1,
+            "to_node_id": 2
+        },
+        {
+            "from_node_id": 2,
+            "to_node_id": 3
+        },
+        {
+            "from_node_id": 3,
+            "to_node_id": 4
+        },
+        {
+            "from_node_id": 4,
+            "to_node_id": 5
+        }
+    ]
+}
