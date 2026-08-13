@@ -793,6 +793,15 @@ def validate_placement_output(
             field_name="recommended_predecessor_node_ids",
             owner_id=suggested_node_id,
         )
+        if (
+            not prerequisites
+            and not successors
+        ):
+            raise ValueError(
+                f"Suggested node {suggested_node_id} "
+                "must have at least one direct "
+                "prerequisite or direct successor."
+            )
 
         if set(prerequisites) & set(successors):
             raise ValueError(
@@ -1083,8 +1092,9 @@ def run_placement_agent(
 
     if not suggested_nodes:
         return {
+            "node_suggestions_with_ids": [],
             "placement_suggestions": [],
-            "existing_edges_to_remove": [],
+            "existing_edges_to_remove":[],
         }
 
     prepared_suggested_nodes = assign_temporary_node_ids(
@@ -1217,12 +1227,17 @@ Correct the placement while following these requirements:
                 result.content
             )
 
-            return validate_placement_output(
+            validated_placement = validate_placement_output(
                 parsed_output=parsed_output,
                 existing_nodes=existing_nodes,
                 existing_edges=existing_edges,
                 suggested_nodes=prepared_suggested_nodes,
             )
+
+            return {
+                "node_suggestions_with_ids": prepared_suggested_nodes,
+                **validated_placement,
+            }
 
         except Exception as error:
             last_error = error

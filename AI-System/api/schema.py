@@ -23,6 +23,10 @@ NonEmptyString = Annotated[
     ),
 ]
 
+PositiveNodeId = Annotated[
+    int,
+    Field(gt=0),
+]
 
 ReviewStage = Literal[
     "trends",
@@ -248,22 +252,42 @@ class NodeSuggestionEditRequest(BaseModel):
 
     title: NonEmptyString
     description: NonEmptyString
-    difficulty: NonEmptyString
+    difficulty: Literal[
+        "beginner",
+        "intermediate",
+        "advanced",
+    ]
     based_on_trend: NonEmptyString
 
 
 class PlacementSuggestionEditRequest(BaseModel):
     model_config = ConfigDict(extra="forbid")
 
-    suggested_node_id: int = Field(gt=0)
+    suggested_node_id: int = PositiveNodeId
 
     suggested_node_title: NonEmptyString
 
-    direct_prerequisite_node_ids: list[int]
-    direct_successor_node_ids: list[int]
-    recommended_predecessor_node_ids: list[int]
+    direct_prerequisite_node_ids:list[PositiveNodeId]
+    direct_successor_node_ids: list[PositiveNodeId]
+    recommended_predecessor_node_ids: list[PositiveNodeId]
 
     explanation: NonEmptyString
+    @model_validator(mode="after")
+    def validate_hard_relationship(
+        self,
+    ) -> "PlacementSuggestionEditRequest":
+
+        if (
+            not self.direct_prerequisite_node_ids
+            and not self.direct_successor_node_ids
+        ):
+            raise ValueError(
+                "A placement must contain at least "
+                "one direct prerequisite or "
+                "direct successor."
+            )
+
+        return self
 
 
 class ExistingEdgeRemovalEditRequest(BaseModel):
@@ -506,14 +530,11 @@ class AdminDecisionRequest(BaseModel):
 
             edges_to_remove = self.data["existing_edges_to_remove"]
 
-            if (
-                not placements
-                and not edges_to_remove
-            ):
+            if  not placements:
+           
                 raise ValueError(
-                    "Placement edit must contain "
-                    "at least one edited placement "
-                    "or edge removal."
+                    "Placement suggestions must not be empty "
+                   
                 )
 
             for placement in placements:
@@ -568,6 +589,8 @@ class NodeSuggestionResponse(BaseModel):
     difficulty: NonEmptyString
     based_on_trend: NonEmptyString
 
+class NodeSuggestionWithIdResponse(NodeSuggestionResponse):
+    id: int = Field(gt=0)
 
 class PlacementSuggestionResponse(BaseModel):
     model_config = ConfigDict(extra="forbid")
@@ -599,6 +622,8 @@ class WorkflowProposalResponse(BaseModel):
     trends: list[TrendResponse]
 
     node_suggestions: list[NodeSuggestionResponse]
+
+    node_suggestions_with_ids: list[NodeSuggestionWithIdResponse]
 
     placement_suggestions: list[PlacementSuggestionResponse]
 

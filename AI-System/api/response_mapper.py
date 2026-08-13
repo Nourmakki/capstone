@@ -24,6 +24,10 @@ def build_workflow_response(
                 "node_suggestions",
                 [],
             ),
+            "node_suggestions_with_ids": result.get(
+                "node_suggestions_with_ids",
+                [],
+            ),
             "placement_suggestions": result.get(
                 "placement_suggestions",
                 [],
