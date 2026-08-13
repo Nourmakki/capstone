@@ -21,6 +21,9 @@ class NodeSuggestion(TypedDict):
     difficulty: str
     based_on_trend: str
 
+class NodeSuggestionWithId(NodeSuggestion):
+    id: int
+
 class PlacementSuggestion(TypedDict):
     suggested_node_id: int
     suggested_node_title: str
@@ -75,6 +78,9 @@ class AgentState(TypedDict, total=False):
 
     # Admin-approved or admin-edited node suggestions.
     approved_node_suggestions: list[NodeSuggestion]
+
+    # Suggested nodes prepared by the Placement Agent with temporary IDs.
+    node_suggestions_with_ids: list[NodeSuggestionWithId]
 
     # Generated Placement Agent output.
     placement_suggestions: list[PlacementSuggestion]

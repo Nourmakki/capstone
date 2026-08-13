@@ -197,6 +197,10 @@ def place_nodes(state: AgentState,) -> Command:
             ],
         )
 
+        suggested_nodes_with_ids = result.get(
+            "node_suggestions_with_ids"
+        )
+
         placements = result.get(
             "placement_suggestions"
         )
@@ -204,6 +208,15 @@ def place_nodes(state: AgentState,) -> Command:
         edges_to_remove = result.get(
             "existing_edges_to_remove"
         )
+
+        if not isinstance(
+            suggested_nodes_with_ids,
+            list,
+        ):
+            raise ValueError(
+                "Placement Agent must return a "
+                "node_suggestions_with_ids list."
+            )
 
         if not isinstance(placements, list):
             raise ValueError(
@@ -219,6 +232,9 @@ def place_nodes(state: AgentState,) -> Command:
 
         return Command(
             update={
+                "node_suggestions_with_ids": (
+                    suggested_nodes_with_ids
+                ),
                 "placement_suggestions": placements,
                 "existing_edges_to_remove": (
                     edges_to_remove
