@@ -10,7 +10,7 @@ use App\Models\VersionNode;
 use App\Models\UserRoadmapProgress;
 use App\Models\Workshop;
 use App\Models\ExternalResources;
-
+use App\Models\RoadmapAiWorkflow;
 
 
 class RoadmapVersion extends Model
@@ -51,6 +51,11 @@ class RoadmapVersion extends Model
     public function externalResources()
     {
         return $this->hasMany(ExternalResources::class);
+    }
+
+    public function aiWorkflows()
+    {
+        return $this->hasMany(RoadmapAiWorkflow::class);
     }
 
 
