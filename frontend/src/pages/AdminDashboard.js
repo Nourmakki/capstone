@@ -96,11 +96,11 @@ function AdminDashboard() {
                         <div className="flex items-center gap-3 mb-3">
                             <Users className="text-[#0097a7]" />
                             <span className="text-gray-400">
-                                {stats.pendingProfessors}
+                                Pending Professors
                             </span>
                         </div>
                         <h2 className="text-4xl font-black">
-                            {professorRequests.length}
+                            {stats.pendingProfessors}
                         </h2>
                     </div>
                     <div className="rounded-3xl border border-white/10 bg-white/[0.03] p-6">

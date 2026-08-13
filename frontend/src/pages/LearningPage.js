@@ -197,7 +197,7 @@ function LearningPage() {
                                                 {quiz.questions?.length ?? 0} questions
                                             </p>
                                             <button
-                                                onClick={() => navigate("/quiz")}
+                                                onClick={() => navigate(`/quiz/${quiz.id}`)}
                                                 className="px-6 py-3 rounded-2xl bg-[#0097a7] text-black font-semibold"
                                             >
                                                 Start Quiz

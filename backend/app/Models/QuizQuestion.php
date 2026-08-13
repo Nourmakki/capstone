@@ -10,7 +10,7 @@ class QuizQuestion extends Model
 {
     use HasFactory;
 
-        protected $fillable = [
+    protected $fillable = [
         'quiz_id',
         'question',
         'type',
@@ -21,6 +21,12 @@ class QuizQuestion extends Model
     protected $casts = [
         'options' => 'array',
     ];
+
+    /**
+     * Never serialise the correct answer. Grading happens server-side;
+     * anything that needs the answer must read it explicitly.
+     */
+    protected $hidden = ['answer'];
 
     public function quiz()
     {

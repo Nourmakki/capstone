@@ -41,7 +41,7 @@ function App() {
                     <Route path="/learning/:versionNodeId" element={
                         <ProtectedRoute roles={["Student"]}><LearningPage /></ProtectedRoute>
                     } />
-                    <Route path="/quiz" element={
+                    <Route path="/quiz/:quizId" element={
                         <ProtectedRoute roles={["Student"]}><QuizPage /></ProtectedRoute>
                     } />
                     <Route path="/project" element={

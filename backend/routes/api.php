@@ -6,6 +6,7 @@ use App\Http\Controllers\Api\LearningController;
 use App\Http\Controllers\Api\ProgressController;
 use App\Http\Controllers\Api\RoadmapController;
 use App\Http\Controllers\Api\TutorialController;
+use App\Http\Controllers\Api\QuizController;
 use Illuminate\Support\Facades\Route;
 
 /*
@@ -40,6 +41,11 @@ Route::middleware('auth:sanctum')->group(function () {
 
     // Everything LearningPage needs for one module.
     Route::get('/version-nodes/{versionNode}', [LearningController::class, 'nodeDetail']);
+
+        // Quizzes
+    Route::get('/quizzes/{quiz}', [QuizController::class, 'show']);
+    Route::post('/quizzes/{quiz}/submit', [QuizController::class, 'submit']);
+    Route::get('/quizzes/{quiz}/attempts', [QuizController::class, 'attempts']);
 
     /*
     |----------------------------------------------------------------------

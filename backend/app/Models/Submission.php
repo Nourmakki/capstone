@@ -12,8 +12,19 @@ use App\Models\HumanReviewRequest;
 class Submission extends Model
 {
     use HasFactory;
-    protected $fillable = ['project_id', 'student_id', 'quiz_id'];
+    protected $fillable = [
+        'project_id',
+        'student_id',
+        'quiz_id',
+        'content',
+        'status',
+        'score',
+        'comments',
+    ];
 
+    protected $casts = [
+        'score' => 'integer',
+    ];
     public function project()
     {
         return $this->belongsTo(Project::class);
