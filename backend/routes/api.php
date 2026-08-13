@@ -1,6 +1,7 @@
 <?php
 
 use App\Http\Controllers\Api\AdminController;
+use App\Http\Controllers\Api\AiWorkflowController;
 use App\Http\Controllers\Api\AuthController;
 use App\Http\Controllers\Api\LearningController;
 use App\Http\Controllers\Api\ProgressController;
@@ -63,7 +64,8 @@ Route::middleware('auth:sanctum')->group(function () {
 
         // Feeds the LangGraph AI service its AgentState input.
         Route::get('/roadmap-versions/{version}/ai-export', [RoadmapController::class, 'aiExport']);
-
+        Route::get('/ai-workflows/{workflow}',[AiWorkflowController::class, 'show']);
+        Route::post('/ai-workflows/{workflow}/resume',[AiWorkflowController::class, 'resume']);
         Route::prefix('admin')->group(function () {
             Route::get('/professor-requests', [AdminController::class, 'professorRequests']);
             Route::put('/approve-professor/{id}', [AdminController::class, 'approveProfessor']);
