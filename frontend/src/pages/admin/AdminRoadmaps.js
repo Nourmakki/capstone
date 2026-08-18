@@ -1,0 +1,231 @@
+import React, { useCallback, useEffect, useState } from "react";
+import api from "../../api";
+import { GitBranch, Upload, Plus, Network } from "lucide-react";
+
+function AdminRoadmaps({ onChanged }) {
+    const [roadmaps, setRoadmaps] = useState([]);
+    const [selectedId, setSelectedId] = useState(null);
+    const [versions, setVersions] = useState([]);
+    const [graph, setGraph] = useState(null);
+    const [form, setForm] = useState({ title: "", description: "" });
+    const [loading, setLoading] = useState(true);
+    const [busy, setBusy] = useState(false);
+
+    const loadRoadmaps = useCallback(async () => {
+        try {
+            const response = await api.get("/roadmaps");
+            const list = response.data.data ?? [];
+            setRoadmaps(list);
+            setSelectedId((prev) => prev ?? list[0]?.id ?? null);
+        } catch (err) {
+            console.error(err);
+        } finally {
+            setLoading(false);
+        }
+    }, []);
+
+    useEffect(() => { loadRoadmaps(); }, [loadRoadmaps]);
+
+    const loadVersions = useCallback(async () => {
+        if (!selectedId) return;
+
+        try {
+            const response = await api.get(`/roadmaps/${selectedId}/versions`);
+            setVersions(response.data.data ?? []);
+        } catch (err) {
+            console.error(err);
+        }
+    }, [selectedId]);
+
+    useEffect(() => { loadVersions(); }, [loadVersions]);
+
+    const createRoadmap = async () => {
+        if (!form.title.trim() || !form.description.trim()) return;
+
+        setBusy(true);
+
+        try {
+            await api.post("/roadmaps", form);
+            setForm({ title: "", description: "" });
+            await loadRoadmaps();
+            onChanged?.();
+        } catch (err) {
+            const errors = err.response?.data?.errors;
+            alert(errors ? Object.values(errors).flat().join("\n") : "Could not create the roadmap.");
+        } finally {
+            setBusy(false);
+        }
+    };
+
+    const createDraft = async () => {
+        setBusy(true);
+
+        try {
+            await api.post(`/roadmaps/${selectedId}/versions`);
+            await loadVersions();
+            onChanged?.();
+        } catch (err) {
+            alert(err.response?.data?.message ?? "Could not create a draft.");
+        } finally {
+            setBusy(false);
+        }
+    };
+
+    const publish = async (versionId) => {
+        setBusy(true);
+
+        try {
+            await api.put(`/roadmap-versions/${versionId}/publish`);
+            await loadVersions();
+            await loadRoadmaps();
+            onChanged?.();
+        } catch (err) {
+            alert(err.response?.data?.message ?? "Could not publish.");
+        } finally {
+            setBusy(false);
+        }
+    };
+
+    const viewGraph = async (versionId) => {
+        try {
+            const response = await api.get(`/roadmap-versions/${versionId}/graph`);
+            setGraph(response.data);
+        } catch (err) {
+            console.error(err);
+        }
+    };
+
+    const statusStyle = (s) =>
+        s === "Published" ? "border-green-400/30 bg-green-400/10 text-green-300"
+        : s === "Draft" ? "border-yellow-400/30 bg-yellow-400/10 text-yellow-300"
+        : "border-white/10 bg-white/[0.03] text-gray-400";
+
+    return (
+        <div className="p-8">
+            <h1 className="text-5xl font-black text-[#0097a7]">Roadmaps</h1>
+            <p className="text-gray-400 mt-2 mb-10">
+                Create roadmaps and manage their versions.
+            </p>
+
+            <div className="rounded-3xl border border-white/10 bg-white/[0.03] p-6 mb-10">
+                <h2 className="text-2xl font-bold mb-6 flex items-center gap-2">
+                    <Plus /> New Roadmap
+                </h2>
+
+                <div className="grid md:grid-cols-2 gap-4">
+                    <input type="text" placeholder="Title" value={form.title}
+                        onChange={(e) => setForm({ ...form, title: e.target.value })}
+                        className="bg-black border border-white/10 rounded-xl p-3 focus:outline-none focus:border-[#0097a7]" />
+                    <input type="text" placeholder="Description" value={form.description}
+                        onChange={(e) => setForm({ ...form, description: e.target.value })}
+                        className="bg-black border border-white/10 rounded-xl p-3 focus:outline-none focus:border-[#0097a7]" />
+                </div>
+
+                <button onClick={createRoadmap} disabled={busy || !form.title.trim() || !form.description.trim()}
+                    className={`mt-6 font-bold px-8 py-3 rounded-xl transition ${
+                        busy || !form.title.trim() || !form.description.trim()
+                            ? "bg-gray-700 text-gray-400 cursor-not-allowed"
+                            : "bg-[#0097a7] text-black hover:scale-105"
+                    }`}>
+                    Create Roadmap
+                </button>
+            </div>
+
+            {loading ? (
+                <p className="text-gray-400">Loading...</p>
+            ) : (
+                <>
+                    <div className="flex flex-wrap gap-3 mb-8">
+                        {roadmaps.map((r) => (
+                            <button key={r.id} onClick={() => { setSelectedId(r.id); setGraph(null); }}
+                                className={`px-6 py-3 rounded-2xl transition ${
+                                    selectedId === r.id
+                                        ? "bg-[#0097a7] text-black font-semibold"
+                                        : "bg-white/5 border border-white/10 text-gray-300"
+                                }`}>
+                                {r.title}
+                            </button>
+                        ))}
+                    </div>
+
+                    <div className="rounded-3xl border border-white/10 bg-white/[0.03] p-8">
+                        <div className="flex items-center justify-between mb-8">
+                            <div className="flex items-center gap-3">
+                                <GitBranch className="text-[#0097a7]" />
+                                <h2 className="text-3xl font-bold">Versions</h2>
+                            </div>
+
+                            <button onClick={createDraft} disabled={busy || !selectedId}
+                                className={`flex items-center gap-2 px-6 py-3 rounded-2xl font-bold transition ${
+                                    busy ? "bg-gray-700 text-gray-400" : "bg-[#0097a7] text-black hover:scale-105"
+                                }`}>
+                                <Plus size={18} /> New Draft Version
+                            </button>
+                        </div>
+
+                        {versions.length === 0 ? (
+                            <p className="text-gray-500">No versions yet.</p>
+                        ) : (
+                            <div className="space-y-4">
+                                {versions.map((v) => (
+                                    <div key={v.id} className="rounded-2xl border border-white/10 bg-black/30 p-5 flex flex-col md:flex-row md:items-center justify-between gap-4">
+                                        <div className="flex items-center gap-4">
+                                            <span className="text-2xl font-black">v{v.version_number}</span>
+                                            <span className={`text-xs px-3 py-1 rounded-full border ${statusStyle(v.status)}`}>
+                                                {v.status}
+                                            </span>
+                                        </div>
+
+                                        <div className="flex gap-3">
+                                            <button onClick={() => viewGraph(v.id)}
+                                                className="flex items-center gap-2 px-5 py-2 rounded-xl border border-white/10 text-gray-300 hover:border-[#0097a7]/40 transition">
+                                                <Network size={16} /> View Graph
+                                            </button>
+
+                                            {v.status !== "Published" && (
+                                                <button onClick={() => publish(v.id)} disabled={busy}
+                                                    className="flex items-center gap-2 px-5 py-2 rounded-xl border border-green-400/20 bg-green-500/10 text-green-300 hover:bg-green-500/20 transition">
+                                                    <Upload size={16} /> Publish
+                                                </button>
+                                            )}
+                                        </div>
+                                    </div>
+                                ))}
+                            </div>
+                        )}
+                    </div>
+
+                    {graph && (
+                        <div className="mt-8 rounded-3xl border border-white/10 bg-white/[0.03] p-8">
+                            <h2 className="text-2xl font-bold mb-6">
+                                Graph · v{graph.version.version_number}
+                            </h2>
+
+                            <div className="grid md:grid-cols-2 gap-4 mb-6">
+                                <div className="rounded-2xl bg-black/30 border border-white/10 p-5">
+                                    <p className="text-gray-400 text-sm">Nodes</p>
+                                    <h3 className="text-3xl font-black mt-2">{graph.nodes.length}</h3>
+                                </div>
+                                <div className="rounded-2xl bg-black/30 border border-white/10 p-5">
+                                    <p className="text-gray-400 text-sm">Edges</p>
+                                    <h3 className="text-3xl font-black mt-2">{graph.edges.length}</h3>
+                                </div>
+                            </div>
+
+                            <div className="space-y-2">
+                                {graph.nodes.map((n) => (
+                                    <div key={n.version_node_id} className="flex items-center justify-between rounded-xl border border-white/10 bg-black/20 px-4 py-3">
+                                        <span>{n.title}</span>
+                                        <span className="text-xs text-gray-500 capitalize">{n.difficulty}</span>
+                                    </div>
+                                ))}
+                            </div>
+                        </div>
+                    )}
+                </>
+            )}
+        </div>
+    );
+}
+
+export default AdminRoadmaps;

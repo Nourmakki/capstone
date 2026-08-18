@@ -14,13 +14,14 @@ class TeamController extends Controller
 {
     public function index(Request $request)
     {
-        $student = $this->studentFor($request);
+        // Staff can browse teams read-only; membership flags stay false.
+        $student = Student::where('user_id', $request->user()->id)->first();
 
         $teams = Team::with('students.user')
             ->withCount('students')
             ->orderByDesc('created_at')
             ->get()
-            ->map(fn ($t) => $this->payload($t, $student->id));
+            ->map(fn ($t) => $this->payload($t, $student?->id ?? 0));
 
         return response()->json(['teams' => $teams]);
     }

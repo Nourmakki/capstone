@@ -12,7 +12,6 @@ import RoadmapOverview from "./pages/RoadmapOverview";
 import LearningPage from "./pages/LearningPage";
 import QuizPage from "./pages/QuizPage";
 import ProjectSubmissionPage from "./pages/ProjectSubmissionPage";
-import AdminProfessorPanel from "./pages/AdminProfessorPanel";
 import TodoPage from "./pages/TodoPage";
 import TeamsPage from "./pages/TeamsPage";
 import WaitingApproval from "./pages/WaitingApproval";
@@ -60,9 +59,6 @@ function App() {
                     } />
                     <Route path="/admin-dashboard" element={
                         <ProtectedRoute roles={["Admin"]}><AdminDashboard /></ProtectedRoute>
-                    } />
-                    <Route path="/admin" element={
-                        <ProtectedRoute roles={["Admin", "Professor"]}><AdminProfessorPanel /></ProtectedRoute>
                     } />
 
                 </Routes>

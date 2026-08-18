@@ -1,178 +1,117 @@
-import React from "react";
-import { useState, useEffect } from "react";
+import React, { useCallback, useEffect, useState } from "react";
+import { useNavigate } from "react-router-dom";
 import api from "../api";
+import { useAuth } from "../context/AuthContext";
 import {
-    ShieldCheck,
-    UserCheck,
-    UserX,
-    Users,
+    LayoutDashboard, Users, Map, LogOut, Menu, ShieldCheck,
 } from "lucide-react";
 
+import AdminOverview from "./admin/AdminOverview";
+import AdminProfessors from "./admin/AdminProfessors";
+import AdminRoadmaps from "./admin/AdminRoadmaps";
+
 function AdminDashboard() {
-    const [professorRequests, setProfessorRequests] = useState([]);
+    const navigate = useNavigate();
+    const { logout } = useAuth();
 
-    const [stats, setStats] = useState({
-        pendingProfessors: 0,
-        approvedProfessors: 0,
-        admins: 0,
-    });
+    const [activePage, setActivePage] = useState("overview");
+    const [collapsed, setCollapsed] = useState(false);
+    const [stats, setStats] = useState({});
 
-    useEffect(() => {
-        loadStats();
-    }, []);
-    const loadStats = async () => {
+    const loadStats = useCallback(async () => {
         try {
             const response = await api.get("/admin/dashboard-stats");
             setStats(response.data);
-        } catch (error) {
-            console.error(error);
+        } catch (err) {
+            console.error(err);
         }
-    };
-    
-    useEffect(() => {
-        loadProfessorRequests();
     }, []);
-    const loadProfessorRequests = async () => {
-        try {
-            const response = await api.get(
-                "/admin/professor-requests"
-            );
-            setProfessorRequests(response.data);
-        } catch (error) {
-            console.error(error);
-        }
+
+    useEffect(() => { loadStats(); }, [loadStats]);
+
+    const handleLogout = async () => {
+        await logout();
+        navigate("/login");
     };
 
-    const handleApprove = async (id) => {
-        try {
-            await api.put(
-                `/admin/approve-professor/${id}`
-            );
-            alert("Professor approved.");
-            loadProfessorRequests();
-        } catch (error) {
-            console.error(error);
-            alert("Unable to approve professor.");
-        }
-    };
-
-    const handleReject = async (id) => {
-        try {
-            await api.delete(
-                `/admin/reject-professor/${id}`
-            );
-            alert("Professor rejected.");
-            loadProfessorRequests();
-        } catch (error) {
-            console.error(error);
-            alert("Unable to reject professor.");
-        }
-    };
+    const navItems = [
+        { id: "overview", label: "Overview", icon: <LayoutDashboard size={20} /> },
+        { id: "professors", label: "Professors", icon: <Users size={20} />, badge: stats.pendingProfessors },
+        { id: "roadmaps", label: "Roadmaps", icon: <Map size={20} /> },
+    ];
 
     return (
-        <div className="min-h-screen bg-black text-white overflow-hidden">
+        <div className="min-h-screen bg-black text-white flex overflow-hidden">
             <div className="absolute top-0 left-0 w-full h-full bg-[radial-gradient(circle_at_center,rgba(0,255,200,0.08),transparent_55%)] pointer-events-none" />
-            <header className="relative z-10 px-8 lg:px-20 py-10 border-b border-white/10">
-                <div className="flex items-center gap-4">
-                    <div className="w-14 h-14 rounded-2xl bg-[#0097a7] text-black flex items-center justify-center">
-                        <ShieldCheck size={28} />
+
+            <aside className={`fixed top-0 left-0 h-screen z-20 border-r border-white/10 bg-black/40 backdrop-blur-xl flex flex-col px-6 pt-6 pb-6 transition-all duration-300 ${
+                collapsed ? "w-24" : "w-72"
+            }`}>
+                <div className="shrink-0 mb-6">
+                    <div className="flex justify-end">
+                        <button onClick={() => setCollapsed(!collapsed)}
+                            className="p-2 rounded-lg hover:bg-white/10 transition">
+                            <Menu size={22} />
+                        </button>
                     </div>
 
-                    <div>
-                        <h1 className="text-4xl font-black">
-                            Admin Dashboard
-                        </h1>
+                    {collapsed ? (
+                        <div className="flex flex-col items-center mt-2">
+                            <ShieldCheck size={28} className="text-[#0097a7]" />
+                        </div>
+                    ) : (
+                        <div className="mt-2">
+                            <h1 className="text-3xl font-black text-[#0097a7]">CS Mastery</h1>
+                            <p className="text-sm text-gray-500 mt-1">Admin Panel</p>
+                        </div>
+                    )}
+                </div>
 
-                        <p className="text-gray-400 mt-2">
-                            Manage professor requests and user permissions.
-                        </p>
-                    </div>
-                </div>
-            </header>
+                <div className="flex-1 min-h-0 flex flex-col">
+                    <nav className="flex-1 min-h-0 overflow-y-auto overscroll-contain space-y-2 pr-1">
+                        {navItems.map((item) => (
+                            <button key={item.id} title={item.label}
+                                onClick={() => setActivePage(item.id)}
+                                className={`w-full flex items-center ${
+                                    collapsed ? "justify-center" : "gap-3"
+                                } px-4 py-2.5 rounded-2xl transition ${
+                                    activePage === item.id
+                                        ? "bg-[#0097a7]/10 border border-[#0097a7]/20 text-[#00b0c2]"
+                                        : "hover:bg-white/5 text-gray-300"
+                                }`}>
+                                {item.icon}
+                                {!collapsed && (
+                                    <span className="flex-1 flex items-center justify-between">
+                                        {item.label}
+                                        {item.badge > 0 && (
+                                            <span className="text-xs px-2 py-0.5 rounded-full bg-yellow-400/20 text-yellow-300">
+                                                {item.badge}
+                                            </span>
+                                        )}
+                                    </span>
+                                )}
+                            </button>
+                        ))}
+                    </nav>
 
-            <main className="relative z-10 px-8 lg:px-20 py-10">
-                <div className="grid md:grid-cols-3 gap-6 mb-10">
-                    <div className="rounded-3xl border border-white/10 bg-white/[0.03] p-6">
-                        <div className="flex items-center gap-3 mb-3">
-                            <Users className="text-[#0097a7]" />
-                            <span className="text-gray-400">
-                                Pending Professors
-                            </span>
-                        </div>
-                        <h2 className="text-4xl font-black">
-                            {stats.pendingProfessors}
-                        </h2>
-                    </div>
-                    <div className="rounded-3xl border border-white/10 bg-white/[0.03] p-6">
-                        <div className="flex items-center gap-3 mb-3">
-                            <UserCheck className="text-green-400" />
-                            <span className="text-gray-400">
-                                Approved Professors
-                            </span>
-                        </div>
-                        <h2 className="text-4xl font-black">
-                            {stats.approvedProfessors}
-                        </h2>
-                    </div>
-                    <div className="rounded-3xl border border-white/10 bg-white/[0.03] p-6">
-                        <div className="flex items-center gap-3 mb-3">
-                            <ShieldCheck className="text-[#0097a7]" />
-                            <span className="text-gray-400">
-                                Administrators
-                            </span>
-                        </div>
-                        <h2 className="text-4xl font-black">
-                            {stats.admins}
-                        </h2>
+                    <div className="shrink-0 mt-6">
+                        <button title="Logout" onClick={handleLogout}
+                            className={`w-full flex items-center ${
+                                collapsed ? "justify-center" : "justify-center gap-3"
+                            } py-3 rounded-2xl border border-red-500/20 bg-red-500/5 text-red-400 hover:bg-red-500/10 hover:border-red-500/40 transition`}>
+                            <LogOut size={18} />
+                            {!collapsed && "Logout"}
+                        </button>
                     </div>
                 </div>
-                <div className="mb-8">
-                    <h2 className="text-3xl font-bold mb-2">
-                        Pending Professor Requests
-                    </h2>
-                    <p className="text-gray-400">
-                        Review applications submitted by users requesting professor access.
-                    </p>
-                </div>
-                <div className="space-y-6">
-                    {professorRequests.map((professor) => (
-                        <div
-                            key={professor.id}
-                            className="rounded-3xl border border-white/10 bg-white/[0.03] p-6"
-                        >
-                            <div className="flex flex-col lg:flex-row lg:items-center lg:justify-between gap-6">
-                                <div>
-                                    <h2 className="text-2xl font-bold">
-                                        {professor.name}
-                                    </h2>
-                                    <p className="text-gray-400 mt-2">
-                                        {professor.email}
-                                    </p>
-                                    <p className="text-[#00b0c2] mt-2">
-                                        {professor.specialization}
-                                    </p>
-                                    <p className="text-gray-500 text-sm mt-1">
-                                        {professor.location}
-                                    </p>
-                                </div>
-                                <div className="flex gap-3">
-                                    <button onClick={() => handleApprove(professor.id)}
-                                        className="flex items-center gap-2 px-6 py-3 rounded-2xl bg-green-500 hover:bg-green-600 transition font-semibold"
-                                    >
-                                        <UserCheck size={18} />
-                                        Approve
-                                    </button>
-                                    <button onClick={() => handleReject(professor.id)}
-                                        className="flex items-center gap-2 px-6 py-3 rounded-2xl bg-red-500 hover:bg-red-600 transition font-semibold"
-                                    >
-                                        <UserX size={18} />
-                                        Reject
-                                    </button>
-                                </div>
-                            </div>
-                        </div>
-                    ))}
-                </div>
+            </aside>
+
+            <main className={`relative z-10 flex-1 overflow-y-auto transition-all duration-300 ${
+                collapsed ? "ml-24" : "ml-72"
+            }`}>
+                {activePage === "overview" && <AdminOverview stats={stats} onGo={setActivePage} />}
+                {activePage === "professors" && <AdminProfessors onChanged={loadStats} />}
+                {activePage === "roadmaps" && <AdminRoadmaps onChanged={loadStats} />}
             </main>
         </div>
     );

@@ -3,7 +3,10 @@
 namespace App\Http\Controllers\Api;
 
 use App\Http\Controllers\Controller;
+use App\Models\HumanReviewRequest;
 use App\Models\Professor;
+use App\Models\Roadmap;
+use App\Models\RoadmapVersion;
 use App\Models\User;
 use Illuminate\Http\Request;
 
@@ -57,9 +60,14 @@ class AdminController extends Controller
     public function dashboardStats()
     {
         return response()->json([
-            "pendingProfessors" => User::where("role", "PendingProfessor")->count(),
-            "approvedProfessors" => User::where("role", "Professor")->count(),
-            "admins" => User::where("role", "Admin")->count(),
+            'pendingProfessors'  => User::where('role', 'PendingProfessor')->count(),
+            'approvedProfessors' => User::where('role', 'Professor')->count(),
+            'admins'             => User::where('role', 'Admin')->count(),
+            'students'           => User::where('role', 'Student')->count(),
+            'roadmaps'           => Roadmap::count(),
+            'publishedVersions'  => RoadmapVersion::where('status', 'Published')->count(),
+            'draftVersions'      => RoadmapVersion::where('status', 'Draft')->count(),
+            'pendingReviews'     => HumanReviewRequest::where('status', 'pending')->count(),
         ]);
     }
 }

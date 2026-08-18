@@ -21,7 +21,7 @@ class ProfessorController extends Controller
         $requests = HumanReviewRequest::with([
                 'submission.student.user',
                 'submission.project',
-                'submission.quiz',
+                'submission.quiz.questions',
             ])
             ->where('status', 'pending')
             ->where(function ($q) use ($professor) {
@@ -51,7 +51,7 @@ class ProfessorController extends Controller
                         'github_url'  => $submission->github_url,
                         'has_file'    => (bool) $submission->file_path,
                         'notes'       => $isQuiz ? null : $submission->content,
-                        'answers'     => $isQuiz ? json_decode($submission->content, true) : null,
+                        'answers'     => $isQuiz ? $this->quizAnswers($submission) : null,
                         'status'      => $submission->status,
                         'score'       => $submission->score,
                         'ai_score'    => $submission->ai_score,
@@ -62,6 +62,34 @@ class ProfessorController extends Controller
 
         return response()->json(['requests' => $requests]);
     }
+    /**
+     * Pairs each quiz question with what the student answered so the
+     * professor can grade without opening the quiz separately.
+     *
+     * The answer column is $hidden on the model, which only affects JSON
+     * serialisation - reading it here is deliberate and this route is
+     * restricted to staff.
+     */
+    private function quizAnswers(Submission $submission): array
+    {
+        $given = collect(json_decode($submission->content, true) ?? [])
+            ->pluck('answer', 'question_id');
+
+        return $submission->quiz?->questions
+            ->map(fn ($q) => [
+                'question_id'    => $q->id,
+                'question'       => $q->question,
+                'type'           => $q->type,
+                'options'        => $q->options ?? [],
+                'given'          => $given->get($q->id),
+                'correct_answer' => $q->answer,
+                'auto_gradable'  => in_array($q->type, ['multiple_choice', 'true_false'], true),
+                'is_correct'     => in_array($q->type, ['multiple_choice', 'true_false'], true)
+                    ? strcasecmp(trim((string) $given->get($q->id)), trim((string) $q->answer)) === 0
+                    : null,
+            ])->values()->all() ?? [];
+    }
+
     public function claim(Request $request, HumanReviewRequest $reviewRequest)
     {
         $professor = $this->professorFor($request);

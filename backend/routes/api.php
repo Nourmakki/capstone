@@ -12,6 +12,8 @@ use App\Http\Controllers\Api\ProfessorController;
 use App\Http\Controllers\Api\ProjectController;
 use App\Http\Controllers\Api\TeamController;
 use App\Http\Controllers\Api\TodoController;
+use App\Http\Controllers\Api\WorkshopController;
+use App\Http\Controllers\Api\ProfileController;
 use Illuminate\Support\Facades\Route;
 
 /*
@@ -82,6 +84,14 @@ Route::middleware('auth:sanctum')->group(function () {
     Route::get('/teams/{team}/messages', [TeamController::class, 'messages']);
     Route::post('/teams/{team}/messages', [TeamController::class, 'postMessage']);
 
+        // Profile
+    Route::get('/profile', [ProfileController::class, 'show']);
+    Route::put('/profile', [ProfileController::class, 'update']);
+
+    // Workshops
+    Route::get('/workshops', [WorkshopController::class, 'index']);
+    Route::get('/workshops/recommended', [WorkshopController::class, 'recommended']);
+
     /*
     |----------------------------------------------------------------------
     | Admin only
@@ -103,6 +113,9 @@ Route::middleware('auth:sanctum')->group(function () {
             Route::delete('/reject-professor/{id}', [AdminController::class, 'rejectProfessor']);
             Route::get('/dashboard-stats', [AdminController::class, 'dashboardStats']);
         });
+
+                Route::post('/roadmaps/{roadmap}/versions', [RoadmapController::class, 'createVersion']);
+        Route::put('/roadmap-versions/{version}/publish', [RoadmapController::class, 'publishVersion']);
     });
 
     /*

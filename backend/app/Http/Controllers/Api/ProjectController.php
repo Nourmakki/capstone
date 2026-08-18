@@ -15,15 +15,19 @@ class ProjectController extends Controller
 {
     public function show(Request $request, Project $project)
     {
-        $student = $this->studentFor($request);
+        // Staff can open a project to read the brief; only students have
+        // their own submissions attached.
+        $student = Student::where('user_id', $request->user()->id)->first();
 
         $project->load('versionNode.node');
 
-        $submissions = Submission::where('project_id', $project->id)
-            ->where('student_id', $student->id)
-            ->orderByDesc('created_at')
-            ->get()
-            ->map(fn ($s) => $this->submissionPayload($s));
+        $submissions = $student
+            ? Submission::where('project_id', $project->id)
+                ->where('student_id', $student->id)
+                ->orderByDesc('created_at')
+                ->get()
+                ->map(fn ($s) => $this->submissionPayload($s))
+            : collect();
 
         return response()->json([
             'id'              => $project->id,

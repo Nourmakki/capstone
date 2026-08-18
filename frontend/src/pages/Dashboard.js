@@ -7,6 +7,7 @@ import {
     LogOut,
     Menu,
     UserRound,
+    CalendarDays,
 } from "lucide-react";
 import React, { useState } from "react";
 import { useNavigate } from "react-router-dom";
@@ -17,6 +18,7 @@ import TodoPage from "./TodoPage";
 import TeamsPage from "./TeamsPage";
 import ContinueLearningPage from "./ContinueLearningPage";
 import ProfilePage from "./ProfilePage";
+import WorkshopsPage from "./WorkshopsPage";
 
 function Dashboard() {
     const [activePage, setActivePage] = useState("dashboard");
@@ -139,6 +141,21 @@ function Dashboard() {
                         </button>
 
                         <button
+                            title="Workshops"
+                            onClick={() => setActivePage("workshops")}
+                            className={`w-full flex items-center ${
+                                collapsed ? "justify-center" : "gap-3"
+                            } px-4 py-2.5 rounded-2xl transition ${
+                                activePage === "workshops"
+                                    ? "bg-[#0097a7]/10 border border-[#0097a7]/20 text-[#00b0c2]"
+                                    : "hover:bg-white/5 text-gray-300"
+                            }`}
+                        >
+                            <CalendarDays size={20} />
+                            {!collapsed && "Workshops"}
+                        </button>
+
+                        <button
                             title="My Profile"
                             onClick={() => setActivePage("profile")}
                             className={`w-full flex items-center ${
@@ -203,6 +220,7 @@ function Dashboard() {
                 {activePage === "learning" && <ContinueLearningPage />}
                 {activePage === "todo" && <TodoPage />}
                 {activePage === "teams" && <TeamsPage />}
+                {activePage === "workshops" && <WorkshopsPage />}
                 {activePage === "profile" && <ProfilePage />}
             </main>
         </div>

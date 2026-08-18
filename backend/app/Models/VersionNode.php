@@ -48,4 +48,9 @@ class VersionNode extends Model
     {
         return $this->hasMany(ExternalResources::class);
     }
+
+    public function workshops()
+    {
+        return $this->hasMany(Workshop::class);
+    }
 }

@@ -150,4 +150,62 @@ class RoadmapController extends Controller
                 'to_node_id'   => $ve->edge->to_node_id,
             ]);
     }
+
+        /**
+     * Start a new draft version by copying the latest one's graph.
+     */
+    public function createVersion(Roadmap $roadmap)
+    {
+        $latest = $roadmap->versions()->orderByDesc('version_number')->first();
+
+        $version = RoadmapVersion::create([
+            'roadmap_id'     => $roadmap->id,
+            'version_number' => ($latest->version_number ?? 0) + 1,
+            'status'         => 'Draft',
+        ]);
+
+        if ($latest) {
+            // Clone nodes and edges so the draft starts from the live graph.
+            foreach (VersionNode::where('roadmap_version_id', $latest->id)->get() as $node) {
+                VersionNode::create([
+                    'roadmap_version_id' => $version->id,
+                    'node_id'            => $node->node_id,
+                ]);
+            }
+
+            foreach (VersionEdge::where('roadmap_version_id', $latest->id)->get() as $edge) {
+                VersionEdge::create([
+                    'roadmap_version_id' => $version->id,
+                    'edge_id'            => $edge->edge_id,
+                ]);
+            }
+        }
+
+        return response()->json([
+            'message' => 'Draft version created.',
+            'version' => new RoadmapVersionResource($version),
+        ], 201);
+    }
+
+    /**
+     * Publish a draft. Older published versions are archived so exactly
+     * one version is live at a time.
+     */
+    public function publishVersion(RoadmapVersion $version)
+    {
+        if ($version->status === 'Published') {
+            return response()->json(['message' => 'This version is already published.'], 409);
+        }
+
+        RoadmapVersion::where('roadmap_id', $version->roadmap_id)
+            ->where('status', 'Published')
+            ->update(['status' => 'Archived']);
+
+        $version->update(['status' => 'Published']);
+
+        return response()->json([
+            'message' => 'Version published.',
+            'version' => new RoadmapVersionResource($version),
+        ]);
+    }
 }

@@ -31,6 +31,8 @@ class DatabaseSeeder extends Seeder
 
             TutorialSeeder::class,
             LearningContentSeeder::class,
+
+            WorkshopSeeder::class,
         ]);
     }
 }
