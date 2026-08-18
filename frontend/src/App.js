@@ -44,7 +44,7 @@ function App() {
                     <Route path="/quiz/:quizId" element={
                         <ProtectedRoute roles={["Student"]}><QuizPage /></ProtectedRoute>
                     } />
-                    <Route path="/project" element={
+                    <Route path="/project/:projectId" element={
                         <ProtectedRoute roles={["Student"]}><ProjectSubmissionPage /></ProtectedRoute>
                     } />
                     <Route path="/todo" element={

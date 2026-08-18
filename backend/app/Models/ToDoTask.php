@@ -11,11 +11,18 @@ class ToDoTask extends Model
     use HasFactory;
 
     protected $fillable = [
-        'users_id',
+        'user_id',
         'title',
         'description',
         'due_date',
-        'is_completed'
+        'is_completed',
+        'priority',
+        'reminder_time',
+    ];
+
+    protected $casts = [
+        'is_completed' => 'boolean',
+        'due_date'     => 'date',
     ];
 
     public function user()

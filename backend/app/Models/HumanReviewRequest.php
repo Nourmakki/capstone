@@ -11,7 +11,12 @@ class HumanReviewRequest extends Model
 {
     use HasFactory;
 
-    protected $fillable = ['submissions_id', 'professors_id','feedback'];
+    protected $fillable = [
+        'submission_id',
+        'professor_id',
+        'status',
+        'feedback',
+    ];
 
     public function submission()
     {

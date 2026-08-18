@@ -123,6 +123,9 @@ class QuizController extends Controller
             'pass_mark'     => self::PASS_MARK,
             'auto_graded'   => ['correct' => $autoCorrect, 'total' => $autoTotal],
             'needs_review'  => $needsReview,
+            // Null until the AI service explains the attempt; the client
+            // renders the explanation panel only when this is populated.
+            'ai_feedback'   => $submission->ai_feedback,
             'breakdown'     => $breakdown,
         ], 201);
     }

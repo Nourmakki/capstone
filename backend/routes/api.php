@@ -8,6 +8,10 @@ use App\Http\Controllers\Api\ProgressController;
 use App\Http\Controllers\Api\RoadmapController;
 use App\Http\Controllers\Api\TutorialController;
 use App\Http\Controllers\Api\QuizController;
+use App\Http\Controllers\Api\ProfessorController;
+use App\Http\Controllers\Api\ProjectController;
+use App\Http\Controllers\Api\TeamController;
+use App\Http\Controllers\Api\TodoController;
 use Illuminate\Support\Facades\Route;
 
 /*
@@ -43,11 +47,17 @@ Route::middleware('auth:sanctum')->group(function () {
     // Everything LearningPage needs for one module.
     Route::get('/version-nodes/{versionNode}', [LearningController::class, 'nodeDetail']);
 
-        // Quizzes
+    // Quizzes
     Route::get('/quizzes/{quiz}', [QuizController::class, 'show']);
     Route::post('/quizzes/{quiz}/submit', [QuizController::class, 'submit']);
     Route::get('/quizzes/{quiz}/attempts', [QuizController::class, 'attempts']);
 
+        // Projects
+    Route::get('/projects/{project}', [ProjectController::class, 'show']);
+    Route::post('/projects/{project}/submit', [ProjectController::class, 'submit']);
+    Route::post('/submissions/{submission}/request-review', [ProjectController::class, 'requestReview']);
+    Route::get('/submissions/{submission}/download', [ProjectController::class, 'download']);
+    
     /*
     |----------------------------------------------------------------------
     | Progress
@@ -56,6 +66,21 @@ Route::middleware('auth:sanctum')->group(function () {
     Route::get('/roadmaps/{roadmap}/student/{user}', [ProgressController::class, 'studentRoadmap']);
     Route::get('/progress/continue', [LearningController::class, 'continueLearning']);
     Route::post('/progress/complete-node', [ProgressController::class, 'completeNode']);
+
+        // To-do tasks
+    Route::get('/todos', [TodoController::class, 'index']);
+    Route::post('/todos', [TodoController::class, 'store']);
+    Route::put('/todos/{todo}', [TodoController::class, 'update']);
+    Route::patch('/todos/{todo}/toggle', [TodoController::class, 'toggle']);
+    Route::delete('/todos/{todo}', [TodoController::class, 'destroy']);
+
+    // Teams
+    Route::get('/teams', [TeamController::class, 'index']);
+    Route::post('/teams', [TeamController::class, 'store']);
+    Route::post('/teams/{team}/join', [TeamController::class, 'join']);
+    Route::delete('/teams/{team}/leave', [TeamController::class, 'leave']);
+    Route::get('/teams/{team}/messages', [TeamController::class, 'messages']);
+    Route::post('/teams/{team}/messages', [TeamController::class, 'postMessage']);
 
     /*
     |----------------------------------------------------------------------
@@ -87,5 +112,16 @@ Route::middleware('auth:sanctum')->group(function () {
     */
     Route::middleware('role:Admin,Professor')->group(function () {
         Route::apiResource('tutorials', TutorialController::class)->except(['index']);
+    });
+        /*
+    |----------------------------------------------------------------------
+    | Professors
+    |----------------------------------------------------------------------
+    */
+    Route::middleware('role:Professor,Admin')->prefix('professor')->group(function () {
+        Route::get('/review-requests', [ProfessorController::class, 'reviewRequests']);
+        Route::post('/review-requests/{reviewRequest}/claim', [ProfessorController::class, 'claim']);
+        Route::post('/review-requests/{reviewRequest}/review', [ProfessorController::class, 'review']);
+        Route::get('/stats', [ProfessorController::class, 'stats']);
     });
 });

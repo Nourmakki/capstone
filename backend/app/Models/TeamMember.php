@@ -12,8 +12,8 @@ class TeamMember extends Model
     use HasFactory;
 
     protected $fillable = [
-        'teams_id',
-        'students_id'
+        'team_id',
+        'student_id',
     ];
 
     public function team()

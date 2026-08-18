@@ -45,9 +45,4 @@ class Student extends Model
     {
         return $this->hasMany(TeamMember::class);
     }
-
-    public function todoTasks()
-    {
-        return $this->hasMany(TodoTask::class);
-    }
 }

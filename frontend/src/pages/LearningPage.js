@@ -219,7 +219,7 @@ function LearningPage() {
                                             <p className="text-[#00b0c2] mb-4 capitalize">{project.difficulty}</p>
                                             <p className="text-gray-400 mb-6">{project.description}</p>
                                             <button
-                                                onClick={() => navigate("/project")}
+                                                onClick={() => navigate(`/project/${project.id}`)}
                                                 className="px-6 py-3 rounded-2xl bg-[#0097a7] text-black font-semibold"
                                             >
                                                 Open Project

@@ -8,6 +8,7 @@ import {
     XCircle,
     AlertCircle,
     Clock3,
+    UserRound,
 } from "lucide-react";
 
 function QuizPage() {
@@ -20,6 +21,7 @@ function QuizPage() {
     const [loading, setLoading] = useState(true);
     const [submitting, setSubmitting] = useState(false);
     const [error, setError] = useState(null);
+    const [reviewRequested, setReviewRequested] = useState(false);
 
     useEffect(() => {
         const load = async () => {
@@ -68,6 +70,28 @@ function QuizPage() {
     const retake = () => {
         setResult(null);
         setAnswers({});
+        setReviewRequested(false);
+    };
+
+    /**
+     * A quiz attempt is a submission, so it reuses the same review
+     * endpoint that project submissions use.
+     */
+    const requestHumanReview = async () => {
+        try {
+            await api.post(`/submissions/${result.submission_id}/request-review`);
+            setReviewRequested(true);
+        } catch (err) {
+            console.error(err);
+
+            // 409 means a review is already pending for this attempt.
+            if (err.response?.status === 409) {
+                setReviewRequested(true);
+                return;
+            }
+
+            alert(err.response?.data?.message ?? "Could not request a review.");
+        }
     };
 
     if (loading) {
@@ -177,11 +201,39 @@ function QuizPage() {
                                 </div>
                             )}
 
+                            {/* Appears once the AI service fills ai_feedback. */}
+                            {result.ai_feedback && (
+                                <div className="mt-6 rounded-2xl bg-black/30 border border-white/10 p-6">
+                                    <div className="flex items-center gap-2 mb-3">
+                                        <Brain size={18} className="text-[#0097a7]" />
+                                        <h3 className="font-bold">Automated Explanation</h3>
+                                    </div>
+                                    <p className="text-sm text-gray-300 leading-relaxed whitespace-pre-line">
+                                        {result.ai_feedback}
+                                    </p>
+                                </div>
+                            )}
+
                             <button
                                 onClick={retake}
                                 className="mt-8 px-6 py-3 rounded-2xl border border-[#0097a7]/30 text-[#00b0c2] hover:bg-[#0097a7]/10 transition"
                             >
                                 Retake Quiz
+                            </button>
+
+                            <button
+                                onClick={requestHumanReview}
+                                disabled={reviewRequested}
+                                className={`mt-4 w-full flex items-center justify-center gap-3 py-4 rounded-2xl border transition ${
+                                    reviewRequested
+                                        ? "border-white/10 bg-white/[0.03] text-gray-500 cursor-not-allowed"
+                                        : "border-[#0097a7]/20 bg-[#0097a7]/10 text-[#00b0c2] hover:bg-[#0097a7]/20"
+                                }`}
+                            >
+                                <UserRound size={20} />
+                                {reviewRequested
+                                    ? "Review requested - a professor will check this attempt"
+                                    : "Not sure about a result? Request Human Correction"}
                             </button>
                         </div>
                     )}

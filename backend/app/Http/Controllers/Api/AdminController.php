@@ -3,7 +3,7 @@
 namespace App\Http\Controllers\Api;
 
 use App\Http\Controllers\Controller;
-
+use App\Models\Professor;
 use App\Models\User;
 use Illuminate\Http\Request;
 
@@ -20,11 +20,26 @@ class AdminController extends Controller
     {
         $user = User::findOrFail($id);
 
-        $user->role = "Professor";
+        if ($user->role !== 'PendingProfessor') {
+            return response()->json([
+                'message' => 'This user is not awaiting professor approval.',
+            ], 422);
+        }
+
+        $user->role = 'Professor';
         $user->save();
 
+        // Without this row the professor cannot be attached to any review.
+        Professor::firstOrCreate(
+            ['user_id' => $user->id],
+            [
+                'qualification' => 'Not specified',
+                'is_verified'   => true,
+            ]
+        );
+
         return response()->json([
-            "message" => "Professor approved successfully."
+            'message' => 'Professor approved successfully.',
         ]);
     }
 

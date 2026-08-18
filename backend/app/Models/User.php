@@ -10,7 +10,7 @@ use Laravel\Sanctum\HasApiTokens;
 use App\Models\Student;
 use App\Models\Professor;
 use App\Models\AiConversation;
-use App\Models\TodoTask;
+use App\Models\ToDoTask;
 
 class User extends Authenticatable
 {
@@ -65,6 +65,6 @@ class User extends Authenticatable
 
     public function todoTasks()
     {
-        return $this->hasMany(TodoTask::class);
+        return $this->hasMany(ToDoTask::class);
     }
 }
