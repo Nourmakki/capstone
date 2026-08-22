@@ -18,10 +18,12 @@ class LearningController extends Controller
     {
         $versionNode->load([
             'node',
-            'tutorials',
+            // Only material a manager approved reaches students.
+            'tutorials' => fn ($q) => $q->approved(),
+            'quizzes' => fn ($q) => $q->approved(),
             'quizzes.questions',
-            'projects',
-            'externalResources',
+            'projects' => fn ($q) => $q->approved(),
+            'externalResources' => fn ($q) => $q->approved(),
             'roadmapVersion.roadmap',
         ]);
 
@@ -69,6 +71,9 @@ class LearningController extends Controller
             'prerequisites'      => $prerequisites,
             'is_completed'       => in_array($versionNode->node_id, $completed, true),
             'is_unlocked'        => $prerequisites->every(fn ($p) => $p['completed']),
+            // What still has to be done before this module can be completed,
+            // so the button can explain itself instead of failing on click.
+            'completion_blockers' => $this->blockersFor($request, $versionNode),
         ]);
     }
 
@@ -141,6 +146,26 @@ class LearningController extends Controller
                 ? (int) round((count($completed) / $total) * 100)
                 : 0,
         ]);
+    }
+
+    /**
+     * Staff have no student record, so nothing blocks them.
+     *
+     * @return array<int, string>
+     */
+    private function blockersFor(Request $request, VersionNode $versionNode): array
+    {
+        $student = Student::where('user_id', $request->user()->id)->first();
+
+        if (! $student) {
+            return [];
+        }
+
+        $progress = UserRoadmapProgress::where('student_id', $student->id)
+            ->where('roadmap_version_id', $versionNode->roadmap_version_id)
+            ->first();
+
+        return ProgressController::completionBlockers($versionNode, $student, $progress);
     }
 
     private function completedNodeIds(Request $request, int $versionId): array

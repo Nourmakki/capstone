@@ -10,6 +10,9 @@ import {
     Trophy,
     Flame,
     Clock3,
+    GitBranch,
+    ChevronDown,
+    AlertCircle,
 } from "lucide-react";
 
 function RoadmapOverview() {
@@ -21,6 +24,13 @@ function RoadmapOverview() {
     const [loading, setLoading] = useState(true);
     const [error, setError] = useState(null);
 
+    // null means "whatever is currently published".
+    const [selectedVersionId, setSelectedVersionId] = useState(null);
+    const [version, setVersion] = useState(null);
+    const [versions, setVersions] = useState([]);
+    const [isLatest, setIsLatest] = useState(true);
+    const [pickerOpen, setPickerOpen] = useState(false);
+
     const { user } = useAuth();
 
     useEffect(() => {
@@ -28,14 +38,25 @@ function RoadmapOverview() {
             setLoading(true);
 
             try {
+                const progressUrl = selectedVersionId
+                    ? `/roadmaps/${roadmapId}/student/${user.id}?version=${selectedVersionId}`
+                    : `/roadmaps/${roadmapId}/student/${user.id}`;
+
                 const [detailResponse, progressResponse] = await Promise.all([
                     api.get(`/roadmaps/${roadmapId}`),
-                    api.get(`/roadmaps/${roadmapId}/student/${user.id}`),
+                    api.get(progressUrl),
                 ]);
 
                 setRoadmap(detailResponse.data.data);
 
-                const { nodes, edges, completed, current_node } = progressResponse.data;
+                const {
+                    nodes, edges, completed, current_node,
+                    version: versionInfo, available_versions, is_latest,
+                } = progressResponse.data;
+
+                setVersion(versionInfo);
+                setVersions(available_versions ?? []);
+                setIsLatest(is_latest);
 
                 // Map node id -> the node ids that must be completed first.
                 const prerequisites = {};
@@ -83,7 +104,14 @@ function RoadmapOverview() {
         if (user?.id) {
             loadRoadmap();
         }
-    }, [roadmapId, user?.id]);
+    }, [roadmapId, user?.id, selectedVersionId]);
+
+    const chooseVersion = (id) => {
+        setPickerOpen(false);
+
+        // Passing null re-requests the live version rather than pinning one.
+        setSelectedVersionId(id === version?.id ? selectedVersionId : id);
+    };
 
     // Derived from the loaded modules, so the header reflects real progress.
     const completedCount = modules.filter((m) => m.status === "completed").length;
@@ -134,10 +162,80 @@ function RoadmapOverview() {
                             Back to Dashboard
                         </button>
 
-                        <div className="inline-flex items-center gap-2 px-4 py-1 rounded-full border border-[#0097a7]/20 bg-[#0097a7]/10 text-[#0097a7] text-sm mb-5">
-                            <Flame size={15} />
-                            Structured Learning Path
+                        <div className="flex items-center flex-wrap gap-3 mb-5">
+                            <div className="inline-flex items-center gap-2 px-4 py-1 rounded-full border border-[#0097a7]/20 bg-[#0097a7]/10 text-[#0097a7] text-sm">
+                                <Flame size={15} />
+                                Structured Learning Path
+                            </div>
+
+                            {/* Version badge - click to read an earlier version. */}
+                            {version && (
+                                <div className="relative">
+                                    <button
+                                        onClick={() => setPickerOpen((open) => !open)}
+                                        className={`inline-flex items-center gap-2 px-4 py-1 rounded-full border text-sm transition ${
+                                            isLatest
+                                                ? "border-[#0097a7]/30 bg-[#0097a7]/10 text-[#00b0c2] hover:bg-[#0097a7]/20"
+                                                : "border-yellow-400/30 bg-yellow-400/10 text-yellow-300 hover:bg-yellow-400/20"
+                                        }`}
+                                    >
+                                        <GitBranch size={14} />
+                                        {version.label}
+                                        {!isLatest && " (older)"}
+                                        <ChevronDown size={14} />
+                                    </button>
+
+                                    {pickerOpen && (
+                                        <div className="absolute left-0 top-full mt-2 z-30 w-80 rounded-2xl border border-white/10 bg-[#0b1416] shadow-2xl overflow-hidden">
+                                            <p className="px-4 py-3 text-xs text-gray-500 border-b border-white/10">
+                                                Choose a version to read
+                                            </p>
+
+                                            {versions.map((v) => (
+                                                <button
+                                                    key={v.id}
+                                                    onClick={() => chooseVersion(v.id)}
+                                                    className={`w-full text-left px-4 py-3 transition border-b border-white/5 last:border-b-0 ${
+                                                        v.id === version.id
+                                                            ? "bg-[#0097a7]/10 text-[#00b0c2]"
+                                                            : "hover:bg-white/5 text-gray-300"
+                                                    }`}
+                                                >
+                                                    <div className="flex items-center justify-between gap-3">
+                                                        <span className="font-semibold">v{v.version_number}</span>
+
+                                                        <span className={`text-xs px-2 py-0.5 rounded-full ${
+                                                            v.status === "Published"
+                                                                ? "bg-green-400/10 text-green-300"
+                                                                : "bg-white/5 text-gray-500"
+                                                        }`}>
+                                                            {v.status === "Published" ? "current" : "past"}
+                                                        </span>
+                                                    </div>
+
+                                                    {v.title && (
+                                                        <p className="text-xs text-gray-500 mt-1">{v.title}</p>
+                                                    )}
+                                                </button>
+                                            ))}
+                                        </div>
+                                    )}
+                                </div>
+                            )}
                         </div>
+
+                        {!isLatest && (
+                            <div className="flex items-center gap-2 mb-5 text-sm text-yellow-300">
+                                <AlertCircle size={15} />
+                                You are reading an older version.
+                                <button
+                                    onClick={() => setSelectedVersionId(null)}
+                                    className="underline hover:text-yellow-200"
+                                >
+                                    Switch to the current one
+                                </button>
+                            </div>
+                        )}
 
                         <h1 className="text-5xl font-black leading-tight">
                             {roadmap?.title ?? "Roadmap"}

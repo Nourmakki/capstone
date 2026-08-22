@@ -1,6 +1,6 @@
-import React, { useCallback, useEffect, useState } from "react";
+import React, { useCallback, useEffect, useRef, useState } from "react";
 import api from "../../api";
-import { GitBranch, Upload, Plus, Network } from "lucide-react";
+import { GitBranch, Upload, Plus, Network, AlertTriangle } from "lucide-react";
 
 function AdminRoadmaps({ onChanged }) {
     const [roadmaps, setRoadmaps] = useState([]);
@@ -8,6 +8,25 @@ function AdminRoadmaps({ onChanged }) {
     const [versions, setVersions] = useState([]);
     const [graph, setGraph] = useState(null);
     const [form, setForm] = useState({ title: "", description: "" });
+    const [versionForm, setVersionForm] = useState({ version_number: "", title: "" });
+
+    // The graph panel renders below the fold, so clicking View Graph looks
+    // like nothing happened unless we scroll to it.
+    const graphRef = useRef(null);
+    const [graphOpenCount, setGraphOpenCount] = useState(0);
+
+    useEffect(() => {
+        if (graphOpenCount === 0) {
+            return;
+        }
+
+        const reduceMotion = window.matchMedia("(prefers-reduced-motion: reduce)").matches;
+
+        graphRef.current?.scrollIntoView({
+            behavior: reduceMotion ? "auto" : "smooth",
+            block: "start",
+        });
+    }, [graphOpenCount]);
     const [loading, setLoading] = useState(true);
     const [busy, setBusy] = useState(false);
 
@@ -61,11 +80,20 @@ function AdminRoadmaps({ onChanged }) {
         setBusy(true);
 
         try {
-            await api.post(`/roadmaps/${selectedId}/versions`);
+            // Blank fields let the API pick the next number and no title.
+            await api.post(`/roadmaps/${selectedId}/versions`, {
+                version_number: versionForm.version_number.trim() || undefined,
+                title: versionForm.title.trim() || undefined,
+            });
+
+            setVersionForm({ version_number: "", title: "" });
             await loadVersions();
             onChanged?.();
         } catch (err) {
-            alert(err.response?.data?.message ?? "Could not create a draft.");
+            const errors = err.response?.data?.errors;
+            alert(errors
+                ? Object.values(errors).flat().join("\n")
+                : (err.response?.data?.message ?? "Could not create a draft."));
         } finally {
             setBusy(false);
         }
@@ -90,8 +118,10 @@ function AdminRoadmaps({ onChanged }) {
         try {
             const response = await api.get(`/roadmap-versions/${versionId}/graph`);
             setGraph(response.data);
+            setGraphOpenCount((n) => n + 1);
         } catch (err) {
             console.error(err);
+            alert("Could not load the graph for this version.");
         }
     };
 
@@ -138,12 +168,25 @@ function AdminRoadmaps({ onChanged }) {
                     <div className="flex flex-wrap gap-3 mb-8">
                         {roadmaps.map((r) => (
                             <button key={r.id} onClick={() => { setSelectedId(r.id); setGraph(null); }}
-                                className={`px-6 py-3 rounded-2xl transition ${
+                                className={`px-6 py-3 rounded-2xl transition flex items-center gap-2 ${
                                     selectedId === r.id
                                         ? "bg-[#0097a7] text-black font-semibold"
                                         : "bg-white/5 border border-white/10 text-gray-300"
                                 }`}>
                                 {r.title}
+
+                                {/* Without this a rejected roadmap looks approved. */}
+                                {r.review_status !== "approved" && (
+                                    <span className={`text-xs px-2 py-0.5 rounded-full ${
+                                        selectedId === r.id
+                                            ? "bg-black/20 text-black"
+                                            : r.review_status === "rejected"
+                                            ? "bg-red-400/20 text-red-300"
+                                            : "bg-yellow-400/20 text-yellow-300"
+                                    }`}>
+                                        {r.review_status}
+                                    </span>
+                                )}
                             </button>
                         ))}
                     </div>
@@ -152,16 +195,60 @@ function AdminRoadmaps({ onChanged }) {
                         <div className="flex items-center justify-between mb-8">
                             <div className="flex items-center gap-3">
                                 <GitBranch className="text-[#0097a7]" />
-                                <h2 className="text-3xl font-bold">Versions</h2>
+                                <div>
+                                    <h2 className="text-3xl font-bold">Versions</h2>
+                                    {/* Which roadmap these belong to - the tab above is easy to miss. */}
+                                    <p className="text-sm text-[#00b0c2] mt-1">
+                                        {roadmaps.find((r) => r.id === selectedId)?.title ?? "No roadmap selected"}
+                                    </p>
+
+                                    {roadmaps.find((r) => r.id === selectedId)?.review_notes && (
+                                        <p className="text-xs text-gray-400 mt-2 max-w-md">
+                                            Reviewer said: {roadmaps.find((r) => r.id === selectedId).review_notes}
+                                        </p>
+                                    )}
+                                </div>
                             </div>
 
-                            <button onClick={createDraft} disabled={busy || !selectedId}
-                                className={`flex items-center gap-2 px-6 py-3 rounded-2xl font-bold transition ${
-                                    busy ? "bg-gray-700 text-gray-400" : "bg-[#0097a7] text-black hover:scale-105"
-                                }`}>
-                                <Plus size={18} /> New Draft Version
-                            </button>
+                            <div className="flex flex-wrap items-center gap-3">
+                                <input
+                                    type="text"
+                                    value={versionForm.version_number}
+                                    onChange={(e) => setVersionForm({ ...versionForm, version_number: e.target.value })}
+                                    placeholder="Number (auto)"
+                                    className="w-36 p-3 rounded-xl bg-black/30 border border-white/10 text-white text-sm"
+                                />
+
+                                <input
+                                    type="text"
+                                    value={versionForm.title}
+                                    onChange={(e) => setVersionForm({ ...versionForm, title: e.target.value })}
+                                    placeholder="Title (optional)"
+                                    className="w-56 p-3 rounded-xl bg-black/30 border border-white/10 text-white text-sm"
+                                />
+
+                                <button onClick={createDraft} disabled={busy || !selectedId}
+                                    className={`flex items-center gap-2 px-6 py-3 rounded-2xl font-bold transition ${
+                                        busy ? "bg-gray-700 text-gray-400" : "bg-[#0097a7] text-black hover:scale-105"
+                                    }`}>
+                                    <Plus size={18} /> New Draft Version
+                                </button>
+                            </div>
                         </div>
+
+                        {/* Without a live version the roadmap is greyed out for
+                            students, which is otherwise invisible from here. */}
+                        {!versions.some((v) => v.status === "Published" && v.review_status === "approved") && (
+                            <div className="mb-6 flex items-start gap-3 rounded-2xl border border-yellow-400/30 bg-yellow-400/5 p-4">
+                                <AlertTriangle size={18} className="text-yellow-400 shrink-0 mt-0.5" />
+                                <p className="text-sm text-yellow-200">
+                                    No published version, so students cannot open this roadmap.
+                                    {versions.length === 0
+                                        ? " Create a draft version, then have it approved."
+                                        : " Get a draft approved to make one live."}
+                                </p>
+                            </div>
+                        )}
 
                         {versions.length === 0 ? (
                             <p className="text-gray-500">No versions yet.</p>
@@ -169,11 +256,26 @@ function AdminRoadmaps({ onChanged }) {
                             <div className="space-y-4">
                                 {versions.map((v) => (
                                     <div key={v.id} className="rounded-2xl border border-white/10 bg-black/30 p-5 flex flex-col md:flex-row md:items-center justify-between gap-4">
-                                        <div className="flex items-center gap-4">
-                                            <span className="text-2xl font-black">v{v.version_number}</span>
-                                            <span className={`text-xs px-3 py-1 rounded-full border ${statusStyle(v.status)}`}>
-                                                {v.status}
-                                            </span>
+                                        <div className="flex items-center gap-4 min-w-0">
+                                            <span className="text-2xl font-black shrink-0">v{v.version_number}</span>
+
+                                            <div className="min-w-0">
+                                                <div className="flex items-center gap-2 flex-wrap">
+                                                    <span className={`text-xs px-3 py-1 rounded-full border ${statusStyle(v.status)}`}>
+                                                        {v.status}
+                                                    </span>
+
+                                                    {v.review_status !== "approved" && (
+                                                        <span className="text-xs px-3 py-1 rounded-full border border-yellow-400/30 bg-yellow-400/10 text-yellow-300">
+                                                            {v.review_status === "pending" ? "awaiting review" : "rejected"}
+                                                        </span>
+                                                    )}
+                                                </div>
+
+                                                {v.title && (
+                                                    <p className="text-sm text-gray-400 mt-1 truncate">{v.title}</p>
+                                                )}
+                                            </div>
                                         </div>
 
                                         <div className="flex gap-3">
@@ -196,7 +298,7 @@ function AdminRoadmaps({ onChanged }) {
                     </div>
 
                     {graph && (
-                        <div className="mt-8 rounded-3xl border border-white/10 bg-white/[0.03] p-8">
+                        <div ref={graphRef} className="mt-8 scroll-mt-6 rounded-3xl border border-white/10 bg-white/[0.03] p-8">
                             <h2 className="text-2xl font-bold mb-6">
                                 Graph · v{graph.version.version_number}
                             </h2>

@@ -17,7 +17,7 @@ class VersionEdgeSeeder extends Seeder
             $roadmap = Roadmap::where('title', $fixture['title'])->firstOrFail();
 
             $version = RoadmapVersion::where('roadmap_id', $roadmap->id)
-                ->where('version_number', 1)
+                ->where('version_number', '1')
                 ->firstOrFail();
 
             $nodeIds = Node::whereIn('title', array_column($fixture['nodes'], 'title'))

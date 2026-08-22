@@ -4,6 +4,7 @@ use App\Http\Controllers\Api\AdminController;
 use App\Http\Controllers\Api\AiWorkflowController;
 use App\Http\Controllers\Api\AuthController;
 use App\Http\Controllers\Api\LearningController;
+use App\Http\Controllers\Api\MaterialController;
 use App\Http\Controllers\Api\ProgressController;
 use App\Http\Controllers\Api\RoadmapController;
 use App\Http\Controllers\Api\TutorialController;
@@ -99,23 +100,34 @@ Route::middleware('auth:sanctum')->group(function () {
     */
     Route::middleware('role:Admin')->group(function () {
 
-        Route::post('/roadmaps', [RoadmapController::class, 'store']);
-        Route::put('/roadmaps/{roadmap}', [RoadmapController::class, 'update']);
-        Route::delete('/roadmaps/{roadmap}', [RoadmapController::class, 'destroy']);
-
-        // Feeds the LangGraph AI service its AgentState input.
-        Route::get('/roadmap-versions/{version}/ai-export', [RoadmapController::class, 'aiExport']);
-        Route::get('/ai-workflows/{workflow}',[AiWorkflowController::class, 'show']);
-        Route::post('/ai-workflows/{workflow}/resume',[AiWorkflowController::class, 'resume']);
+        // User administration stays with the admin alone.
         Route::prefix('admin')->group(function () {
             Route::get('/professor-requests', [AdminController::class, 'professorRequests']);
+            Route::get('/professor-requests/{id}/cv', [AdminController::class, 'professorCv']);
             Route::put('/approve-professor/{id}', [AdminController::class, 'approveProfessor']);
             Route::delete('/reject-professor/{id}', [AdminController::class, 'rejectProfessor']);
             Route::get('/dashboard-stats', [AdminController::class, 'dashboardStats']);
         });
+    });
 
-                Route::post('/roadmaps/{roadmap}/versions', [RoadmapController::class, 'createVersion']);
+    /*
+    |----------------------------------------------------------------------
+    | Roadmap authoring - admins and material managers
+    |----------------------------------------------------------------------
+    */
+    Route::middleware('role:Admin,MaterialManager')->group(function () {
+
+        Route::post('/roadmaps', [RoadmapController::class, 'store']);
+        Route::put('/roadmaps/{roadmap}', [RoadmapController::class, 'update']);
+        Route::delete('/roadmaps/{roadmap}', [RoadmapController::class, 'destroy']);
+
+        Route::post('/roadmaps/{roadmap}/versions', [RoadmapController::class, 'createVersion']);
         Route::put('/roadmap-versions/{version}/publish', [RoadmapController::class, 'publishVersion']);
+
+        Route::apiResource('tutorials', TutorialController::class)->except(['index']);
+
+        // Feeds the LangGraph AI service its AgentState input.
+        Route::get('/roadmap-versions/{version}/ai-export', [RoadmapController::class, 'aiExport']);
     });
 
     /*
@@ -123,14 +135,34 @@ Route::middleware('auth:sanctum')->group(function () {
     | Admin and Professor
     |----------------------------------------------------------------------
     */
-    Route::middleware('role:Admin,Professor')->group(function () {
-        Route::apiResource('tutorials', TutorialController::class)->except(['index']);
-    });
         /*
     |----------------------------------------------------------------------
     | Professors
     |----------------------------------------------------------------------
     */
+    /*
+    |----------------------------------------------------------------------
+    | Material managers
+    |----------------------------------------------------------------------
+    */
+    Route::middleware('role:MaterialManager,Admin')->group(function () {
+
+        // AI proposals: the material manager is the human in the loop.
+        Route::get('/ai-workflows', [AiWorkflowController::class, 'index']);
+        Route::get('/ai-workflows/{workflow}', [AiWorkflowController::class, 'show']);
+        Route::post('/ai-workflows/{workflow}/resume', [AiWorkflowController::class, 'resume']);
+        Route::post('/roadmap-versions/{version}/ai-workflows', [AiWorkflowController::class, 'store']);
+
+        // Material that reached the database and still needs a decision.
+        Route::prefix('material')->group(function () {
+            Route::get('/stats', [MaterialController::class, 'stats']);
+            Route::get('/pending', [MaterialController::class, 'pending']);
+            Route::get('/history', [MaterialController::class, 'history']);
+            Route::post('/{type}/{id}/approve', [MaterialController::class, 'approve']);
+            Route::post('/{type}/{id}/reject', [MaterialController::class, 'reject']);
+        });
+    });
+
     Route::middleware('role:Professor,Admin')->prefix('professor')->group(function () {
         Route::get('/review-requests', [ProfessorController::class, 'reviewRequests']);
         Route::post('/review-requests/{reviewRequest}/claim', [ProfessorController::class, 'claim']);

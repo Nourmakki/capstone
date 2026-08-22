@@ -15,6 +15,9 @@ class ProjectController extends Controller
 {
     public function show(Request $request, Project $project)
     {
+        // An unapproved project must not be reachable by guessing its id.
+        $this->requireApproved($request, $project);
+
         // Staff can open a project to read the brief; only students have
         // their own submissions attached.
         $student = Student::where('user_id', $request->user()->id)->first();
@@ -43,6 +46,8 @@ class ProjectController extends Controller
 
     public function submit(SubmitProjectRequest $request, Project $project)
     {
+        $this->requireApproved($request, $project);
+
         $student = $this->studentFor($request);
 
         $path = $request->hasFile('file')
@@ -143,5 +148,15 @@ class ProjectController extends Controller
     private function studentFor(Request $request): Student
     {
         return Student::where('user_id', $request->user()->id)->firstOrFail();
+    }
+
+    /**
+     * Staff may open unreviewed content; students may not.
+     */
+    private function requireApproved(Request $request, Project $project): void
+    {
+        $staff = in_array($request->user()->role, ['Admin', 'MaterialManager'], true);
+
+        abort_if(! $staff && ! $project->isApproved(), 404, 'Project not found.');
     }
 }

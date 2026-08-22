@@ -13,7 +13,13 @@ class RoadmapVersionResource extends JsonResource
             'id'             => $this->id,
             'roadmap_id'     => $this->roadmap_id,
             'version_number' => $this->version_number,
+            'title'          => $this->title,
+            // What the UI shows on the version badge.
+            'label'          => 'v' . $this->version_number
+                . ($this->title ? ' · ' . $this->title : ''),
             'status'         => $this->status,
+            'review_status'  => $this->review_status,
+            'created_at'     => $this->created_at,
         ];
     }
 }

@@ -17,6 +17,7 @@ import TeamsPage from "./pages/TeamsPage";
 import WaitingApproval from "./pages/WaitingApproval";
 import ProfessorDashboard from "./pages/ProfessorDashboard";
 import AdminDashboard from "./pages/AdminDashboard";
+import MaterialManagerDashboard from "./pages/MaterialManagerDashboard";
 
 function App() {
     return (
@@ -59,6 +60,9 @@ function App() {
                     } />
                     <Route path="/admin-dashboard" element={
                         <ProtectedRoute roles={["Admin"]}><AdminDashboard /></ProtectedRoute>
+                    } />
+                    <Route path="/material-dashboard" element={
+                        <ProtectedRoute roles={["MaterialManager"]}><MaterialManagerDashboard /></ProtectedRoute>
                     } />
 
                 </Routes>

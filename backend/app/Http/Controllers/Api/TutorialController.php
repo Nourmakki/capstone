@@ -3,95 +3,128 @@
 namespace App\Http\Controllers\Api;
 
 use App\Http\Controllers\Controller;
-
 use App\Models\Tutorial;
 use Illuminate\Http\Request;
 
 class TutorialController extends Controller
 {
-    public function index($versionNodeId)
-{
-    $tutorials = Tutorial::where('version_node_id', $versionNodeId)->get();
-
-    return response()->json($tutorials);
-}
-
-public function show($id)
-{
-    $tutorial = Tutorial::with('versionNode')->find($id);
-
-    if (!$tutorial)
+    /**
+     * Staff manage material, so they see every status. Students only ever
+     * see what a material manager approved.
+     */
+    private function isStaff(Request $request): bool
     {
-        return response()->json([
-            'message' => 'Tutorial not found'
-        ],404);
+        return in_array($request->user()->role, ['Admin', 'MaterialManager'], true);
     }
 
-    return response()->json($tutorial);
-}
-
-public function store(Request $request)
-{
-    $request->validate([
-        'version_node_id' => 'required|exists:version_nodes,id',
-        'title' => 'required|string|max:255',
-        'url' => 'required|url',
-        'description' => 'required|string',
-        'source_name' => 'required|string|max:255',
-        'difficulty' => 'required|in:beginner,intermediate,advanced',
-    ]);
-
-    $tutorial = Tutorial::create($request->all());
-
-    return response()->json([
-        'message' => 'Tutorial created successfully',
-        'tutorial' => $tutorial
-    ],201);
-}
-
-public function update(Request $request, $id)
-{
-    $tutorial = Tutorial::find($id);
-
-    if(!$tutorial)
+    private function rules(): array
     {
-        return response()->json([
-            'message'=>'Tutorial not found'
-        ],404);
+        return [
+            'version_node_id' => ['required', 'exists:version_nodes,id'],
+            'title'           => ['required', 'string', 'max:255'],
+            'url'             => ['required', 'url', 'max:255'],
+            'description'     => ['required', 'string'],
+            'source_name'     => ['required', 'string', 'max:255'],
+            'difficulty'      => ['required', 'in:beginner,intermediate,advanced'],
+        ];
     }
 
-    $request->validate([
-        'version_node_id' => 'required|exists:version_nodes,id',
-        'title' => 'required|string|max:255',
-        'url' => 'required|url',
-        'description' => 'required|string',
-        'source_name' => 'required|string|max:255',
-        'difficulty' => 'required|in:beginner,intermediate,advanced',
-    ]);
-
-    $tutorial->update($request->all());
-
-    return response()->json([
-        'message'=>'Tutorial updated successfully',
-        'tutorial'=>$tutorial
-    ]);
-}
-
-public function destroy($id)
-{
-    $tutorial = Tutorial::find($id);
-
-    if(!$tutorial)
+    public function index(Request $request, $versionNodeId)
     {
-        return response()->json([
-            'message'=>'Tutorial not found'
-        ],404);
+        $query = Tutorial::where('version_node_id', $versionNodeId);
+
+        if (! $this->isStaff($request)) {
+            $query->approved();
+        }
+
+        return response()->json(
+            $query->orderBy('title')->get()->map(fn ($t) => $this->payload($t))
+        );
     }
 
-    $tutorial->delete();
+    public function show(Request $request, $id)
+    {
+        $tutorial = Tutorial::with('versionNode')->find($id);
 
-    return response()->json([
-        'message'=>'Tutorial deleted successfully'
-    ]);
-}
+        if (! $tutorial) {
+            return response()->json(['message' => 'Tutorial not found'], 404);
+        }
+
+        if (! $this->isStaff($request) && ! $tutorial->isApproved()) {
+            return response()->json(['message' => 'Tutorial not found'], 404);
+        }
+
+        return response()->json($this->payload($tutorial));
+    }
+
+    public function store(Request $request)
+    {
+        $data = $request->validate($this->rules());
+
+        // Only validated fields: $request->all() would let a caller set
+        // review_status and approve their own tutorial.
+        $tutorial = Tutorial::create($data);
+
+        return response()->json([
+            'message'  => 'Tutorial created successfully',
+            'tutorial' => $this->payload($tutorial->fresh()),
+        ], 201);
+    }
+
+    public function update(Request $request, $id)
+    {
+        $tutorial = Tutorial::find($id);
+
+        if (! $tutorial) {
+            return response()->json(['message' => 'Tutorial not found'], 404);
+        }
+
+        $data = $request->validate($this->rules());
+
+        $tutorial->update($data);
+
+        // Edited content has to be reviewed again.
+        if ($tutorial->wasChanged() && $tutorial->review_status === 'approved') {
+            $tutorial->update([
+                'review_status' => 'pending',
+                'reviewed_by'   => null,
+                'reviewed_at'   => null,
+                'review_notes'  => null,
+            ]);
+        }
+
+        return response()->json([
+            'message'  => 'Tutorial updated successfully',
+            'tutorial' => $this->payload($tutorial->fresh()),
+        ]);
+    }
+
+    public function destroy($id)
+    {
+        $tutorial = Tutorial::find($id);
+
+        if (! $tutorial) {
+            return response()->json(['message' => 'Tutorial not found'], 404);
+        }
+
+        $tutorial->delete();
+
+        return response()->json(['message' => 'Tutorial deleted successfully']);
+    }
+
+    private function payload(Tutorial $tutorial): array
+    {
+        return [
+            'id'              => $tutorial->id,
+            'version_node_id' => $tutorial->version_node_id,
+            'title'           => $tutorial->title,
+            'url'             => $tutorial->url,
+            'description'     => $tutorial->description,
+            'source_name'     => $tutorial->source_name,
+            'difficulty'      => $tutorial->difficulty,
+            'review_status'   => $tutorial->review_status,
+            'review_notes'    => $tutorial->review_notes,
+            'created_at'      => $tutorial->created_at,
+        ];
+    }
 }

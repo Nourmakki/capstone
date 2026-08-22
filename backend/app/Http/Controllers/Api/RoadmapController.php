@@ -10,25 +10,45 @@ use App\Models\Roadmap;
 use App\Models\RoadmapVersion;
 use App\Models\VersionEdge;
 use App\Models\VersionNode;
+use Illuminate\Http\Request;
 
 class RoadmapController extends Controller
 {
-    public function index()
+    /**
+     * Staff manage material, so they see everything. Students only ever
+     * see what a material manager approved.
+     */
+    private function seesUnapproved(Request $request): bool
     {
-        $roadmaps = Roadmap::with([
+        return in_array($request->user()->role, ['Admin', 'MaterialManager'], true);
+    }
+
+    public function index(Request $request)
+    {
+        $staff = $this->seesUnapproved($request);
+
+        $query = Roadmap::query()->when(! $staff, fn ($q) => $q->approved());
+
+        $roadmaps = $query->with([
             'versions' => fn ($q) => $q->where('status', 'Published')
-                ->orderByDesc('version_number'),
+                ->when(! $staff, fn ($inner) => $inner->approved())
+                ->orderByDesc('id'),
             'versions.versionNodes',
         ])->orderBy('title')->get();
 
         return RoadmapResource::collection($roadmaps);
     }
 
-    public function show(Roadmap $roadmap)
+    public function show(Request $request, Roadmap $roadmap)
     {
+        $staff = $this->seesUnapproved($request);
+
+        abort_if(! $staff && ! $roadmap->isApproved(), 404);
+
         $roadmap->load([
             'versions' => fn ($q) => $q->where('status', 'Published')
-                ->orderByDesc('version_number'),
+                ->when(! $staff, fn ($inner) => $inner->approved())
+                ->orderByDesc('id'),
             'versions.versionNodes',
         ]);
 
@@ -38,16 +58,16 @@ class RoadmapController extends Controller
     public function versions(Roadmap $roadmap)
     {
         return RoadmapVersionResource::collection(
-            $roadmap->versions()->orderByDesc('version_number')->get()
+            $roadmap->versions()->orderByDesc('id')->get()
         );
     }
 
     public function latestVersion(Roadmap $roadmap)
     {
-        // Ordered by version_number, not created_at.
+        // Newest published version, ordered by creation.
         $version = $roadmap->versions()
             ->where('status', 'Published')
-            ->orderByDesc('version_number')
+            ->orderByDesc('id')
             ->first();
 
         if (! $version) {
@@ -154,13 +174,21 @@ class RoadmapController extends Controller
         /**
      * Start a new draft version by copying the latest one's graph.
      */
-    public function createVersion(Roadmap $roadmap)
+    public function createVersion(Request $request, Roadmap $roadmap)
     {
-        $latest = $roadmap->versions()->orderByDesc('version_number')->first();
+        $data = $request->validate([
+            // Labels are free text so "2.1" or "2026 refresh" are valid.
+            'version_number' => ['nullable', 'string', 'max:20'],
+            'title'          => ['nullable', 'string', 'max:255'],
+        ]);
+
+        $latest = $roadmap->versions()->orderByDesc('id')->first();
 
         $version = RoadmapVersion::create([
             'roadmap_id'     => $roadmap->id,
-            'version_number' => ($latest->version_number ?? 0) + 1,
+            'version_number' => $data['version_number']
+                ?? (string) ($roadmap->versions()->count() + 1),
+            'title'          => $data['title'] ?? null,
             'status'         => 'Draft',
         ]);
 
@@ -195,6 +223,13 @@ class RoadmapController extends Controller
     {
         if ($version->status === 'Published') {
             return response()->json(['message' => 'This version is already published.'], 409);
+        }
+
+        // A material manager gates what goes live.
+        if (! $version->isApproved()) {
+            return response()->json([
+                'message' => 'This version must be approved by a material manager before publishing.',
+            ], 409);
         }
 
         RoadmapVersion::where('roadmap_id', $version->roadmap_id)

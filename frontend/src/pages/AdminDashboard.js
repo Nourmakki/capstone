@@ -3,12 +3,13 @@ import { useNavigate } from "react-router-dom";
 import api from "../api";
 import { useAuth } from "../context/AuthContext";
 import {
-    LayoutDashboard, Users, Map, LogOut, Menu, ShieldCheck,
+    LayoutDashboard, Users, Map, Video, LogOut, Menu, ShieldCheck,
 } from "lucide-react";
 
 import AdminOverview from "./admin/AdminOverview";
 import AdminProfessors from "./admin/AdminProfessors";
 import AdminRoadmaps from "./admin/AdminRoadmaps";
+import AdminTutorials from "./admin/AdminTutorials";
 
 function AdminDashboard() {
     const navigate = useNavigate();
@@ -38,6 +39,7 @@ function AdminDashboard() {
         { id: "overview", label: "Overview", icon: <LayoutDashboard size={20} /> },
         { id: "professors", label: "Professors", icon: <Users size={20} />, badge: stats.pendingProfessors },
         { id: "roadmaps", label: "Roadmaps", icon: <Map size={20} /> },
+        { id: "tutorials", label: "Tutorials", icon: <Video size={20} /> },
     ];
 
     return (
@@ -112,6 +114,7 @@ function AdminDashboard() {
                 {activePage === "overview" && <AdminOverview stats={stats} onGo={setActivePage} />}
                 {activePage === "professors" && <AdminProfessors onChanged={loadStats} />}
                 {activePage === "roadmaps" && <AdminRoadmaps onChanged={loadStats} />}
+                {activePage === "tutorials" && <AdminTutorials onChanged={loadStats} />}
             </main>
         </div>
     );

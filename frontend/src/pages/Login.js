@@ -23,6 +23,7 @@ const handleLogin = async (e) => {
         if (role === "Student") navigate("/dashboard");
         else if (role === "Professor") navigate("/professor-dashboard");
         else if (role === "Admin") navigate("/admin-dashboard");
+        else if (role === "MaterialManager") navigate("/material-dashboard");
     } catch (error) {
         if (error.response?.status === 403 && error.response?.data?.pending) {
             navigate("/professor-pending");

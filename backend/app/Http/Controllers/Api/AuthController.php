@@ -3,6 +3,7 @@
 namespace App\Http\Controllers\Api;
 
 use App\Http\Controllers\Controller;
+use App\Models\Professor;
 use App\Models\Student;
 use App\Models\User;
 use Illuminate\Http\Request;
@@ -19,6 +20,12 @@ class AuthController extends Controller
             'password' => ['required', 'confirmed', Password::min(8)],
             'location' => ['nullable', 'string', 'max:255'],
             'role'     => ['required', 'in:student,professor'],
+
+            // An admin approves a professor by reading their CV, so it is
+            // required for that role. This endpoint is public, hence the
+            // strict type and size limits.
+            'qualification' => ['required_if:role,professor', 'nullable', 'string', 'max:255'],
+            'cv'            => ['required_if:role,professor', 'file', 'mimes:pdf', 'max:5120'],
         ]);
 
         $role = $data['role'] === 'student' ? 'Student' : 'PendingProfessor';
@@ -43,6 +50,15 @@ class AuthController extends Controller
                 'token'   => $user->createToken('api')->plainTextToken,
             ], 201);
         }
+
+        // The professors row IS the application: it carries the CV and stays
+        // unverified until an admin approves it.
+        Professor::create([
+            'user_id'       => $user->id,
+            'qualification' => $data['qualification'],
+            'cv_path'       => $request->file('cv')->store('cvs'),
+            'is_verified'   => false,
+        ]);
 
         // Pending professors get no token - they cannot use the app until approved.
         return response()->json([

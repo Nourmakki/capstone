@@ -33,8 +33,13 @@ function ProjectSubmissionPage() {
     useEffect(() => { load(); }, [load]);
 
     const handleSubmit = async () => {
-        if (!githubUrl.trim() && !file) {
-            alert("Provide a GitHub link or upload a ZIP file.");
+        if (!githubUrl.trim()) {
+            alert("Add the link to your GitHub repository.");
+            return;
+        }
+
+        if (!file) {
+            alert("Attach your project as a ZIP file.");
             return;
         }
 
@@ -125,7 +130,9 @@ function ProjectSubmissionPage() {
                                 <h2 className="text-2xl font-bold">Submit Your Work</h2>
                             </div>
 
-                            <label className="block text-gray-300 mb-2">GitHub Repository Link</label>
+                            <label className="block text-gray-300 mb-2">
+                                GitHub Repository Link <span className="text-red-400">*</span>
+                            </label>
                             <div className="relative mb-6">
                                 <GitBranch size={18} className="absolute left-4 top-4 text-gray-400" />
                                 <input
@@ -137,13 +144,22 @@ function ProjectSubmissionPage() {
                                 />
                             </div>
 
-                            <label className="block text-gray-300 mb-2">Upload ZIP (optional, max 10 MB)</label>
+                            <label className="block text-gray-300 mb-2">
+                                Project ZIP <span className="text-red-400">*</span>
+                                <span className="text-gray-500 text-sm"> (max 10 MB)</span>
+                            </label>
                             <input
                                 type="file"
                                 accept=".zip"
                                 onChange={(e) => setFile(e.target.files[0] ?? null)}
-                                className="w-full p-4 rounded-2xl bg-black/30 border border-white/10 mb-6"
+                                className="w-full p-4 rounded-2xl bg-black/30 border border-white/10"
                             />
+                            {file && (
+                                <p className="text-xs text-[#00b0c2] mt-2">
+                                    {file.name} ({Math.round(file.size / 1024)} KB)
+                                </p>
+                            )}
+                            <div className="mb-6" />
 
                             <label className="block text-gray-300 mb-2">Notes (optional)</label>
                             <textarea

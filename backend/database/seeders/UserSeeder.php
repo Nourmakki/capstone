@@ -61,6 +61,16 @@ class UserSeeder extends Seeder
             ]
         );
 
+        User::updateOrCreate(
+            ['email' => 'material@capstone.test'],
+            [
+                'name'     => 'Maya Material',
+                'password' => Hash::make('password123'),
+                'role'     => 'MaterialManager',
+                'location' => 'Beirut, Lebanon',
+            ]
+        );
+
         // A professor still awaiting approval, so the admin panel has
         // something to review.
         User::updateOrCreate(

@@ -14,7 +14,7 @@ class QuizController extends Controller
     /**
      * Pass mark, as a percentage.
      */
-    private const PASS_MARK = 70;
+    public const PASS_MARK = 70;
 
     /**
      * Question types this platform can grade without a human.
@@ -26,6 +26,9 @@ class QuizController extends Controller
      */
     public function show(Request $request, Quiz $quiz)
     {
+        // An unapproved quiz must not be reachable by guessing its id.
+        $this->requireApproved($request, $quiz);
+
         $quiz->load('questions');
 
         return response()->json([
@@ -50,6 +53,8 @@ class QuizController extends Controller
      */
     public function submit(SubmitQuizRequest $request, Quiz $quiz)
     {
+        $this->requireApproved($request, $quiz);
+
         $student = $this->studentFor($request);
 
         $quiz->load('questions');
@@ -176,5 +181,15 @@ class QuizController extends Controller
     private function studentFor(Request $request): Student
     {
         return Student::where('user_id', $request->user()->id)->firstOrFail();
+    }
+
+    /**
+     * Staff may open unreviewed content; students may not.
+     */
+    private function requireApproved(Request $request, Quiz $quiz): void
+    {
+        $staff = in_array($request->user()->role, ['Admin', 'MaterialManager'], true);
+
+        abort_if(! $staff && ! $quiz->isApproved(), 404, 'Quiz not found.');
     }
 }

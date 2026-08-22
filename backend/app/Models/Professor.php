@@ -12,6 +12,7 @@ class Professor extends Model
     protected $fillable = [
         'user_id',
         'qualification',
+        'cv_path',
         'is_verified'
     ];
 

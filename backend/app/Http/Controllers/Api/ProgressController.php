@@ -3,6 +3,7 @@
 namespace App\Http\Controllers\Api;
 
 use App\Http\Controllers\Controller;
+use App\Http\Resources\RoadmapVersionResource;
 
 use App\Models\CompletedNode;
 use App\Models\UserRoadmapProgress;
@@ -11,6 +12,7 @@ use Illuminate\Http\Request;
 use App\Models\RoadmapVersion;
 use App\Models\VersionNode;
 use App\Models\VersionEdge;
+use App\Models\Submission;
 
 class ProgressController extends Controller
 {
@@ -32,6 +34,17 @@ class ProgressController extends Controller
             ],
             ['status' => 'in_progress']
         );
+
+        // A module is only finished once its prerequisites, quizzes and
+        // projects are done - otherwise progress means nothing.
+        $blockers = $this->completionBlockers($versionNode, $student, $progress);
+
+        if ($blockers !== []) {
+            return response()->json([
+                'message'  => 'This module is not finished yet.',
+                'blockers' => $blockers,
+            ], 422);
+        }
 
         CompletedNode::firstOrCreate([
             'user_roadmap_progress_id' => $progress->id,
@@ -55,14 +68,94 @@ class ProgressController extends Controller
         ]);
     }
 
-        public function studentRoadmap($roadmapId, $userId)
+    /**
+     * Everything standing between a student and completing this module.
+     * Returns an empty array when they are free to finish it.
+     *
+     * @return array<int, string>
+     */
+    public static function completionBlockers(
+        VersionNode $versionNode,
+        Student $student,
+        ?UserRoadmapProgress $progress
+    ): array {
+        $blockers = [];
+
+        $completed = $progress
+            ? $progress->completedNodes()->pluck('node_id')->toArray()
+            : [];
+
+        // 1. Prerequisites, taken from the edges pointing at this node.
+        $prerequisiteIds = VersionEdge::with('edge')
+            ->where('roadmap_version_id', $versionNode->roadmap_version_id)
+            ->get()
+            ->filter(fn ($ve) => $ve->edge && $ve->edge->to_node_id === $versionNode->node_id)
+            ->map(fn ($ve) => $ve->edge->from_node_id)
+            ->values();
+
+        $missing = $prerequisiteIds->reject(fn ($id) => in_array($id, $completed, true));
+
+        if ($missing->isNotEmpty()) {
+            $titles = VersionNode::with('node')
+                ->where('roadmap_version_id', $versionNode->roadmap_version_id)
+                ->whereIn('node_id', $missing)
+                ->get()
+                ->map(fn ($vn) => $vn->node->title)
+                ->implode(', ');
+
+            $blockers[] = "Finish the earlier module(s) first: {$titles}.";
+        }
+
+        // 2. Every quiz on this module must be passed.
+        foreach ($versionNode->quizzes as $quiz) {
+            $best = Submission::where('quiz_id', $quiz->id)
+                ->where('student_id', $student->id)
+                ->max('score');
+
+            if ($best === null) {
+                $blockers[] = "Take the quiz \"{$quiz->title}\".";
+            } elseif ($best < QuizController::PASS_MARK) {
+                $blockers[] = "Pass \"{$quiz->title}\" - your best score is {$best}%, "
+                    . QuizController::PASS_MARK . "% is needed.";
+            }
+        }
+
+        // 3. Every project on this module must have been submitted.
+        foreach ($versionNode->projects as $project) {
+            $submitted = Submission::where('project_id', $project->id)
+                ->where('student_id', $student->id)
+                ->exists();
+
+            if (! $submitted) {
+                $blockers[] = "Submit the project \"{$project->title}\".";
+            }
+        }
+
+        return $blockers;
+    }
+
+        public function studentRoadmap(Request $request, $roadmapId, $userId)
     {
         $student = Student::where('user_id', $userId)->firstOrFail();
 
-        $version = RoadmapVersion::where('roadmap_id', $roadmapId)
-            ->where('status', 'Published')
-            ->orderByDesc('version_number')
-            ->firstOrFail();
+        // Every version a student may read: published and manager-approved.
+        $availableVersions = RoadmapVersion::where('roadmap_id', $roadmapId)
+            ->whereIn('status', ['Published', 'Archived'])
+            ->approved()
+            ->orderByDesc('id')
+            ->get();
+
+        abort_if($availableVersions->isEmpty(), 404, 'This roadmap has no readable version.');
+
+        // A student may pin an older version; otherwise show the live one.
+        $requested = $request->query('version');
+
+        $version = $requested
+            ? $availableVersions->firstWhere('id', (int) $requested)
+            : $availableVersions->firstWhere('status', 'Published');
+
+        // An unknown or unreadable id falls back rather than 404ing.
+        $version ??= $availableVersions->first();
 
         $nodes = VersionNode::with('node')
             ->where('roadmap_version_id', $version->id)
@@ -111,11 +204,13 @@ class ProgressController extends Controller
         }
 
         return response()->json([
-            'version'      => $version,
-            'nodes'        => $nodes,
-            'edges'        => $edges,
-            'completed'    => $completed,
-            'current_node' => $currentNode,
+            'version'            => new RoadmapVersionResource($version),
+            'is_latest'          => $version->status === 'Published',
+            'available_versions' => RoadmapVersionResource::collection($availableVersions),
+            'nodes'              => $nodes,
+            'edges'              => $edges,
+            'completed'          => $completed,
+            'current_node'       => $currentNode,
         ]);
     }
 }

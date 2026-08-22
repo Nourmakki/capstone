@@ -13,22 +13,22 @@ class SubmitProjectRequest extends FormRequest
 
     public function rules(): array
     {
+        // Both are required: the repository is what a reviewer reads, and the
+        // archive is the fixed snapshot of what was actually handed in.
         return [
-            'github_url' => ['nullable', 'url', 'max:255'],
-            'file'       => ['nullable', 'file', 'mimes:zip', 'max:10240'],
+            'github_url' => ['required', 'url', 'max:255'],
+            'file'       => ['required', 'file', 'mimes:zip', 'max:10240'],
             'notes'      => ['nullable', 'string', 'max:2000'],
         ];
     }
 
-    public function withValidator($validator): void
+    public function messages(): array
     {
-        $validator->after(function ($validator) {
-            if (! $this->filled('github_url') && ! $this->hasFile('file')) {
-                $validator->errors()->add(
-                    'github_url',
-                    'Provide a GitHub link or upload a ZIP file.'
-                );
-            }
-        });
+        return [
+            'github_url.required' => 'Add the link to your GitHub repository.',
+            'file.required'       => 'Attach your project as a ZIP file.',
+            'file.mimes'          => 'The project file must be a .zip archive.',
+            'file.max'            => 'The project ZIP must be 10 MB or smaller.',
+        ];
     }
 }

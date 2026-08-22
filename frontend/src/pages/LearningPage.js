@@ -74,6 +74,44 @@ function LearningPage() {
         );
     }
 
+    // A locked module stays closed even when reached by URL - showing its
+    // tutorials would make the roadmap order meaningless.
+    if (!detail.is_unlocked) {
+        return (
+            <div className="min-h-screen bg-black text-white flex items-center justify-center p-8">
+                <div className="max-w-lg w-full rounded-3xl border border-white/10 bg-white/[0.03] p-10 text-center">
+                    <Lock size={48} className="mx-auto text-gray-500 mb-5" />
+
+                    <h1 className="text-3xl font-black">{detail.node.title}</h1>
+                    <p className="text-gray-400 mt-3">
+                        This module is locked. Finish what comes before it first.
+                    </p>
+
+                    {detail.prerequisites.length > 0 && (
+                        <div className="mt-6 space-y-2 text-left">
+                            {detail.prerequisites.map((p) => (
+                                <div key={p.version_node_id}
+                                     className="flex items-center justify-between rounded-xl border border-white/10 bg-black/30 px-4 py-3">
+                                    <span className="text-sm">{p.title}</span>
+                                    <span className={`text-xs ${p.completed ? "text-green-400" : "text-yellow-400"}`}>
+                                        {p.completed ? "done" : "not finished"}
+                                    </span>
+                                </div>
+                            ))}
+                        </div>
+                    )}
+
+                    <button
+                        onClick={() => navigate(`/roadmap/${detail.roadmap.id}`)}
+                        className="mt-8 w-full py-3 rounded-2xl bg-[#0097a7] text-black font-bold hover:scale-[1.02] transition"
+                    >
+                        Back to Roadmap
+                    </button>
+                </div>
+            </div>
+        );
+    }
+
     const tabs = [
         { id: "tutorials", label: `🎥 Tutorials (${detail.tutorials.length})` },
         { id: "quiz", label: `🧠 Quiz (${detail.quizzes.length})` },
@@ -274,21 +312,38 @@ function LearningPage() {
                                         ✓ Module Completed
                                     </div>
                                 ) : (
-                                    <button
-                                        disabled={!detail.is_unlocked || saving}
-                                        onClick={handleCompleteModule}
-                                        className={`w-full py-4 rounded-2xl font-bold transition ${
-                                            detail.is_unlocked && !saving
-                                                ? "bg-[#0097a7] text-black hover:scale-[1.02]"
-                                                : "bg-gray-800 text-gray-500 cursor-not-allowed"
-                                        }`}
-                                    >
-                                        {saving
-                                            ? "Saving..."
-                                            : detail.is_unlocked
-                                            ? "Mark as Complete →"
-                                            : "Complete Prerequisites First"}
-                                    </button>
+                                    <>
+                                        {/* Say what is still outstanding rather than
+                                            leaving a dead button with no explanation. */}
+                                        {detail.completion_blockers?.length > 0 && (
+                                            <div className="mb-4 rounded-2xl border border-yellow-400/20 bg-yellow-400/5 p-4">
+                                                <p className="text-sm font-semibold text-yellow-300 mb-2">
+                                                    Before you can complete this module:
+                                                </p>
+                                                <ul className="space-y-1">
+                                                    {detail.completion_blockers.map((b, i) => (
+                                                        <li key={i} className="text-sm text-gray-300">· {b}</li>
+                                                    ))}
+                                                </ul>
+                                            </div>
+                                        )}
+
+                                        <button
+                                            disabled={detail.completion_blockers?.length > 0 || saving}
+                                            onClick={handleCompleteModule}
+                                            className={`w-full py-4 rounded-2xl font-bold transition ${
+                                                !detail.completion_blockers?.length && !saving
+                                                    ? "bg-[#0097a7] text-black hover:scale-[1.02]"
+                                                    : "bg-gray-800 text-gray-500 cursor-not-allowed"
+                                            }`}
+                                        >
+                                            {saving
+                                                ? "Saving..."
+                                                : detail.completion_blockers?.length > 0
+                                                ? "Not Finished Yet"
+                                                : "Mark as Complete →"}
+                                        </button>
+                                    </>
                                 )}
                             </div>
                         </div>

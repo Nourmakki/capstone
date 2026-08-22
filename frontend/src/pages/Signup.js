@@ -10,6 +10,8 @@ const Signup=()=>{
     const[passwordConfirmation, setPasswordConfirmation]=useState("");
     const[location, setLocation]=useState("");
     const[role, setRole]=useState("");
+    const[qualification, setQualification]=useState("");
+    const[cv, setCv]=useState(null);
     const[submitting, setSubmitting]=useState(false);
     const navigate = useNavigate();
     const { login } = useAuth();
@@ -31,17 +33,32 @@ const Signup=()=>{
             return;
         }
 
+        if (role === "professor" && !cv) {
+            alert("Please attach your CV as a PDF. An administrator reads it before approving you.");
+            return;
+        }
+
         setSubmitting(true);
 
         try {
-            const response = await api.post("/register", {
-                name,
-                email,
-                password,
-                password_confirmation: passwordConfirmation,
-                location,
-                role,
-            });
+            // Sent as multipart because professor applications carry a file.
+            const form = new FormData();
+            form.append("name", name);
+            form.append("email", email);
+            form.append("password", password);
+            form.append("password_confirmation", passwordConfirmation);
+            form.append("role", role);
+
+            if (location) {
+                form.append("location", location);
+            }
+
+            if (role === "professor") {
+                form.append("qualification", qualification);
+                form.append("cv", cv);
+            }
+
+            const response = await api.post("/register", form);
 
             // Pending professors get no token - they wait for admin approval.
             if (response.data.pending) {
@@ -149,6 +166,45 @@ const Signup=()=>{
                             </button>
                         </div>
                     </div>
+
+                    {/* An admin approves a professor by reading their CV. */}
+                    {role === "professor" && (
+                        <div className="mb-5 p-4 rounded-lg border border-[#0097a7]/30 bg-[#0097a7]/5">
+                            <p className="text-xs text-gray-300 mb-4">
+                                An administrator will review your CV before approving your account.
+                            </p>
+
+                            <div className="mb-4">
+                                <label className="block text-left text-sm mb-1 text-gray-300">
+                                    Qualification
+                                </label>
+                                <input
+                                    type="text"
+                                    value={qualification}
+                                    onChange={(e) => setQualification(e.target.value)}
+                                    placeholder="e.g. PhD in Computer Science, 6 years teaching"
+                                    className="w-full p-2 border border-gray-600 bg-gray-700 text-white placeholder-gray-400 rounded-lg"
+                                />
+                            </div>
+
+                            <div>
+                                <label className="block text-left text-sm mb-1 text-gray-300">
+                                    CV (PDF, max 5 MB)
+                                </label>
+                                <input
+                                    type="file"
+                                    accept="application/pdf"
+                                    onChange={(e) => setCv(e.target.files[0] ?? null)}
+                                    className="w-full p-2 border border-gray-600 bg-gray-700 text-white rounded-lg text-sm"
+                                />
+                                {cv && (
+                                    <p className="text-xs text-[#00b0c2] mt-2">
+                                        {cv.name} ({Math.round(cv.size / 1024)} KB)
+                                    </p>
+                                )}
+                            </div>
+                        </div>
+                    )}
 
                     <button type="submit" disabled={submitting || passwordsMismatch} className={`w-full p-2 rounded-lg text-white transition ${
                         submitting || passwordsMismatch
