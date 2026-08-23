@@ -184,11 +184,11 @@ class QuizController extends Controller
     }
 
     /**
-     * Staff may open unreviewed content; students may not.
+     * Material managers may open unreviewed content; nobody else may.
      */
     private function requireApproved(Request $request, Quiz $quiz): void
     {
-        $staff = in_array($request->user()->role, ['Admin', 'MaterialManager'], true);
+        $staff = $request->user()->role === 'MaterialManager';
 
         abort_if(! $staff && ! $quiz->isApproved(), 404, 'Quiz not found.');
     }

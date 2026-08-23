@@ -33,7 +33,7 @@ class WorkshopController extends Controller
     {
         $user = $request->user();
 
-        // Staff have no student record; they still get location matching.
+        // Non-students have no progress; they still get location matching.
         $student = Student::where('user_id', $user->id)->first();
 
         $country = $this->countryFrom($user->location);

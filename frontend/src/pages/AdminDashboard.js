@@ -3,13 +3,11 @@ import { useNavigate } from "react-router-dom";
 import api from "../api";
 import { useAuth } from "../context/AuthContext";
 import {
-    LayoutDashboard, Users, Map, Video, LogOut, Menu, ShieldCheck,
+    LayoutDashboard, Users, LogOut, Menu, ShieldCheck,
 } from "lucide-react";
 
 import AdminOverview from "./admin/AdminOverview";
 import AdminProfessors from "./admin/AdminProfessors";
-import AdminRoadmaps from "./admin/AdminRoadmaps";
-import AdminTutorials from "./admin/AdminTutorials";
 
 function AdminDashboard() {
     const navigate = useNavigate();
@@ -38,13 +36,11 @@ function AdminDashboard() {
     const navItems = [
         { id: "overview", label: "Overview", icon: <LayoutDashboard size={20} /> },
         { id: "professors", label: "Professors", icon: <Users size={20} />, badge: stats.pendingProfessors },
-        { id: "roadmaps", label: "Roadmaps", icon: <Map size={20} /> },
-        { id: "tutorials", label: "Tutorials", icon: <Video size={20} /> },
     ];
 
     return (
         <div className="min-h-screen bg-black text-white flex overflow-hidden">
-            <div className="absolute top-0 left-0 w-full h-full bg-[radial-gradient(circle_at_center,rgba(0,255,200,0.08),transparent_55%)] pointer-events-none" />
+            <div className="absolute top-0 left-0 w-full h-full bg-[radial-gradient(circle_at_center,rgba(0,255,200,0.15),transparent_55%)] pointer-events-none" />
 
             <aside className={`fixed top-0 left-0 h-screen z-20 border-r border-white/10 bg-black/40 backdrop-blur-xl flex flex-col px-6 pt-6 pb-6 transition-all duration-300 ${
                 collapsed ? "w-24" : "w-72"
@@ -113,8 +109,6 @@ function AdminDashboard() {
             }`}>
                 {activePage === "overview" && <AdminOverview stats={stats} onGo={setActivePage} />}
                 {activePage === "professors" && <AdminProfessors onChanged={loadStats} />}
-                {activePage === "roadmaps" && <AdminRoadmaps onChanged={loadStats} />}
-                {activePage === "tutorials" && <AdminTutorials onChanged={loadStats} />}
             </main>
         </div>
     );

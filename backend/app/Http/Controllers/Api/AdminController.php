@@ -6,6 +6,8 @@ use App\Http\Controllers\Controller;
 use App\Models\ExternalResources;
 use App\Models\HumanReviewRequest;
 use App\Models\Professor;
+use App\Models\Project;
+use App\Models\Quiz;
 use App\Models\Roadmap;
 use App\Models\RoadmapAiWorkflow;
 use App\Models\RoadmapVersion;
@@ -106,22 +108,27 @@ class AdminController extends Controller
             'approvedProfessors' => User::where('role', 'Professor')->count(),
             'admins'             => User::where('role', 'Admin')->count(),
             'students'           => User::where('role', 'Student')->count(),
-            'roadmaps'           => Roadmap::count(),
-            'publishedVersions'  => RoadmapVersion::where('status', 'Published')->count(),
-            'draftVersions'      => RoadmapVersion::where('status', 'Draft')->count(),
-            'pendingReviews'     => HumanReviewRequest::where('status', 'pending')->count(),
-
-            // Material manager workload.
             'materialManagers'   => User::where('role', 'MaterialManager')->count(),
-            'materialPending'    => Roadmap::pendingReview()->count()
+
+            // Read-only oversight. The admin cannot act on any of this -
+            // material belongs to the material manager - but seeing the
+            // backlog is how they know whether the role needs more people.
+            'roadmaps'            => Roadmap::count(),
+            'publishedVersions'   => RoadmapVersion::where('status', 'Published')->count(),
+            'materialPending'     => Roadmap::pendingReview()->count()
                 + RoadmapVersion::pendingReview()->count()
                 + Tutorial::pendingReview()->count()
-                + ExternalResources::pendingReview()->count(),
-            'materialRejected'   => Roadmap::where('review_status', 'rejected')->count()
+                + ExternalResources::pendingReview()->count()
+                + Quiz::pendingReview()->count()
+                + Project::pendingReview()->count(),
+            'materialRejected'    => Roadmap::where('review_status', 'rejected')->count()
                 + RoadmapVersion::where('review_status', 'rejected')->count()
                 + Tutorial::where('review_status', 'rejected')->count()
-                + ExternalResources::where('review_status', 'rejected')->count(),
+                + ExternalResources::where('review_status', 'rejected')->count()
+                + Quiz::where('review_status', 'rejected')->count()
+                + Project::where('review_status', 'rejected')->count(),
             'aiWorkflowsAwaiting' => RoadmapAiWorkflow::where('status', 'awaiting_review')->count(),
+            'pendingReviews'      => HumanReviewRequest::where('status', 'pending')->count(),
         ]);
     }
 }

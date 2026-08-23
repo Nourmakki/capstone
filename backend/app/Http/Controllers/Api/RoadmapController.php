@@ -15,12 +15,12 @@ use Illuminate\Http\Request;
 class RoadmapController extends Controller
 {
     /**
-     * Staff manage material, so they see everything. Students only ever
-     * see what a material manager approved.
+     * Material managers see every status, including unapproved. Students
+     * only ever see approved material.
      */
     private function seesUnapproved(Request $request): bool
     {
-        return in_array($request->user()->role, ['Admin', 'MaterialManager'], true);
+        return $request->user()->role === 'MaterialManager';
     }
 
     public function index(Request $request)

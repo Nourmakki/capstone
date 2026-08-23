@@ -18,7 +18,7 @@ class ProjectController extends Controller
         // An unapproved project must not be reachable by guessing its id.
         $this->requireApproved($request, $project);
 
-        // Staff can open a project to read the brief; only students have
+        // A material manager can read the brief; only students have
         // their own submissions attached.
         $student = Student::where('user_id', $request->user()->id)->first();
 
@@ -105,13 +105,13 @@ class ProjectController extends Controller
     }
 
     /**
-     * Owner, professors and admins may download a submitted file.
+     * The student who submitted it, and the professors who grade it.
      */
     public function download(Request $request, Submission $submission)
     {
         $user = $request->user();
 
-        $isStaff = in_array($user->role, ['Professor', 'Admin'], true);
+        $isStaff = $user->role === 'Professor';
         $student = Student::where('user_id', $user->id)->first();
         $isOwner = $student && $submission->student_id === $student->id;
 
@@ -151,11 +151,11 @@ class ProjectController extends Controller
     }
 
     /**
-     * Staff may open unreviewed content; students may not.
+     * Material managers may open unreviewed content; nobody else may.
      */
     private function requireApproved(Request $request, Project $project): void
     {
-        $staff = in_array($request->user()->role, ['Admin', 'MaterialManager'], true);
+        $staff = $request->user()->role === 'MaterialManager';
 
         abort_if(! $staff && ! $project->isApproved(), 404, 'Project not found.');
     }

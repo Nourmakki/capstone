@@ -112,10 +112,10 @@ Route::middleware('auth:sanctum')->group(function () {
 
     /*
     |----------------------------------------------------------------------
-    | Roadmap authoring - admins and material managers
+    | Roadmap authoring - material managers only
     |----------------------------------------------------------------------
     */
-    Route::middleware('role:Admin,MaterialManager')->group(function () {
+    Route::middleware('role:MaterialManager')->group(function () {
 
         Route::post('/roadmaps', [RoadmapController::class, 'store']);
         Route::put('/roadmaps/{roadmap}', [RoadmapController::class, 'update']);
@@ -145,7 +145,7 @@ Route::middleware('auth:sanctum')->group(function () {
     | Material managers
     |----------------------------------------------------------------------
     */
-    Route::middleware('role:MaterialManager,Admin')->group(function () {
+    Route::middleware('role:MaterialManager')->group(function () {
 
         // AI proposals: the material manager is the human in the loop.
         Route::get('/ai-workflows', [AiWorkflowController::class, 'index']);
@@ -163,7 +163,7 @@ Route::middleware('auth:sanctum')->group(function () {
         });
     });
 
-    Route::middleware('role:Professor,Admin')->prefix('professor')->group(function () {
+    Route::middleware('role:Professor')->prefix('professor')->group(function () {
         Route::get('/review-requests', [ProfessorController::class, 'reviewRequests']);
         Route::post('/review-requests/{reviewRequest}/claim', [ProfessorController::class, 'claim']);
         Route::post('/review-requests/{reviewRequest}/review', [ProfessorController::class, 'review']);

@@ -14,7 +14,7 @@ class TeamController extends Controller
 {
     public function index(Request $request)
     {
-        // Staff can browse teams read-only; membership flags stay false.
+        // Non-students browse teams read-only; membership flags stay false.
         $student = Student::where('user_id', $request->user()->id)->first();
 
         $teams = Team::with('students.user')
