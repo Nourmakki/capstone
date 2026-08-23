@@ -136,6 +136,7 @@ def fetch_video_transcript(
     return {
         "video_id": video_id,
         "text": sampled_text,
+        "full_text": full_text,
         "language_code": (
             transcript.language_code
         ),
