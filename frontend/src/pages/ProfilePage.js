@@ -61,7 +61,7 @@ function ProfilePage() {
 
     return (
         <div className="min-h-screen bg-black text-white overflow-hidden">
-            <div className="absolute top-0 left-0 w-full h-full bg-[radial-gradient(circle_at_center,rgba(0,255,200,0.08),transparent_55%)] pointer-events-none" />
+            <div className="absolute top-0 left-0 w-full h-full bg-[radial-gradient(circle_at_center,rgba(0,255,200,0.15),transparent_55%)] pointer-events-none" />
 
             <header className="relative z-10 px-8 lg:px-20 py-10 border-b border-white/10">
                 <div className="flex flex-col lg:flex-row lg:items-center lg:justify-between gap-8">

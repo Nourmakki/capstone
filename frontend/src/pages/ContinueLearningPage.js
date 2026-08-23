@@ -35,7 +35,7 @@ function ContinueLearningPage() {
 
     return (
         <div className="min-h-screen bg-black text-white overflow-hidden">
-            <div className="absolute inset-0 bg-[radial-gradient(circle_at_center,rgba(0,255,200,0.08),transparent_55%)] pointer-events-none" />
+            <div className="absolute inset-0 bg-[radial-gradient(circle_at_center,rgba(0,255,200,0.15),transparent_55%)] pointer-events-none" />
 
             <div className="relative z-10 px-10 py-10">
                 <div className="mb-10">

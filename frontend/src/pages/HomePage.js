@@ -1,6 +1,6 @@
 import React from "react";
 import { useNavigate } from "react-router-dom";
-import {Code2, Brain, Smartphone, Database, Cloud, Cpu, Gamepad2, Monitor, ArrowRight,} from "lucide-react";
+import {Code2, Brain, Smartphone, Cloud, Gamepad2, Monitor, ArrowRight,} from "lucide-react";
 
 const roadmapCards=[
     {
@@ -44,11 +44,13 @@ const roadmapCards=[
 function HomePage(){
     const navigate = useNavigate();
     return (
-        <div className="min-h-screen bg-black text-white overflow-hidden">
+        // No overflow-hidden here: any non-visible overflow on an ancestor
+        // stops the nav below from sticking.
+        <div className="min-h-screen bg-black text-white">
             
-            <div className= "absolute top-0 left-0 w-full h-full bg-[radial-gradient(circle_at_center, rgba(0,255,200, 0.08), transparent_55%)] pointer-events-none">
+            <div className="absolute top-0 left-0 w-full h-full bg-[radial-gradient(circle_at_center,rgba(0,255,200,0.15),transparent_55%)] pointer-events-none">
             </div>
-            <nav className="relative z-10 flex items-center justify-between px-8 py-5 border-b border-white/10">
+            <nav className="sticky top-0 z-50 flex items-center justify-between px-8 py-5 border-b border-white/10 bg-black/80 backdrop-blur-md">
                 <div>
                     <h1 className="text-2xl font-bold tracking-wide text-[#0097a7]">
                         CS Mastery
