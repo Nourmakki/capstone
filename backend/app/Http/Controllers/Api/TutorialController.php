@@ -9,12 +9,12 @@ use Illuminate\Http\Request;
 class TutorialController extends Controller
 {
     /**
-     * Staff manage material, so they see every status. Students only ever
-     * see what a material manager approved.
+     * Material managers see every status, including unapproved. Students
+     * only ever see approved material.
      */
     private function isStaff(Request $request): bool
     {
-        return in_array($request->user()->role, ['Admin', 'MaterialManager'], true);
+        return $request->user()->role === 'MaterialManager';
     }
 
     private function rules(): array
@@ -25,7 +25,6 @@ class TutorialController extends Controller
             'url'             => ['required', 'url', 'max:255'],
             'description'     => ['required', 'string'],
             'source_name'     => ['required', 'string', 'max:255'],
-            'difficulty'      => ['required', 'in:beginner,intermediate,advanced'],
         ];
     }
 
@@ -121,7 +120,6 @@ class TutorialController extends Controller
             'url'             => $tutorial->url,
             'description'     => $tutorial->description,
             'source_name'     => $tutorial->source_name,
-            'difficulty'      => $tutorial->difficulty,
             'review_status'   => $tutorial->review_status,
             'review_notes'    => $tutorial->review_notes,
             'created_at'      => $tutorial->created_at,

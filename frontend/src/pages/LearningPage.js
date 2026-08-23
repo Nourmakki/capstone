@@ -121,7 +121,7 @@ function LearningPage() {
 
     return (
         <div className="min-h-screen bg-black text-white overflow-hidden">
-            <div className="absolute top-0 left-0 w-full h-full bg-[radial-gradient(circle_at_center,rgba(0,255,200,0.08),transparent_55%)] pointer-events-none" />
+            <div className="absolute top-0 left-0 w-full h-full bg-[radial-gradient(circle_at_center,rgba(0,255,200,0.15),transparent_55%)] pointer-events-none" />
 
             <header className="relative z-10 px-8 lg:px-20 py-8 border-b border-white/10">
                 <button
@@ -203,7 +203,6 @@ function LearningPage() {
                                                     <p className="text-gray-400 mt-2">{tutorial.description}</p>
                                                     <div className="mt-4 flex gap-3 text-sm">
                                                         <span className="text-[#00b0c2]">{tutorial.source_name}</span>
-                                                        <span className="text-yellow-400 capitalize">{tutorial.difficulty}</span>
                                                     </div>
                                                 </div>
 

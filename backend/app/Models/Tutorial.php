@@ -21,8 +21,7 @@ class Tutorial extends Model
     'title',
     'url',
     'description',
-    'source_name',
-    'difficulty'
+    'source_name'
 ];
 
     public function versionNode()

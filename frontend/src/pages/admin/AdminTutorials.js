@@ -7,7 +7,6 @@ const EMPTY = {
     url: "",
     description: "",
     source_name: "",
-    difficulty: "beginner",
 };
 
 function AdminTutorials({ onChanged }) {
@@ -94,13 +93,24 @@ function AdminTutorials({ onChanged }) {
 
     useEffect(() => { loadTutorials(); }, [loadTutorials]);
 
+    // Laravel's url rule needs a scheme. Rejecting "youtube.com/watch?v=x"
+    // over a missing "https://" is a pointless thing to make someone retype.
+    const withScheme = (url) => {
+        const trimmed = url.trim();
+        return /^https?:\/\//i.test(trimmed) ? trimmed : `https://${trimmed}`;
+    };
+
     const save = async () => {
         if (!nodeId) return;
 
         setBusy(true);
 
         try {
-            const payload = { ...form, version_node_id: nodeId };
+            const payload = {
+                ...form,
+                url: withScheme(form.url),
+                version_node_id: nodeId,
+            };
 
             if (editingId) {
                 await api.put(`/tutorials/${editingId}`, payload);
@@ -129,7 +139,6 @@ function AdminTutorials({ onChanged }) {
             url: t.url,
             description: t.description,
             source_name: t.source_name,
-            difficulty: t.difficulty,
         });
     };
 
@@ -242,13 +251,6 @@ function AdminTutorials({ onChanged }) {
                                 onChange={(e) => setForm({ ...form, source_name: e.target.value })}
                                 className="p-3 rounded-xl bg-black/30 border border-white/10 text-white" />
 
-                            <select value={form.difficulty}
-                                onChange={(e) => setForm({ ...form, difficulty: e.target.value })}
-                                className="p-3 rounded-xl bg-black/30 border border-white/10 text-white">
-                                <option value="beginner">Beginner</option>
-                                <option value="intermediate">Intermediate</option>
-                                <option value="advanced">Advanced</option>
-                            </select>
                         </div>
 
                         <textarea rows="3" placeholder="Description" value={form.description}
@@ -297,9 +299,6 @@ function AdminTutorials({ onChanged }) {
                                                     {t.review_status}
                                                 </span>
 
-                                                <span className="text-xs text-gray-500 capitalize">
-                                                    {t.difficulty}
-                                                </span>
                                             </div>
 
                                             <p className="text-sm text-gray-400">{t.description}</p>

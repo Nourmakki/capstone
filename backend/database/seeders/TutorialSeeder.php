@@ -47,7 +47,6 @@ class TutorialSeeder extends Seeder
                             'title'       => $tutorial['title'],
                             'description' => $tutorial['description'],
                             'source_name' => $tutorial['source_name'],
-                            'difficulty'  => $tutorial['difficulty'],
                         ]
                     );
                 }
