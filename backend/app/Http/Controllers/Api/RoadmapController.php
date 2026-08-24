@@ -6,11 +6,20 @@ use App\Http\Controllers\Controller;
 use App\Http\Requests\StoreRoadmapRequest;
 use App\Http\Resources\RoadmapResource;
 use App\Http\Resources\RoadmapVersionResource;
+use App\Models\ExternalResources;
+use App\Models\Node;
+use App\Models\Project;
+use App\Models\Quiz;
+use App\Models\QuizQuestion;
 use App\Models\Roadmap;
 use App\Models\RoadmapVersion;
+use App\Models\Tutorial;
+use App\Models\UserRoadmapProgress;
 use App\Models\VersionEdge;
 use App\Models\VersionNode;
+use App\Models\Workshop;
 use Illuminate\Http\Request;
+use Illuminate\Support\Facades\DB;
 
 class RoadmapController extends Controller
 {
@@ -184,35 +193,94 @@ class RoadmapController extends Controller
 
         $latest = $roadmap->versions()->orderByDesc('id')->first();
 
-        $version = RoadmapVersion::create([
-            'roadmap_id'     => $roadmap->id,
-            'version_number' => $data['version_number']
-                ?? (string) ($roadmap->versions()->count() + 1),
-            'title'          => $data['title'] ?? null,
-            'status'         => 'Draft',
-        ]);
+        // All of it or none of it: a half-cloned version would look complete
+        // while quietly missing modules or their material.
+        $version = DB::transaction(function () use ($data, $roadmap, $latest) {
+            $version = RoadmapVersion::create([
+                'roadmap_id'     => $roadmap->id,
+                'version_number' => $data['version_number']
+                    ?? (string) ($roadmap->versions()->count() + 1),
+                'title'          => $data['title'] ?? null,
+                'status'         => 'Draft',
+            ]);
 
-        if ($latest) {
-            // Clone nodes and edges so the draft starts from the live graph.
-            foreach (VersionNode::where('roadmap_version_id', $latest->id)->get() as $node) {
-                VersionNode::create([
-                    'roadmap_version_id' => $version->id,
-                    'node_id'            => $node->node_id,
-                ]);
+            if ($latest) {
+                // Clone nodes and edges so the draft starts from the live graph.
+                $nodeMap = [];
+
+                foreach (VersionNode::where('roadmap_version_id', $latest->id)->get() as $node) {
+                    $clone = VersionNode::create([
+                        'roadmap_version_id' => $version->id,
+                        'node_id'            => $node->node_id,
+                    ]);
+
+                    $nodeMap[$node->id] = $clone->id;
+                }
+
+                foreach (VersionEdge::where('roadmap_version_id', $latest->id)->get() as $edge) {
+                    VersionEdge::create([
+                        'roadmap_version_id' => $version->id,
+                        'edge_id'            => $edge->edge_id,
+                    ]);
+                }
+
+                $this->cloneMaterial($nodeMap);
             }
 
-            foreach (VersionEdge::where('roadmap_version_id', $latest->id)->get() as $edge) {
-                VersionEdge::create([
-                    'roadmap_version_id' => $version->id,
-                    'edge_id'            => $edge->edge_id,
-                ]);
-            }
-        }
+            return $version;
+        });
 
         return response()->json([
             'message' => 'Draft version created.',
             'version' => new RoadmapVersionResource($version),
         ], 201);
+    }
+
+    /**
+     * Tutorials, quizzes, projects and resources are keyed to version_node_id,
+     * so cloning a version's nodes alone leaves every module empty - and
+     * publishing that draft would strip the roadmap of all its material.
+     *
+     * Review state is carried over deliberately: the content is unchanged, so
+     * making a manager re-approve it would be busywork.
+     *
+     * @param array<int,int> $nodeMap old version_node id => new version_node id
+     */
+    private function cloneMaterial(array $nodeMap): void
+    {
+        foreach ($nodeMap as $oldNodeId => $newNodeId) {
+            foreach (Tutorial::where('version_node_id', $oldNodeId)->get() as $tutorial) {
+                $copy = $tutorial->replicate();
+                $copy->version_node_id = $newNodeId;
+                $copy->save();
+            }
+
+            foreach (ExternalResources::where('version_node_id', $oldNodeId)->get() as $resource) {
+                $copy = $resource->replicate();
+                $copy->version_node_id = $newNodeId;
+                $copy->save();
+            }
+
+            foreach (Project::where('version_node_id', $oldNodeId)->get() as $project) {
+                $copy = $project->replicate();
+                $copy->version_node_id = $newNodeId;
+                $copy->save();
+            }
+
+            // A quiz owns its questions, so the copy needs its own set -
+            // sharing them would make editing one quiz change the other.
+            foreach (Quiz::where('version_node_id', $oldNodeId)->get() as $quiz) {
+                $copy = $quiz->replicate();
+                $copy->version_node_id = $newNodeId;
+                $copy->save();
+
+                foreach (QuizQuestion::where('quiz_id', $quiz->id)->get() as $question) {
+                    $questionCopy = $question->replicate();
+                    $questionCopy->quiz_id = $copy->id;
+                    $questionCopy->save();
+                }
+            }
+        }
     }
 
     /**
@@ -241,6 +309,71 @@ class RoadmapController extends Controller
         return response()->json([
             'message' => 'Version published.',
             'version' => new RoadmapVersionResource($version),
+        ]);
+    }
+
+    /**
+     * Delete a draft version outright.
+     *
+     * The foreign keys cascade from roadmap_versions down through version_nodes
+     * to tutorials, quizzes, questions, projects and resources, so the delete
+     * itself is one line. The guards are the point:
+     *
+     * - Only a Draft. Published is what students are following, Archived is the
+     *   record of what they followed.
+     * - user_roadmap_progress cascades too, so refuse if any student has
+     *   progress on it rather than silently erasing their history.
+     * - workshops cascade as well, so say what would go instead of deleting
+     *   scheduled events by surprise.
+     */
+    public function destroyVersion(RoadmapVersion $version)
+    {
+        if ($version->status !== 'Draft') {
+            return response()->json([
+                'message' => "Only a Draft version can be deleted. This one is {$version->status}.",
+            ], 422);
+        }
+
+        $studentsOnIt = UserRoadmapProgress::where('roadmap_version_id', $version->id)->count();
+
+        if ($studentsOnIt > 0) {
+            return response()->json([
+                'message' => "{$studentsOnIt} student(s) have progress on this version. Deleting it would erase their history.",
+            ], 422);
+        }
+
+        $workshops = Workshop::where('roadmap_version_id', $version->id)->count();
+
+        if ($workshops > 0) {
+            return response()->json([
+                'message' => "{$workshops} workshop(s) are scheduled against this version. Move or delete them first.",
+            ], 422);
+        }
+
+        $nodeIds = VersionNode::where('roadmap_version_id', $version->id)->pluck('id');
+        $nodeRowIds = VersionNode::where('roadmap_version_id', $version->id)->pluck('node_id');
+
+        $removed = [
+            'modules'   => $nodeIds->count(),
+            'tutorials' => Tutorial::whereIn('version_node_id', $nodeIds)->count(),
+            'quizzes'   => Quiz::whereIn('version_node_id', $nodeIds)->count(),
+            'projects'  => Project::whereIn('version_node_id', $nodeIds)->count(),
+            'resources' => ExternalResources::whereIn('version_node_id', $nodeIds)->count(),
+        ];
+
+        DB::transaction(function () use ($version, $nodeRowIds) {
+            $version->delete();
+
+            // version_nodes cascade away, but the nodes they pointed at do not.
+            // Drop the ones no other version still uses.
+            Node::whereIn('id', $nodeRowIds)
+                ->whereNotIn('id', VersionNode::pluck('node_id'))
+                ->delete();
+        });
+
+        return response()->json([
+            'message' => 'Draft version deleted.',
+            'removed' => $removed,
         ]);
     }
 }

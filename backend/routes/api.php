@@ -15,6 +15,7 @@ use App\Http\Controllers\Api\TeamController;
 use App\Http\Controllers\Api\TodoController;
 use App\Http\Controllers\Api\WorkshopController;
 use App\Http\Controllers\Api\ProfileController;
+use App\Http\Controllers\Api\VersionGraphController;
 use Illuminate\Support\Facades\Route;
 
 /*
@@ -123,6 +124,13 @@ Route::middleware('auth:sanctum')->group(function () {
 
         Route::post('/roadmaps/{roadmap}/versions', [RoadmapController::class, 'createVersion']);
         Route::put('/roadmap-versions/{version}/publish', [RoadmapController::class, 'publishVersion']);
+        Route::delete('/roadmap-versions/{version}', [RoadmapController::class, 'destroyVersion']);
+
+        // Manual graph authoring: the modules in a draft and what comes before what.
+        Route::get('/roadmap-versions/{version}/modules', [VersionGraphController::class, 'index']);
+        Route::post('/roadmap-versions/{version}/modules', [VersionGraphController::class, 'store']);
+        Route::put('/version-nodes/{versionNode}', [VersionGraphController::class, 'update']);
+        Route::delete('/version-nodes/{versionNode}', [VersionGraphController::class, 'destroy']);
 
         Route::apiResource('tutorials', TutorialController::class)->except(['index']);
 

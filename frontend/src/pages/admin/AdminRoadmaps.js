@@ -1,6 +1,7 @@
 import React, { useCallback, useEffect, useRef, useState } from "react";
 import api from "../../api";
-import { GitBranch, Upload, Plus, Network, AlertTriangle } from "lucide-react";
+import { GitBranch, Upload, Plus, Network, AlertTriangle, Trash2 } from "lucide-react";
+import VersionModulesEditor from "./VersionModulesEditor";
 
 function AdminRoadmaps({ onChanged }) {
     const [roadmaps, setRoadmaps] = useState([]);
@@ -10,7 +11,7 @@ function AdminRoadmaps({ onChanged }) {
     const [form, setForm] = useState({ title: "", description: "" });
     const [versionForm, setVersionForm] = useState({ version_number: "", title: "" });
 
-    // The graph panel renders below the fold, so clicking View Graph looks
+    // The editor renders below the fold, so clicking Modules looks
     // like nothing happened unless we scroll to it.
     const graphRef = useRef(null);
     const [graphOpenCount, setGraphOpenCount] = useState(0);
@@ -114,14 +115,42 @@ function AdminRoadmaps({ onChanged }) {
         }
     };
 
-    const viewGraph = async (versionId) => {
+    const viewGraph = (versionId) => {
+        setGraph(versionId);
+        setGraphOpenCount((n) => n + 1);
+    };
+
+    const deleteVersion = async (version) => {
+        const label = `v${version.version_number}${version.title ? ` · ${version.title}` : ""}`;
+
+        if (!window.confirm(
+            `Delete ${label}?\n\n` +
+            "Its modules go with it, along with any tutorials, quizzes, projects " +
+            "and resources attached to them. This cannot be undone."
+        )) return;
+
+        setBusy(true);
+
         try {
-            const response = await api.get(`/roadmap-versions/${versionId}/graph`);
-            setGraph(response.data);
-            setGraphOpenCount((n) => n + 1);
+            const response = await api.delete(`/roadmap-versions/${version.id}`);
+            const r = response.data.removed;
+
+            // Close the editor if it was showing the version we just removed.
+            if (graph === version.id) setGraph(null);
+
+            await loadVersions();
+            await loadRoadmaps();
+            onChanged?.();
+
+            alert(
+                `${label} deleted.\n\n` +
+                `${r.modules} modules, ${r.tutorials} tutorials, ${r.quizzes} quizzes, ` +
+                `${r.projects} projects, ${r.resources} resources removed.`
+            );
         } catch (err) {
-            console.error(err);
-            alert("Could not load the graph for this version.");
+            alert(err.response?.data?.message ?? "Could not delete this version.");
+        } finally {
+            setBusy(false);
         }
     };
 
@@ -281,13 +310,23 @@ function AdminRoadmaps({ onChanged }) {
                                         <div className="flex gap-3">
                                             <button onClick={() => viewGraph(v.id)}
                                                 className="flex items-center gap-2 px-5 py-2 rounded-xl border border-white/10 text-gray-300 hover:border-[#0097a7]/40 transition">
-                                                <Network size={16} /> View Graph
+                                                <Network size={16} /> Modules
                                             </button>
 
                                             {v.status !== "Published" && (
                                                 <button onClick={() => publish(v.id)} disabled={busy}
                                                     className="flex items-center gap-2 px-5 py-2 rounded-xl border border-green-400/20 bg-green-500/10 text-green-300 hover:bg-green-500/20 transition">
                                                     <Upload size={16} /> Publish
+                                                </button>
+                                            )}
+
+                                            {/* Drafts only - a published or archived version is
+                                                what students followed and has to stay. */}
+                                            {v.status === "Draft" && (
+                                                <button onClick={() => deleteVersion(v)} disabled={busy}
+                                                    title="Delete this draft version"
+                                                    className="flex items-center gap-2 px-5 py-2 rounded-xl border border-red-400/30 text-red-400 hover:bg-red-400/10 transition">
+                                                    <Trash2 size={16} />
                                                 </button>
                                             )}
                                         </div>
@@ -298,30 +337,12 @@ function AdminRoadmaps({ onChanged }) {
                     </div>
 
                     {graph && (
-                        <div ref={graphRef} className="mt-8 scroll-mt-6 rounded-3xl border border-white/10 bg-white/[0.03] p-8">
-                            <h2 className="text-2xl font-bold mb-6">
-                                Graph · v{graph.version.version_number}
-                            </h2>
-
-                            <div className="grid md:grid-cols-2 gap-4 mb-6">
-                                <div className="rounded-2xl bg-black/30 border border-white/10 p-5">
-                                    <p className="text-gray-400 text-sm">Nodes</p>
-                                    <h3 className="text-3xl font-black mt-2">{graph.nodes.length}</h3>
-                                </div>
-                                <div className="rounded-2xl bg-black/30 border border-white/10 p-5">
-                                    <p className="text-gray-400 text-sm">Edges</p>
-                                    <h3 className="text-3xl font-black mt-2">{graph.edges.length}</h3>
-                                </div>
-                            </div>
-
-                            <div className="space-y-2">
-                                {graph.nodes.map((n) => (
-                                    <div key={n.version_node_id} className="flex items-center justify-between rounded-xl border border-white/10 bg-black/20 px-4 py-3">
-                                        <span>{n.title}</span>
-                                        <span className="text-xs text-gray-500 capitalize">{n.difficulty}</span>
-                                    </div>
-                                ))}
-                            </div>
+                        <div ref={graphRef} className="mt-8 scroll-mt-6">
+                            <VersionModulesEditor
+                                key={graph}
+                                versionId={graph}
+                                onChanged={() => { loadVersions(); onChanged?.(); }}
+                            />
                         </div>
                     )}
                 </>
