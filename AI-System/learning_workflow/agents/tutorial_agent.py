@@ -13,7 +13,7 @@ from learning_workflow.tools.youtube_search import (search_youtube_candidates,)
 from learning_workflow.tools.youtube_playlist import (fetch_playlist_video_ids,)
 from learning_workflow.tools.youtube_metadata import (fetch_video_metadata,)
 from learning_workflow.tools.youtube_transcript import (fetch_video_transcript,)
-
+from learning_workflow.graph.state import (LearningAgentState,)
 
 SHORTLIST_SIZE = 3
 
@@ -502,6 +502,62 @@ def validate_result_against_evidence(
             "Tutorial Agent changed the "
             "selected channel name."
         )
+
+def build_selected_tutorial_quiz_evidence(
+    result: TutorialAgentResult,
+    shortlisted_evidence: list[
+        dict[str, Any]
+    ],
+) -> dict[str, Any]:
+
+    if (
+        result.status != "ready"
+        or result.tutorial is None
+    ):
+        raise ValueError(
+            "Quiz evidence can only be built "
+            "for a ready tutorial result."
+        )
+
+    selected_key = (
+        result.tutorial.resource_type,
+        result.tutorial.resource_id,
+    )
+
+    for candidate in shortlisted_evidence:
+        candidate_key = (
+            candidate["resource_type"],
+            candidate["resource_id"],
+        )
+
+        if candidate_key == selected_key:
+            return {
+                "resource_type": (
+                    candidate[
+                        "resource_type"
+                    ]
+                ),
+                "resource_id": (
+                    candidate[
+                        "resource_id"
+                    ]
+                ),
+                "videos": (
+                    candidate["videos"]
+                ),
+                "transcript_evidence": (
+                    candidate.get(
+                        "transcript_evidence"
+                    )
+                ),
+            }
+
+    raise ValueError(
+        "Selected tutorial evidence was "
+        "not found in the shortlisted evidence."
+    )
+
+
 # =====================================================================
 # Start the runner
 # =====================================================================
@@ -544,7 +600,7 @@ def run_tutorial_agent(
 
 
     if not candidates:
-        return TutorialAgentResult(
+        tutorial_result = TutorialAgentResult(
             node_id=agent_input.node.id,
             status="learning_failed",
             tutorial=None,
@@ -555,6 +611,10 @@ def run_tutorial_agent(
                 "roadmap node."
             ),
         ).model_dump()
+
+        return {
+            "tutorial_result": tutorial_result,
+        }
 
     candidate_metadata: list[dict[str, Any]] = []
 
@@ -659,7 +719,7 @@ def run_tutorial_agent(
             )
 
     if not candidate_metadata:
-        return TutorialAgentResult(
+        tutorial_result = TutorialAgentResult(
             node_id=agent_input.node.id,
             status="learning_failed",
             tutorial=None,
@@ -670,6 +730,10 @@ def run_tutorial_agent(
                 "metadata could be retrieved."
             ),
         ).model_dump()
+
+        return {
+            "tutorial_result": tutorial_result,
+        }
 
     shortlist_user_message = f"""
 ROADMAP TOPIC
@@ -841,6 +905,52 @@ YOUTUBE CANDIDATE METADATA
             }
         )
 
+    shortlisted_llm_evidence: list[
+        dict[str, Any]
+    ] = []
+
+    for candidate in shortlisted_evidence:
+
+        candidate_for_llm = {
+            **candidate
+        }
+
+        transcript_evidence = (
+            candidate.get(
+                "transcript_evidence"
+            )
+        )
+
+        if transcript_evidence is not None:
+
+            transcript_for_llm = (
+                transcript_evidence.get(
+                    "transcript"
+                )
+            )
+
+            if transcript_for_llm is not None:
+
+                transcript_without_full_text = {
+                    key: value
+                    for key, value
+                    in transcript_for_llm.items()
+                    if key != "full_text"
+                }
+
+                candidate_for_llm[
+                    "transcript_evidence"
+                ] = {
+                    **transcript_evidence,
+                    "transcript": (
+                        transcript_without_full_text
+                    ),
+                }
+
+        shortlisted_llm_evidence.append(
+            candidate_for_llm
+        )
+
     final_user_message = f"""
 ROADMAP TOPIC
 {agent_input.roadmap_topic}
@@ -867,7 +977,7 @@ PREREQUISITE NODES
 SHORTLISTED YOUTUBE TUTORIAL EVIDENCE
 
 {json.dumps(
-    shortlisted_evidence,
+    shortlisted_llm_evidence,
     indent=2,
     ensure_ascii=False,
 )}
@@ -914,38 +1024,25 @@ SHORTLISTED YOUTUBE TUTORIAL EVIDENCE
         shortlisted_evidence,
     )
 
-    if __name__ == "__main__":
-        print()
-        print("=" * 70)
-        print("LLM #2 FINAL CHOICE")
-        print("=" * 70)
+    tutorial_result = (
+        validated_result.model_dump()
+    )
 
-        if validated_result.status == "ready":
-            tutorial = validated_result.tutorial
+    output = {
+        "tutorial_result": tutorial_result,
+    }
 
-            print(
-                tutorial.resource_type,
-                tutorial.resource_id,
-                tutorial.title,
+    if validated_result.status == "ready":
+        output["tutorial_quiz_evidence"] = (
+            build_selected_tutorial_quiz_evidence(
+                validated_result,
+                shortlisted_evidence,
             )
+        )
 
-            print(
-                "URL:",
-                tutorial.url,
-            )
+    return output
 
-            print(
-                "Channel:",
-                tutorial.channel_name,
-            )
 
-        else:
-            print(
-                "learning_failed:",
-                validated_result.failure_reason,
-            )
-
-    return validated_result.model_dump()
 
 # =====================================================================
 # TUTORIAL AGENT PROMPT
