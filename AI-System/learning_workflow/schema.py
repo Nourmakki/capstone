@@ -657,3 +657,45 @@ class ProjectAssessmentResult(BaseModel):
             )
 
         return self
+
+ExternalResourceType = Literal[
+    "official_documentation",
+    "github_repository",
+    "technical_reference",
+]
+# =====================================================================
+# EXTERNAL RESOURCES AGENT
+# =====================================================================
+class ExternalResource(BaseModel):
+    model_config = ConfigDict(extra="forbid")
+
+    title: NonEmptyString
+    url: NonEmptyString
+    resource_type: ExternalResourceType
+    source_name: NonEmptyString
+    description: NonEmptyString
+    why_recommended: NonEmptyString
+
+
+class ExternalResourcesResult(BaseModel):
+    model_config = ConfigDict(extra="forbid")
+    node_id: PositiveNodeId
+    resources: list[ExternalResource] = Field(
+        max_length=3,
+    )
+
+    @model_validator(mode="after")
+    def validate_unique_resource_urls(
+        self,
+    ) -> "ExternalResourcesResult":
+        urls = [
+            resource.url
+            for resource in self.resources
+        ]
+
+        if len(set(urls)) != len(urls):
+            raise ValueError(
+                "External resource URLs must be unique."
+            )
+
+        return self
