@@ -37,6 +37,7 @@ class AiWorkflowController extends Controller
                 'status'         => $w->status,
                 'review_stage'   => $w->review_stage,
                 'awaiting'       => $w->status === 'awaiting_review',
+                'committed_version_id' => $w->committed_version_id,
                 'roadmap'        => $w->roadmapVersion->roadmap->title ?? 'Unknown',
                 'version_label'  => 'v' . ($w->roadmapVersion->version_number ?? '?'),
                 'version_id'     => $w->roadmap_version_id,
@@ -129,6 +130,55 @@ class AiWorkflowController extends Controller
             }
 
             return response()->json($response->json(), $response->status());
+        });
+    }
+
+        /**
+     * Turn an approved proposal into a new draft version.
+     */
+    public function commit(RoadmapAiWorkflow $workflow): JsonResponse
+    {
+        if ($workflow->committed_version_id) {
+            return response()->json([
+                'message' => 'This proposal has already been committed.',
+            ], 409);
+        }
+
+        return $this->proxy(function () use ($workflow) {
+            // Read the live state rather than our cached row - the reviewer
+            // may have edited the proposal since we last synced.
+            $response = $this->aiWorkflowService->getWorkflow($workflow->thread_id);
+
+            if (! $response->successful()) {
+                return response()->json($response->json(), $response->status());
+            }
+
+            $body = $response->json();
+
+            if (($body['status'] ?? null) !== 'ready_for_commit') {
+                return response()->json([
+                    'message' => 'This proposal is not approved yet.',
+                ], 409);
+            }
+
+            try {
+                $version = app(\App\Services\AiRoadmapCommitService::class)
+                    ->commit($workflow, $body['data'] ?? []);
+            } catch (\RuntimeException $e) {
+                return response()->json(['message' => $e->getMessage()], 422);
+            } catch (\Illuminate\Validation\ValidationException $e) {
+                // A graph rule rejected it. Caught here so it does not reach
+                // proxy(), which would report a bad proposal as an outage.
+                return response()->json([
+                    'message' => collect($e->errors())->flatten()->first(),
+                ], 422);
+            }
+
+            return response()->json([
+                'message'    => 'Committed as a new draft version.',
+                'version_id' => $version->id,
+                'version'    => 'v' . $version->version_number,
+            ], 201);
         });
     }
 

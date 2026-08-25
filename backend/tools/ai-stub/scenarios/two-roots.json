@@ -1,0 +1,36 @@
+{
+  "_comment": "The AI proposes a module with no prerequisites at all, which would give the roadmap a second place to start. Structurally legal - no cycle, every id resolves - but it splits the roadmap into two disconnected pieces and leaves the map view with no single origin. assertSingleRoot() must reject it and roll the whole commit back.",
+  "status": "ready_for_commit",
+  "review_stage": null,
+  "data": {
+    "trends": [],
+    "node_suggestions": [
+      {
+        "title": "TypeScript for React",
+        "description": "Type components, props and hooks with TypeScript.",
+        "difficulty": "intermediate",
+        "based_on_trend": "n/a"
+      }
+    ],
+    "node_suggestions_with_ids": [
+      {
+        "id": 6,
+        "title": "TypeScript for React",
+        "description": "Type components, props and hooks with TypeScript.",
+        "difficulty": "intermediate",
+        "based_on_trend": "n/a"
+      }
+    ],
+    "placement_suggestions": [
+      {
+        "suggested_node_id": 6,
+        "suggested_node_title": "TypeScript for React",
+        "direct_prerequisite_node_ids": [],
+        "direct_successor_node_ids": [],
+        "recommended_predecessor_node_ids": [],
+        "explanation": "Deliberately unattached - a second starting module."
+      }
+    ],
+    "existing_edges_to_remove": []
+  }
+}

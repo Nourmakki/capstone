@@ -10,7 +10,6 @@ use App\Models\ExternalResources;
 use App\Models\Node;
 use App\Models\Project;
 use App\Models\Quiz;
-use App\Models\QuizQuestion;
 use App\Models\Roadmap;
 use App\Models\RoadmapVersion;
 use App\Models\Tutorial;
@@ -205,26 +204,7 @@ class RoadmapController extends Controller
             ]);
 
             if ($latest) {
-                // Clone nodes and edges so the draft starts from the live graph.
-                $nodeMap = [];
-
-                foreach (VersionNode::where('roadmap_version_id', $latest->id)->get() as $node) {
-                    $clone = VersionNode::create([
-                        'roadmap_version_id' => $version->id,
-                        'node_id'            => $node->node_id,
-                    ]);
-
-                    $nodeMap[$node->id] = $clone->id;
-                }
-
-                foreach (VersionEdge::where('roadmap_version_id', $latest->id)->get() as $edge) {
-                    VersionEdge::create([
-                        'roadmap_version_id' => $version->id,
-                        'edge_id'            => $edge->edge_id,
-                    ]);
-                }
-
-                $this->cloneMaterial($nodeMap);
+                app(\App\Services\VersionCloner::class)->copy($latest, $version);
             }
 
             return $version;
@@ -234,53 +214,6 @@ class RoadmapController extends Controller
             'message' => 'Draft version created.',
             'version' => new RoadmapVersionResource($version),
         ], 201);
-    }
-
-    /**
-     * Tutorials, quizzes, projects and resources are keyed to version_node_id,
-     * so cloning a version's nodes alone leaves every module empty - and
-     * publishing that draft would strip the roadmap of all its material.
-     *
-     * Review state is carried over deliberately: the content is unchanged, so
-     * making a manager re-approve it would be busywork.
-     *
-     * @param array<int,int> $nodeMap old version_node id => new version_node id
-     */
-    private function cloneMaterial(array $nodeMap): void
-    {
-        foreach ($nodeMap as $oldNodeId => $newNodeId) {
-            foreach (Tutorial::where('version_node_id', $oldNodeId)->get() as $tutorial) {
-                $copy = $tutorial->replicate();
-                $copy->version_node_id = $newNodeId;
-                $copy->save();
-            }
-
-            foreach (ExternalResources::where('version_node_id', $oldNodeId)->get() as $resource) {
-                $copy = $resource->replicate();
-                $copy->version_node_id = $newNodeId;
-                $copy->save();
-            }
-
-            foreach (Project::where('version_node_id', $oldNodeId)->get() as $project) {
-                $copy = $project->replicate();
-                $copy->version_node_id = $newNodeId;
-                $copy->save();
-            }
-
-            // A quiz owns its questions, so the copy needs its own set -
-            // sharing them would make editing one quiz change the other.
-            foreach (Quiz::where('version_node_id', $oldNodeId)->get() as $quiz) {
-                $copy = $quiz->replicate();
-                $copy->version_node_id = $newNodeId;
-                $copy->save();
-
-                foreach (QuizQuestion::where('quiz_id', $quiz->id)->get() as $question) {
-                    $questionCopy = $question->replicate();
-                    $questionCopy->quiz_id = $copy->id;
-                    $questionCopy->save();
-                }
-            }
-        }
     }
 
     /**

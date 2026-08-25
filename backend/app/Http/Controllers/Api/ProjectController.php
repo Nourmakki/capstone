@@ -74,8 +74,19 @@ class ProjectController extends Controller
      * A student asks for a human review of their submission.
      * professor_id stays null until a professor claims it.
      */
-    public function requestReview(Request $request, Submission $submission)
+    public function requestReview(Request $request, $submissionId)
     {
+        // Looked up by hand rather than route-model-bound: binding answers a
+        // stale id with "No query results for model [App\Models\Submission]",
+        // which is a stack-trace string, not something to show a student.
+        $submission = Submission::find($submissionId);
+
+        if (! $submission) {
+            return response()->json([
+                'message' => 'That submission no longer exists. Refresh the page.',
+            ], 404);
+        }
+
         $student = $this->studentFor($request);
 
         if ($submission->student_id !== $student->id) {

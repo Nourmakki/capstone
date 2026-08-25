@@ -1,0 +1,68 @@
+{
+  "_comment": "Happy path against Web Development v1 (node ids 1-5, chain 1->2->3->4->5). React Testing is spliced INTO the chain between Hooks and Router, so the 4->5 edge is removed and replaced by 4->6->5 - the roadmap keeps exactly one starting module. Temp id 6 deliberately collides with a real node 6 in another roadmap, and node 7 depends on node 6, which is also new.",
+  "status": "ready_for_commit",
+  "review_stage": null,
+  "data": {
+    "trends": [
+      {
+        "title": "Testing is expected of junior React developers",
+        "summary": "Job listings increasingly ask for React Testing Library.",
+        "source_url": "https://example.com/trend/testing"
+      }
+    ],
+    "node_suggestions": [
+      {
+        "title": "React Testing",
+        "description": "Write unit and integration tests with Jest and React Testing Library.",
+        "difficulty": "advanced",
+        "based_on_trend": "Testing is expected of junior React developers"
+      },
+      {
+        "title": "React Performance",
+        "description": "Profile renders and apply memoisation where it actually helps.",
+        "difficulty": "advanced",
+        "based_on_trend": "Testing is expected of junior React developers"
+      }
+    ],
+    "node_suggestions_with_ids": [
+      {
+        "id": 6,
+        "title": "React Testing",
+        "description": "Write unit and integration tests with Jest and React Testing Library.",
+        "difficulty": "advanced",
+        "based_on_trend": "Testing is expected of junior React developers"
+      },
+      {
+        "id": 7,
+        "title": "React Performance",
+        "description": "Profile renders and apply memoisation where it actually helps.",
+        "difficulty": "advanced",
+        "based_on_trend": "Testing is expected of junior React developers"
+      }
+    ],
+    "placement_suggestions": [
+      {
+        "suggested_node_id": 6,
+        "suggested_node_title": "React Testing",
+        "direct_prerequisite_node_ids": [4],
+        "direct_successor_node_ids": [5],
+        "recommended_predecessor_node_ids": [],
+        "explanation": "Students should be testing components before they start routing between them."
+      },
+      {
+        "suggested_node_id": 7,
+        "suggested_node_title": "React Performance",
+        "direct_prerequisite_node_ids": [5],
+        "direct_successor_node_ids": [],
+        "recommended_predecessor_node_ids": [],
+        "explanation": "Profiling is the last thing to learn, once a full app exists."
+      }
+    ],
+    "existing_edges_to_remove": [
+      {
+        "from_node_id": 4,
+        "to_node_id": 5
+      }
+    ]
+  }
+}

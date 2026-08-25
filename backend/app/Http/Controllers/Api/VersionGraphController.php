@@ -8,6 +8,7 @@ use App\Models\Node;
 use App\Models\RoadmapVersion;
 use App\Models\VersionEdge;
 use App\Models\VersionNode;
+use App\Services\VersionGraphRules;
 use Illuminate\Http\Request;
 use Illuminate\Support\Facades\DB;
 use Illuminate\Validation\Rule;
@@ -29,6 +30,10 @@ use Illuminate\Validation\ValidationException;
 class VersionGraphController extends Controller
 {
     private const DIFFICULTIES = ['beginner', 'intermediate', 'advanced'];
+
+    public function __construct(private VersionGraphRules $rules)
+    {
+    }
 
     private function assertDraft(RoadmapVersion $version): void
     {
@@ -88,6 +93,8 @@ class VersionGraphController extends Controller
                 $data['prerequisite_node_ids'] ?? []
             );
 
+            $this->rules->assertValid($version);
+
             return response()->json([
                 'message' => 'Module added.',
                 'modules' => $this->modulesFor($version),
@@ -129,6 +136,8 @@ class VersionGraphController extends Controller
             if (array_key_exists('prerequisite_node_ids', $data)) {
                 $this->syncPrerequisites($version, $nodeId, $data['prerequisite_node_ids']);
             }
+
+            $this->rules->assertValid($version);
 
             return response()->json([
                 'message' => 'Module updated.',
@@ -174,6 +183,8 @@ class VersionGraphController extends Controller
             if (! VersionNode::where('node_id', $nodeId)->exists()) {
                 Node::whereKey($nodeId)->delete();
             }
+
+            $this->rules->assertValid($version->fresh());
 
             return response()->json([
                 'message' => 'Module removed.',
@@ -301,8 +312,6 @@ class VersionGraphController extends Controller
             }
         }
 
-        $this->assertNoCycle($version, $nodeId, $prerequisiteNodeIds);
-
         // Clear this node's incoming edges in this version, then re-add.
         foreach ($this->edgeRowsFor($version) as $edge) {
             if ($edge->to_node_id === $nodeId) {
@@ -345,45 +354,4 @@ class VersionGraphController extends Controller
         }
     }
 
-    /**
-     * Walk the prerequisite graph as it would be after the change and refuse
-     * it if the node can reach itself.
-     */
-    private function assertNoCycle(RoadmapVersion $version, int $nodeId, array $prerequisiteNodeIds): void
-    {
-        // prerequisites[x] = the nodes that must come before x
-        $prerequisites = [];
-        foreach ($this->edgeRowsFor($version) as $edge) {
-            if ($edge->to_node_id === $nodeId) {
-                continue; // replaced by the incoming set
-            }
-
-            $prerequisites[$edge->to_node_id][] = $edge->from_node_id;
-        }
-
-        $prerequisites[$nodeId] = $prerequisiteNodeIds;
-
-        $seen = [];
-        $stack = $prerequisiteNodeIds;
-
-        while ($stack) {
-            $current = array_pop($stack);
-
-            if ($current === $nodeId) {
-                throw ValidationException::withMessages([
-                    'prerequisite_node_ids' => 'That would create a loop - these modules would depend on each other and none could ever be unlocked.',
-                ]);
-            }
-
-            if (isset($seen[$current])) {
-                continue;
-            }
-
-            $seen[$current] = true;
-
-            foreach ($prerequisites[$current] ?? [] as $parent) {
-                $stack[] = $parent;
-            }
-        }
-    }
 }

@@ -1,0 +1,49 @@
+{
+  "_comment": "Node 7 is offered as a suggestion but never gets a placement of its own, yet node 6 names it as a prerequisite. Committing it would create an edge to a node that was never added. resolve() must refuse.",
+  "status": "ready_for_commit",
+  "review_stage": null,
+  "data": {
+    "trends": [],
+    "node_suggestions": [
+      {
+        "title": "React Testing",
+        "description": "Write unit and integration tests.",
+        "difficulty": "advanced",
+        "based_on_trend": "n/a"
+      },
+      {
+        "title": "React Performance",
+        "description": "Profile renders and apply memoisation.",
+        "difficulty": "advanced",
+        "based_on_trend": "n/a"
+      }
+    ],
+    "node_suggestions_with_ids": [
+      {
+        "id": 6,
+        "title": "React Testing",
+        "description": "Write unit and integration tests.",
+        "difficulty": "advanced",
+        "based_on_trend": "n/a"
+      },
+      {
+        "id": 7,
+        "title": "React Performance",
+        "description": "Profile renders and apply memoisation.",
+        "difficulty": "advanced",
+        "based_on_trend": "n/a"
+      }
+    ],
+    "placement_suggestions": [
+      {
+        "suggested_node_id": 6,
+        "suggested_node_title": "React Testing",
+        "direct_prerequisite_node_ids": [7],
+        "direct_successor_node_ids": [],
+        "recommended_predecessor_node_ids": [],
+        "explanation": "Depends on a suggestion that was never placed."
+      }
+    ],
+    "existing_edges_to_remove": []
+  }
+}

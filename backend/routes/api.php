@@ -160,6 +160,7 @@ Route::middleware('auth:sanctum')->group(function () {
         Route::get('/ai-workflows/{workflow}', [AiWorkflowController::class, 'show']);
         Route::post('/ai-workflows/{workflow}/resume', [AiWorkflowController::class, 'resume']);
         Route::post('/roadmap-versions/{version}/ai-workflows', [AiWorkflowController::class, 'store']);
+        Route::post('/ai-workflows/{workflow}/commit', [AiWorkflowController::class, 'commit']);
 
         // Material that reached the database and still needs a decision.
         Route::prefix('material')->group(function () {

@@ -1,6 +1,6 @@
 import React, { useCallback, useEffect, useState } from "react";
 import api from "../../api";
-import { UserRound, CheckCircle2, Inbox, CheckCircle, XCircle, HelpCircle } from "lucide-react";
+import { UserRound, CheckCircle2, Inbox, CheckCircle, XCircle, HelpCircle, Download } from "lucide-react";
 
 function ProfessorReviews({ onChanged }) {
     const [requests, setRequests] = useState([]);
@@ -8,6 +8,35 @@ function ProfessorReviews({ onChanged }) {
     const [loading, setLoading] = useState(true);
     const [form, setForm] = useState({});
     const [busy, setBusy] = useState(null);
+
+    /**
+     * The download route needs the bearer token, so a plain link will not
+     * work. Fetch it as a blob and hand the browser an object URL instead -
+     * same approach as the admin CV download.
+     */
+    const downloadZip = async (submissionId, student) => {
+        try {
+            const response = await api.get(`/submissions/${submissionId}/download`, {
+                responseType: "blob",
+            });
+
+            const url = URL.createObjectURL(
+                new Blob([response.data], { type: "application/zip" })
+            );
+
+            const link = document.createElement("a");
+            link.href = url;
+            link.download = `submission-${submissionId}-${student.replace(/\s+/g, "-").toLowerCase()}.zip`;
+            document.body.appendChild(link);
+            link.click();
+            link.remove();
+
+            setTimeout(() => URL.revokeObjectURL(url), 60000);
+        } catch (err) {
+            console.error(err);
+            alert(err.response?.data?.message ?? "Could not download this submission.");
+        }
+    };
 
     const load = useCallback(async () => {
         try {
@@ -134,8 +163,16 @@ function ProfessorReviews({ onChanged }) {
                                         </a>
                                     )}
 
+                                    {/* The archive is the fixed snapshot of what was
+                                        handed in, so grading needs to reach it. */}
                                     {r.submission.has_file && (
-                                        <p className="text-xs text-gray-400 mt-2">ZIP file attached</p>
+                                        <button
+                                            onClick={() => downloadZip(r.submission.id, r.student)}
+                                            className="mt-3 inline-flex items-center gap-2 px-4 py-2 rounded-xl border border-[#0097a7]/30 text-[#00b0c2] text-sm hover:bg-[#0097a7]/10 transition"
+                                        >
+                                            <Download size={14} />
+                                            Download ZIP
+                                        </button>
                                     )}
 
                                     {r.submission.notes && (

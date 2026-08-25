@@ -8,15 +8,21 @@ use App\Models\RoadmapVersion;
 
 class RoadmapAiWorkflow extends Model
 {
-    protected $fillable = [
+        protected $fillable = [
         'roadmap_version_id',
         'thread_id',
         'status',
         'review_stage',
+        'committed_version_id',
     ];
 
     public function roadmapVersion(): BelongsTo
     {
         return $this->belongsTo(RoadmapVersion::class);
+    }
+
+    public function committedVersion(): BelongsTo
+    {
+        return $this->belongsTo(RoadmapVersion::class, 'committed_version_id');
     }
 }

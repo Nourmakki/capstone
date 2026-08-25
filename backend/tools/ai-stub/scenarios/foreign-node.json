@@ -1,0 +1,36 @@
+{
+  "_comment": "Node 9 is a real row in the nodes table, but it belongs to the AI/ML roadmap, not to Web Development v1. It is not in node_suggestions_with_ids either, so it looks like an existing node - resolve() must check it is actually part of THIS version and refuse. This is the case a naive 'is the id bigger than max?' check would wave through.",
+  "status": "ready_for_commit",
+  "review_stage": null,
+  "data": {
+    "trends": [],
+    "node_suggestions": [
+      {
+        "title": "React Testing",
+        "description": "Write unit and integration tests.",
+        "difficulty": "advanced",
+        "based_on_trend": "n/a"
+      }
+    ],
+    "node_suggestions_with_ids": [
+      {
+        "id": 6,
+        "title": "React Testing",
+        "description": "Write unit and integration tests.",
+        "difficulty": "advanced",
+        "based_on_trend": "n/a"
+      }
+    ],
+    "placement_suggestions": [
+      {
+        "suggested_node_id": 6,
+        "suggested_node_title": "React Testing",
+        "direct_prerequisite_node_ids": [9],
+        "direct_successor_node_ids": [],
+        "recommended_predecessor_node_ids": [],
+        "explanation": "Prerequisite belongs to a different roadmap."
+      }
+    ],
+    "existing_edges_to_remove": []
+  }
+}

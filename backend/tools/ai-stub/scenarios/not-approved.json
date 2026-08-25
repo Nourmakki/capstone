@@ -1,0 +1,36 @@
+{
+  "_comment": "Still awaiting a reviewer decision. Committing must be refused with a 409, even though the payload underneath is otherwise valid - approving is what makes a proposal committable.",
+  "status": "awaiting_review",
+  "review_stage": "full_review",
+  "data": {
+    "trends": [],
+    "node_suggestions": [
+      {
+        "title": "React Testing",
+        "description": "Write unit and integration tests.",
+        "difficulty": "advanced",
+        "based_on_trend": "n/a"
+      }
+    ],
+    "node_suggestions_with_ids": [
+      {
+        "id": 6,
+        "title": "React Testing",
+        "description": "Write unit and integration tests.",
+        "difficulty": "advanced",
+        "based_on_trend": "n/a"
+      }
+    ],
+    "placement_suggestions": [
+      {
+        "suggested_node_id": 6,
+        "suggested_node_title": "React Testing",
+        "direct_prerequisite_node_ids": [5],
+        "direct_successor_node_ids": [],
+        "recommended_predecessor_node_ids": [],
+        "explanation": "Valid, but not approved yet."
+      }
+    ],
+    "existing_edges_to_remove": []
+  }
+}

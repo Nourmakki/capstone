@@ -6,6 +6,35 @@ import {
     UserRound, Clock3, AlertCircle, Brain,
 } from "lucide-react";
 
+// PHP's own upload_max_filesize caps this well below Laravel's validation
+// rule, so the browser has to know the real ceiling.
+const MAX_UPLOAD_BYTES = 2 * 1024 * 1024;
+
+/**
+ * A rejected upload is not always a validation error. When the body exceeds
+ * PHP's post_max_size the server discards it and answers 413 with no errors
+ * key, which used to surface as a bare "Submission failed."
+ */
+function submitErrorMessage(err) {
+    const response = err.response;
+
+    if (!response) {
+        return "Could not reach the server. Check that the backend is running.";
+    }
+
+    const errors = response.data?.errors;
+    if (errors) {
+        return Object.values(errors).flat().join("\n");
+    }
+
+    if (response.status === 413) {
+        return "That ZIP is too large for the server to accept. "
+            + `Keep it under ${MAX_UPLOAD_BYTES / 1024 / 1024} MB.`;
+    }
+
+    return response.data?.message ?? `Submission failed (HTTP ${response.status}).`;
+}
+
 function ProjectSubmissionPage() {
     const navigate = useNavigate();
     const { projectId } = useParams();
@@ -43,6 +72,16 @@ function ProjectSubmissionPage() {
             return;
         }
 
+        // Caught here so the server does not silently discard the whole
+        // request body, which surfaces as an unexplained failure.
+        if (file.size > MAX_UPLOAD_BYTES) {
+            alert(
+                `That ZIP is ${(file.size / 1024 / 1024).toFixed(1)} MB. ` +
+                `The server accepts up to ${MAX_UPLOAD_BYTES / 1024 / 1024} MB.`
+            );
+            return;
+        }
+
         setSubmitting(true);
 
         try {
@@ -59,8 +98,7 @@ function ProjectSubmissionPage() {
             await load();
         } catch (err) {
             console.error(err);
-            const errors = err.response?.data?.errors;
-            alert(errors ? Object.values(errors).flat().join("\n") : "Submission failed.");
+            alert(submitErrorMessage(err));
         } finally {
             setSubmitting(false);
         }
@@ -73,6 +111,10 @@ function ProjectSubmissionPage() {
             await load();
         } catch (err) {
             alert(err.response?.data?.message ?? "Could not request a review.");
+
+            // The list on screen is out of date if the row is gone, so pull
+            // it again rather than leaving a button that cannot work.
+            if (err.response?.status === 404) await load();
         }
     };
 
@@ -146,7 +188,9 @@ function ProjectSubmissionPage() {
 
                             <label className="block text-gray-300 mb-2">
                                 Project ZIP <span className="text-red-400">*</span>
-                                <span className="text-gray-500 text-sm"> (max 10 MB)</span>
+                                <span className="text-gray-500 text-sm">
+                                    {" "}(max {MAX_UPLOAD_BYTES / 1024 / 1024} MB)
+                                </span>
                             </label>
                             <input
                                 type="file"

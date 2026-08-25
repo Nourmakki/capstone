@@ -4,6 +4,7 @@ namespace App\Models;
 
 use Illuminate\Database\Eloquent\Factories\HasFactory;
 use Illuminate\Database\Eloquent\Model;
+use Illuminate\Support\Facades\Storage;
 use App\Models\Project;
 use App\Models\Student;
 use App\Models\Quiz;
@@ -32,6 +33,23 @@ class Submission extends Model
         'ai_score'       => 'integer',
         'ai_reviewed_at' => 'datetime',
     ];
+
+    /**
+     * The uploaded archive goes with the row. Without this every deleted
+     * submission leaves its ZIP on the private disk forever, referenced by
+     * nothing.
+     *
+     * Note this does not fire when the database cascades the row away, which
+     * happens when a student is deleted - see User::booted().
+     */
+    protected static function booted(): void
+    {
+        static::deleting(function (self $submission) {
+            if ($submission->file_path && Storage::exists($submission->file_path)) {
+                Storage::delete($submission->file_path);
+            }
+        });
+    }
 
     /**
      * The grade that counts: a human review always wins over the AI.

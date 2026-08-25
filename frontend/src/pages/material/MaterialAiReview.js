@@ -2,7 +2,7 @@ import React, { useCallback, useEffect, useState } from "react";
 import api from "../../api";
 import {
     Bot, TrendingUp, Plus, Network, Trash2, Check, X, RefreshCw,
-    AlertTriangle, Inbox, ChevronRight,
+    AlertTriangle, Inbox, ChevronRight, GitBranch,
 } from "lucide-react";
 
 // Stage slugs the AI service accepts for regenerate/edit.
@@ -20,6 +20,10 @@ function MaterialAiReview({ onChanged }) {
     const [loading, setLoading] = useState(true);
     const [busy, setBusy] = useState(false);
     const [serviceDown, setServiceDown] = useState(false);
+
+    // The proposal refers to existing modules by id, which means nothing to
+    // a reviewer. The version's own graph is what turns them into titles.
+    const [existingNodes, setExistingNodes] = useState([]);
 
     const loadList = useCallback(async () => {
         try {
@@ -39,7 +43,14 @@ function MaterialAiReview({ onChanged }) {
         setProposal(null);
         setFeedback("");
         setServiceDown(false);
+        setExistingNodes([]);
         setBusy(true);
+
+        // Fetched separately and allowed to fail: without titles the proposal
+        // is harder to read, but it should still be reviewable.
+        api.get(`/roadmap-versions/${workflow.version_id}/graph`)
+            .then((r) => setExistingNodes(r.data.nodes ?? []))
+            .catch((err) => console.error(err));
 
         try {
             const response = await api.get(`/ai-workflows/${workflow.id}`);
@@ -84,8 +95,73 @@ function MaterialAiReview({ onChanged }) {
         }
     };
 
+    /**
+     * Approving only marks the proposal ready. This is the step that writes
+     * the approved modules and edges into a new roadmap version.
+     */
+    const commit = async () => {
+        if (!window.confirm(
+            "Create a new draft version from this proposal?\n\n"
+            + "It starts as a Draft awaiting review, so nothing goes live yet."
+        )) return;
+
+        setBusy(true);
+
+        try {
+            const response = await api.post(`/ai-workflows/${selected.id}/commit`);
+            alert(`${response.data.message}\n\n${response.data.version} created.`);
+            await loadList();
+            await openWorkflow(selected);
+            onChanged?.();
+        } catch (err) {
+            if (err.response?.status === 503) {
+                setServiceDown(true);
+            } else {
+                alert(err.response?.data?.message ?? "Could not commit this proposal.");
+            }
+        } finally {
+            setBusy(false);
+        }
+    };
+
     const data = proposal?.data;
     const awaitingReview = proposal?.status === "awaiting_review";
+    const readyToCommit = proposal?.status === "ready_for_commit";
+
+    /**
+     * Suggested modules are checked first, exactly as the commit does: the
+     * AI numbers its new modules from max(existing id) + 1, which collides
+     * with real ids belonging to other roadmaps.
+     */
+    const titleFor = (id) => {
+        const suggested = data?.node_suggestions_with_ids?.find((n) => n.id === id);
+        if (suggested) return suggested.title;
+
+        const existing = existingNodes.find((n) => n.node_id === id);
+        if (existing) return existing.title;
+
+        return `module ${id}`;
+    };
+
+    const NodeChips = ({ label, ids }) => {
+        if (!ids?.length) return null;
+
+        return (
+            <div className="flex flex-wrap items-center gap-2 mt-2">
+                <span className="text-xs text-gray-500">{label}</span>
+                {ids.map((id) => (
+                    <span key={id}
+                          className="text-xs px-3 py-1 rounded-full border border-[#0097a7]/30 bg-[#0097a7]/10 text-[#00b0c2]">
+                        {titleFor(id)}
+                    </span>
+                ))}
+            </div>
+        );
+    };
+
+    // Read from the list rather than `selected`, so it refreshes after a
+    // commit instead of holding the row as it was when it was opened.
+    const alreadyCommitted = !!workflows.find((w) => w.id === selected?.id)?.committed_version_id;
 
     return (
         <div className="p-8">
@@ -246,18 +322,16 @@ function MaterialAiReview({ onChanged }) {
                                                 <h4 className="font-semibold">{p.suggested_node_title}</h4>
                                                 <p className="text-sm text-gray-400 mt-2">{p.explanation}</p>
 
-                                                <div className="flex flex-wrap gap-2 mt-3 text-xs">
-                                                    {p.direct_prerequisite_node_ids?.length > 0 && (
-                                                        <span className="px-3 py-1 rounded-full bg-white/5 border border-white/10 text-gray-400">
-                                                            after {p.direct_prerequisite_node_ids.length} module(s)
-                                                        </span>
-                                                    )}
-                                                    {p.direct_successor_node_ids?.length > 0 && (
-                                                        <span className="px-3 py-1 rounded-full bg-white/5 border border-white/10 text-gray-400">
-                                                            before {p.direct_successor_node_ids.length} module(s)
-                                                        </span>
-                                                    )}
-                                                </div>
+                                                <NodeChips label="comes after" ids={p.direct_prerequisite_node_ids} />
+                                                <NodeChips label="comes before" ids={p.direct_successor_node_ids} />
+                                                <NodeChips label="suggested to follow" ids={p.recommended_predecessor_node_ids} />
+
+                                                {!p.direct_prerequisite_node_ids?.length
+                                                    && !p.direct_successor_node_ids?.length && (
+                                                    <p className="text-xs text-gray-500 mt-2">
+                                                        Not linked to anything - it would be a starting module.
+                                                    </p>
+                                                )}
                                             </div>
                                         ))}
                                     </Section>
@@ -268,7 +342,7 @@ function MaterialAiReview({ onChanged }) {
                                                  count={data.existing_edges_to_remove.length}>
                                             {data.existing_edges_to_remove.map((e, i) => (
                                                 <div key={i} className="rounded-2xl border border-red-400/20 bg-red-400/5 p-3 text-sm text-gray-300">
-                                                    module {e.from_node_id} → module {e.to_node_id}
+                                                    {titleFor(e.from_node_id)} → {titleFor(e.to_node_id)}
                                                 </div>
                                             ))}
                                         </Section>
@@ -316,6 +390,30 @@ function MaterialAiReview({ onChanged }) {
                                             ))}
                                         </div>
                                     </div>
+                                </div>
+                            )}
+
+                            {readyToCommit && (
+                                <div className="rounded-3xl border border-[#0097a7]/20 bg-[#0097a7]/5 p-6">
+                                    <h3 className="text-xl font-bold mb-2">Approved</h3>
+
+                                    <p className="text-sm text-gray-400 mb-5">
+                                        Nothing has been written yet. Committing copies this
+                                        roadmap's current graph into a new draft version and
+                                        adds the approved modules and links to it.
+                                    </p>
+
+                                    {alreadyCommitted ? (
+                                        <p className="text-sm text-green-300">
+                                            Already committed to a new draft version.
+                                        </p>
+                                    ) : (
+                                        <button onClick={commit} disabled={busy}
+                                            className="flex items-center gap-2 px-6 py-3 rounded-2xl bg-[#0097a7] text-black font-bold hover:scale-105 transition disabled:bg-gray-700 disabled:text-gray-400 disabled:hover:scale-100">
+                                            <GitBranch size={18} />
+                                            {busy ? "Committing..." : "Commit to a New Version"}
+                                        </button>
+                                    )}
                                 </div>
                             )}
                         </div>

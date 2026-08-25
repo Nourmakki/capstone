@@ -1,0 +1,36 @@
+{
+  "_comment": "New node 6 sits after React Router (5) but is also declared a prerequisite of React Basics (1). With the existing chain 1->2->3->4->5 that closes a loop, and every module in it would be permanently locked. assertAcyclic() must reject this and roll the whole thing back.",
+  "status": "ready_for_commit",
+  "review_stage": null,
+  "data": {
+    "trends": [],
+    "node_suggestions": [
+      {
+        "title": "React Testing",
+        "description": "Write unit and integration tests with Jest and React Testing Library.",
+        "difficulty": "advanced",
+        "based_on_trend": "n/a"
+      }
+    ],
+    "node_suggestions_with_ids": [
+      {
+        "id": 6,
+        "title": "React Testing",
+        "description": "Write unit and integration tests with Jest and React Testing Library.",
+        "difficulty": "advanced",
+        "based_on_trend": "n/a"
+      }
+    ],
+    "placement_suggestions": [
+      {
+        "suggested_node_id": 6,
+        "suggested_node_title": "React Testing",
+        "direct_prerequisite_node_ids": [5],
+        "direct_successor_node_ids": [1],
+        "recommended_predecessor_node_ids": [],
+        "explanation": "Deliberately circular."
+      }
+    ],
+    "existing_edges_to_remove": []
+  }
+}

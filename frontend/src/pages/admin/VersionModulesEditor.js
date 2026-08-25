@@ -10,31 +10,70 @@ const EMPTY = {
 };
 
 /**
- * Order the list the way a student would walk it: a module appears after
- * everything it depends on. Without this the modules show in insertion
- * order, which reads as noise once a few edits have happened.
+ * Group the modules into the separate paths a student could take, each one
+ * walked from its starting module to its end.
+ *
+ * Ordering by dependency depth instead would interleave independent paths -
+ * a module could sit several rows below the one it directly follows, which
+ * reads as though something comes between them.
+ *
+ * @returns {Array<Array>} one array per path, in walking order
  */
-function inLearningOrder(modules) {
-    const depth = new Map();
+function intoPaths(modules) {
+    const byNodeId = new Map(modules.map((m) => [m.node_id, m]));
 
-    const depthOf = (module, seen = new Set()) => {
-        if (depth.has(module.node_id)) return depth.get(module.node_id);
-        if (seen.has(module.node_id)) return 0;
+    // successors[x] = the modules that list x as a prerequisite
+    const successors = new Map();
 
-        seen.add(module.node_id);
+    for (const module of modules) {
+        for (const id of module.prerequisite_node_ids) {
+            if (!successors.has(id)) successors.set(id, []);
+            successors.get(id).push(module);
+        }
+    }
 
-        const value = module.prerequisite_node_ids.reduce((deepest, id) => {
-            const parent = modules.find((m) => m.node_id === id);
-            return parent ? Math.max(deepest, depthOf(parent, seen) + 1) : deepest;
-        }, 0);
+    const placed = new Set();
+    const paths = [];
 
-        depth.set(module.node_id, value);
-        return value;
+    // Follow one branch to its end before starting the next.
+    const walk = (module, path) => {
+        if (placed.has(module.version_node_id)) return;
+
+        placed.add(module.version_node_id);
+        path.push(module);
+
+        const next = (successors.get(module.node_id) ?? [])
+            .slice()
+            .sort((a, b) => a.version_node_id - b.version_node_id);
+
+        for (const child of next) {
+            // A module with several prerequisites belongs to the path that
+            // reaches it last, once everything it needs is already placed.
+            const ready = child.prerequisite_node_ids.every(
+                (id) => !byNodeId.has(id) || placed.has(byNodeId.get(id).version_node_id)
+            );
+
+            if (ready) walk(child, path);
+        }
     };
 
-    return [...modules].sort(
-        (a, b) => depthOf(a) - depthOf(b) || a.version_node_id - b.version_node_id
-    );
+    const starts = modules
+        .filter((m) => m.prerequisite_node_ids.length === 0)
+        .sort((a, b) => a.version_node_id - b.version_node_id);
+
+    for (const start of starts) {
+        const path = [];
+        walk(start, path);
+        if (path.length) paths.push(path);
+    }
+
+    // Anything left is only reachable through a cycle, which the API refuses
+    // to create - but a stray row should still be visible, not hidden.
+    const orphans = modules.filter((m) => !placed.has(m.version_node_id));
+
+    if (orphans.length) paths.push(orphans);
+
+    return paths;
 }
 
 function VersionModulesEditor({ versionId, onChanged }) {
@@ -135,7 +174,8 @@ function VersionModulesEditor({ versionId, onChanged }) {
         return <p className="text-gray-400">Loading modules...</p>;
     }
 
-    const modules = inLearningOrder(data.modules);
+    const paths = intoPaths(data.modules);
+    const modules = paths.flat();
     const editable = data.version.editable;
     const titleOf = (nodeId) =>
         data.modules.find((m) => m.node_id === nodeId)?.title ?? `#${nodeId}`;
@@ -251,14 +291,30 @@ function VersionModulesEditor({ versionId, onChanged }) {
                     No modules yet. This version has nothing for students to do.
                 </p>
             ) : (
-                <div className="space-y-3">
-                    {modules.map((m, index) => (
+                <div className="space-y-10">
+                    {paths.map((path, pathIndex) => (
+                    <div key={path[0].version_node_id} className="space-y-3">
+
+                    {/* Naming each path stops the stage numbers from reading
+                        as one sequence when the roadmap actually branches. */}
+                    {paths.length > 1 && (
+                        <div className="flex items-center gap-3 mb-1">
+                            <span className="text-xs px-3 py-1 rounded-full border border-[#0097a7]/30 bg-[#0097a7]/10 text-[#00b0c2]">
+                                Path {pathIndex + 1}
+                            </span>
+                            <span className="text-xs text-gray-500">
+                                starts at {path[0].title} · {path.length} module{path.length === 1 ? "" : "s"}
+                            </span>
+                        </div>
+                    )}
+
+                    {path.map((m, index) => (
                         <div key={m.version_node_id}
                              className="rounded-2xl border border-white/10 bg-black/20 p-5">
                             <div className="flex flex-col lg:flex-row lg:items-start justify-between gap-4">
                                 <div className="flex gap-4 min-w-0">
                                     <span className="text-xs text-gray-500 mt-1 shrink-0 w-12">
-                                        STAGE {index + 1}
+                                        STEP {index + 1}
                                     </span>
 
                                     <div className="min-w-0">
@@ -311,6 +367,8 @@ function VersionModulesEditor({ versionId, onChanged }) {
                                 )}
                             </div>
                         </div>
+                    ))}
+                    </div>
                     ))}
                 </div>
             )}
