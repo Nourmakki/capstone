@@ -40,6 +40,20 @@ PracticalActivityType = Literal[
     "exercises",
 ]
 
+AssessmentCriterionStatus = Literal[
+    "met",
+    "mostly_met",
+    "partially_met",
+    "minimally_met",
+    "not_met",
+    "not_verifiable",
+]
+
+ExternalResourceType = Literal[
+    "official_documentation",
+    "github_repository",
+    "technical_reference",
+]
 
 # =====================================================================
 # ROADMAP NODE
@@ -189,6 +203,58 @@ class ProjectResultState(TypedDict):
     deliverables: list[str]
     acceptance_criteria: list[str]
 
+# =====================================================================
+# PROJECT ASSESSMENT RESULT
+# =====================================================================
+
+class CriterionAssessmentState(TypedDict):
+    criterion_id: str
+    criterion: str
+    status: AssessmentCriterionStatus
+    evidence: str
+    feedback: str
+
+
+class BonusCategoryAssessmentState(TypedDict):
+    score: int
+    evidence: list[str]
+    explanation: str
+
+
+class ProjectAssessmentResultState(TypedDict):
+    node_id: int
+    tutorial_resource_id: str
+    activity_type: PracticalActivityType
+    criterion_assessments: list[
+        CriterionAssessmentState
+    ]
+    meaningful_extra_features: (
+        BonusCategoryAssessmentState
+    )
+    creativity_and_innovation: (
+        BonusCategoryAssessmentState
+    )
+    constraint_violations: list[str]
+    strengths: list[str]
+    improvements: list[str]
+    overall_feedback: str
+
+# =====================================================================
+# EXTERNAL RESOURCES RESULT
+# =====================================================================
+
+class ExternalResourceState(TypedDict):
+    title: str
+    url: str
+    resource_type: ExternalResourceType
+    source_name: str
+    description: str
+    why_recommended: str
+
+
+class ExternalResourcesResultState(TypedDict):
+    node_id: int
+    resources: list[ExternalResourceState]
 
 # =====================================================================
 # WORKFLOW TRACKING
@@ -199,6 +265,8 @@ WorkflowStatus = Literal[
     "running_tutorial_agent",
     "running_quiz_agent",
     "running_project_agent",
+    "running_project_assessment_agent",
+    "running_external_resources_agent",
     "ready",
     "failed",
 ]
@@ -244,6 +312,12 @@ class LearningAgentState(
 
     # Project Agent final practical activity output.
     project_result: ProjectResultState
+
+    # Project Assessment Agent final output.
+    project_assessment_result: (ProjectAssessmentResultState)
+
+    # External Resources Agent final output.
+    external_resources_result: ExternalResourcesResultState
 
     # Workflow tracking.
     status: WorkflowStatus
