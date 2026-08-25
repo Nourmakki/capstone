@@ -23,6 +23,11 @@ class Project extends Model
         'description',
         'difficulty',
         'github_url',
+        'ai_metadata',
+    ];
+
+    protected $casts = [
+        'ai_metadata' => 'array',
     ];
 
     public function submissions()

@@ -26,12 +26,14 @@ class Submission extends Model
         'ai_score',
         'ai_feedback',
         'ai_reviewed_at',
+        'ai_metadata',
     ];
 
     protected $casts = [
         'score'          => 'integer',
         'ai_score'       => 'integer',
         'ai_reviewed_at' => 'datetime',
+        'ai_metadata' => 'array',
     ];
 
     /**

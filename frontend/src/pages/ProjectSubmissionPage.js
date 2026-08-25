@@ -276,8 +276,11 @@ function ProjectSubmissionPage() {
                                                             <Brain size={14} className="text-[#0097a7]" />
                                                             Estimated grade
                                                         </span>
+                                                        {/* Not a percentage: the grader adds up to 10
+                                                            bonus points, so this can exceed 100. */}
                                                         <span className="text-2xl font-black text-[#0097a7]">
-                                                            {s.ai_score}%
+                                                            {s.ai_score}
+                                                            <span className="text-sm text-gray-500 font-normal"> / 100</span>
                                                         </span>
                                                     </div>
                                                     {s.ai_feedback && (

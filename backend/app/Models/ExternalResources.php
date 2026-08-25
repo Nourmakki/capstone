@@ -21,6 +21,11 @@ class ExternalResources extends Model
         'title',
         'url',
         'type',
+        'ai_metadata',
+    ];
+
+    protected $casts = [
+        'ai_metadata' => 'array',
     ];
 
     public function versionNode()

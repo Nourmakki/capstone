@@ -21,8 +21,13 @@ class Tutorial extends Model
     'title',
     'url',
     'description',
-    'source_name'
+    'source_name',
+    'ai_metadata',
 ];
+
+    protected $casts = [
+        'ai_metadata' => 'array',
+    ];
 
     public function versionNode()
     {

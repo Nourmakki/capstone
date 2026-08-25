@@ -21,8 +21,20 @@ class Quiz extends Model
         'review_notes',
         'version_node_id',
         'title',
-        'score'
+        'score',
+        'ai_metadata',
     ];
+
+    protected $casts = [
+        'ai_metadata' => 'array',
+    ];
+
+    /**
+     * Quiz metadata sits next to the answers, so it stays server-side by
+     * default. Tutorials, projects and resources keep theirs visible - that
+     * content is written for the student to read.
+     */
+    protected $hidden = ['ai_metadata'];
 
     public function versionNode()
     {

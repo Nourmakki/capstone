@@ -16,17 +16,23 @@ class QuizQuestion extends Model
         'type',
         'options',
         'answer',
+        'ai_metadata',
     ];
 
     protected $casts = [
         'options' => 'array',
+        'ai_metadata' => 'array',
     ];
 
     /**
      * Never serialise the correct answer. Grading happens server-side;
      * anything that needs the answer must read it explicitly.
+     *
+     * ai_metadata is hidden for the same reason: the quiz agent puts
+     * correct_answer_explanation in there, which gives the answer away as
+     * surely as the answer column does.
      */
-    protected $hidden = ['answer'];
+    protected $hidden = ['answer', 'ai_metadata'];
 
     public function quiz()
     {

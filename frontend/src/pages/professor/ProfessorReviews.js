@@ -142,7 +142,7 @@ function ProfessorReviews({ onChanged }) {
 
                                         {r.submission.ai_score !== null && (
                                             <span className="text-xs text-gray-400">
-                                                AI estimated {r.submission.ai_score}%
+                                                AI estimated {r.submission.ai_score} / 100
                                             </span>
                                         )}
 
