@@ -49,6 +49,12 @@ AssessmentCriterionStatus = Literal[
     "not_verifiable",
 ]
 
+ExternalResourceType = Literal[
+    "official_documentation",
+    "github_repository",
+    "technical_reference",
+]
+
 # =====================================================================
 # ROADMAP NODE
 # =====================================================================
@@ -234,6 +240,23 @@ class ProjectAssessmentResultState(TypedDict):
     overall_feedback: str
 
 # =====================================================================
+# EXTERNAL RESOURCES RESULT
+# =====================================================================
+
+class ExternalResourceState(TypedDict):
+    title: str
+    url: str
+    resource_type: ExternalResourceType
+    source_name: str
+    description: str
+    why_recommended: str
+
+
+class ExternalResourcesResultState(TypedDict):
+    node_id: int
+    resources: list[ExternalResourceState]
+
+# =====================================================================
 # WORKFLOW TRACKING
 # =====================================================================
 
@@ -243,6 +266,7 @@ WorkflowStatus = Literal[
     "running_quiz_agent",
     "running_project_agent",
     "running_project_assessment_agent",
+    "running_external_resources_agent",
     "ready",
     "failed",
 ]
@@ -291,6 +315,9 @@ class LearningAgentState(
 
     # Project Assessment Agent final output.
     project_assessment_result: (ProjectAssessmentResultState)
+
+    # External Resources Agent final output.
+    external_resources_result: ExternalResourcesResultState
 
     # Workflow tracking.
     status: WorkflowStatus
