@@ -57,7 +57,7 @@ function ProfessorRoadmaps() {
 
     return (
         <div className="p-8">
-            <h1 className="text-5xl font-black text-[#0097a7]">Roadmaps</h1>
+            <h1 className="text-3xl lg:text-5xl font-black text-[#0097a7]">Roadmaps</h1>
             <p className="text-gray-400 mt-2 mb-10">
                 Browse the learning content your students are working through.
             </p>

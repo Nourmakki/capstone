@@ -77,7 +77,7 @@ function HomePage(){
                     <div className="inline-block px-4 py-1 rounded-full border border-[#0097a7]/30 bg-[#0097a7]/10 text-[#00b0c2] text-sm mb-6">
                         CS Roadmaps • AI Guidane • Projects • Quizzes
                     </div>
-                    <h1 className="text-5xl lg:text-7xl font-black leading-tight">
+                    <h1 className="text-4xl sm:text-5xl lg:text-7xl font-black leading-tight">
                         Learn Computer Science
                         <span className="block text-[#0097a7]">
                             The Structured Way

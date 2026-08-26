@@ -249,7 +249,7 @@ function RoadmapOverview() {
                             </div>
                         )}
 
-                        <h1 className="text-5xl font-black leading-tight">
+                        <h1 className="text-3xl lg:text-5xl font-black leading-tight">
                             {roadmap?.title ?? "Roadmap"}
                             <span className="block text-[#0097a7]">
                                 Roadmap

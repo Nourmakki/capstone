@@ -49,16 +49,16 @@ function StudentHomePage() {
         <div className="min-h-screen bg-black text-white overflow-hidden">
             <div className="absolute top-0 left-0 w-full h-full bg-[radial-gradient(circle_at_center,rgba(0,255,200,0.15),transparent_55%)] pointer-events-none" />
 
-            <section className="pt-20 relative z-10 px-8 lg:px-20 pb-24">
-                <div className="flex items-center justify-between mb-10">
-                    <div>
-                        <h2 className="text-4xl font-bold text-[#0097a7]">
-                            Explore Software Engineering Domains
-                        </h2>
-                        <p className="text-gray-400 mt-2">
-                            Structured learning paths for modern tech careers.
-                        </p>
-                    </div>
+            {/* Same padding and heading treatment as the other dashboard
+                pages, so the title lands in the same place on every one. */}
+            <section className="pt-20 relative z-10 px-8 pb-24">
+                <div className="mb-10">
+                    <h1 className="text-3xl lg:text-4xl font-black text-[#0097a7]">
+                        Explore Software Engineering Domains
+                    </h1>
+                    <p className="text-gray-400 mt-2">
+                        Structured learning paths for modern tech careers.
+                    </p>
                 </div>
 
                 {loading && (

@@ -135,7 +135,7 @@ function QuizPage() {
                             {quiz.title}
                         </div>
 
-                        <h1 className="text-5xl font-black">Knowledge Check</h1>
+                        <h1 className="text-3xl lg:text-5xl font-black">Knowledge Check</h1>
 
                         <p className="mt-4 text-lg text-gray-400 max-w-3xl">
                             {quiz.questions.length} questions · pass mark {quiz.pass_mark}%
@@ -174,7 +174,7 @@ function QuizPage() {
                             <div className="grid md:grid-cols-3 gap-6">
                                 <div className="rounded-2xl bg-black/30 border border-white/10 p-6">
                                     <h3 className="font-semibold mb-3 text-gray-400">Score</h3>
-                                    <p className="text-5xl font-black text-[#0097a7]">
+                                    <p className="text-3xl lg:text-5xl font-black text-[#0097a7]">
                                         {result.score}%
                                     </p>
                                 </div>

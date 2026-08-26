@@ -147,7 +147,7 @@ function LearningPage() {
                     </div>
                 </div>
 
-                <h1 className="text-5xl font-black">{detail.node.title}</h1>
+                <h1 className="text-3xl lg:text-5xl font-black">{detail.node.title}</h1>
 
                 <p className="mt-4 text-lg text-gray-400 max-w-3xl">
                     {detail.node.description}

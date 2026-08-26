@@ -96,7 +96,7 @@ function ProfessorReviews({ onChanged }) {
 
     return (
         <div className="p-8">
-            <h1 className="text-5xl font-black text-[#0097a7]">Review Queue</h1>
+            <h1 className="text-3xl lg:text-5xl font-black text-[#0097a7]">Review Queue</h1>
             <p className="text-gray-400 mt-2 mb-10">
                 Grade student quizzes and project submissions.
             </p>

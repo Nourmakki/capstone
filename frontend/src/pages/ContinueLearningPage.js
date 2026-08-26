@@ -44,7 +44,7 @@ function ContinueLearningPage() {
                         Continue Learning
                     </div>
 
-                    <h1 className="text-5xl font-black mt-5">Welcome Back</h1>
+                    <h1 className="text-3xl lg:text-4xl font-black mt-5">Welcome Back</h1>
 
                     <p className="text-gray-400 mt-4 max-w-3xl">
                         Pick up exactly where you stopped and continue progressing

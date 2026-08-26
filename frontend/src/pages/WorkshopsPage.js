@@ -38,9 +38,9 @@ function WorkshopsPage() {
         });
 
     return (
-        <div className="min-h-screen bg-black text-white p-8">
+        <div className="min-h-screen bg-black text-white p-20 z-10 px-8">
             <div className="mb-8">
-                <h1 className="text-5xl font-black text-[#0097a7]">Workshops</h1>
+                <h1 className="text-3xl lg:text-4xl font-black text-[#0097a7]">Workshops</h1>
                 <p className="text-gray-400 mt-2">
                     {!country
                         ? "Set a location on your profile to see nearby events."

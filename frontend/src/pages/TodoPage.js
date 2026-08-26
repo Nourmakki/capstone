@@ -92,9 +92,9 @@ function TodoPage() {
         : "text-yellow-400 border-yellow-400/30 bg-yellow-400/5";
 
     return (
-        <div className="min-h-screen bg-black text-white p-8">
+        <div className="min-h-screen bg-black text-white p-20 z-10 px-8">
             <div className="mb-10">
-                <h1 className="text-5xl font-black text-[#0097a7]">My To-Do List</h1>
+                <h1 className="text-3xl lg:text-4xl font-black text-[#0097a7]">My To-Do List</h1>
                 <p className="text-gray-400 mt-2">Organize your learning journey and stay productive.</p>
             </div>
 

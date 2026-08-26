@@ -70,7 +70,7 @@ function ProfilePage() {
                             {initial}
                         </div>
                         <div>
-                            <h1 className="text-4xl font-black">{u.name}</h1>
+                            <h1 className="text-3xl lg:text-4xl font-black">{u.name}</h1>
                             <p className="text-gray-400 mt-2">
                                 {u.role}{u.level ? ` · ${u.level}` : ""}
                             </p>

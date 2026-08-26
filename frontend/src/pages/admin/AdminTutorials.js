@@ -167,7 +167,7 @@ function AdminTutorials({ onChanged }) {
 
     return (
         <div className="p-8">
-            <h1 className="text-5xl font-black text-[#0097a7]">Tutorials</h1>
+            <h1 className="text-3xl lg:text-5xl font-black text-[#0097a7]">Tutorials</h1>
             <p className="text-gray-400 mt-2 mb-10">
                 Add and edit the video tutorials attached to each module.
             </p>

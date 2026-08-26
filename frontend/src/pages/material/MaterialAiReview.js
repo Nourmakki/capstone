@@ -167,7 +167,7 @@ function MaterialAiReview({ onChanged }) {
         <div className="p-8">
             <div className="flex items-center gap-3">
                 <Bot size={32} className="text-[#0097a7]" />
-                <h1 className="text-5xl font-black text-[#0097a7]">AI Proposals</h1>
+                <h1 className="text-3xl lg:text-5xl font-black text-[#0097a7]">AI Proposals</h1>
             </div>
             <p className="text-gray-400 mt-2 mb-10">
                 The AI suggests roadmap changes. Nothing reaches students until you approve it.

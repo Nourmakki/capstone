@@ -149,7 +149,7 @@ function ProjectSubmissionPage() {
                         <div className="inline-flex items-center gap-2 px-4 py-1 rounded-full border border-[#0097a7]/20 bg-[#0097a7]/10 text-[#00b0c2] text-sm mb-5">
                             {project.node_title}
                         </div>
-                        <h1 className="text-5xl font-black">{project.title}</h1>
+                        <h1 className="text-3xl lg:text-5xl font-black">{project.title}</h1>
                         <p className="mt-5 text-lg text-gray-400 max-w-3xl">{project.description}</p>
                     </div>
 
