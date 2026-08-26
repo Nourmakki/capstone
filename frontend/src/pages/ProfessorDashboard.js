@@ -3,7 +3,7 @@ import { useNavigate } from "react-router-dom";
 import api from "../api";
 import { useAuth } from "../context/AuthContext";
 import {
-    ClipboardCheck, Map, UserRound, LogOut, Menu, GraduationCap,
+    ClipboardCheck, Map, UserRound, LogOut, Menu, X, GraduationCap,
 } from "lucide-react";
 
 import ProfessorReviews from "./professor/ProfessorReviews";
@@ -16,6 +16,15 @@ function ProfessorDashboard() {
 
     const [activePage, setActivePage] = useState("reviews");
     const [collapsed, setCollapsed] = useState(false);
+
+    // Below lg the sidebar is an off-canvas drawer: a fixed 288px sidebar
+    // leaves a 375px viewport 87px to live in.
+    const [drawerOpen, setDrawerOpen] = useState(false);
+
+    const go = (page) => {
+        setActivePage(page);
+        setDrawerOpen(false);
+    };
     const [pending, setPending] = useState(0);
 
     const loadStats = useCallback(async () => {
@@ -44,14 +53,40 @@ function ProfessorDashboard() {
         <div className="min-h-screen bg-black text-white flex overflow-hidden">
             <div className="absolute top-0 left-0 w-full h-full bg-[radial-gradient(circle_at_center,rgba(0,255,200,0.15),transparent_55%)] pointer-events-none" />
 
-            <aside className={`fixed top-0 left-0 h-screen z-20 border-r border-white/10 bg-black/40 backdrop-blur-xl flex flex-col px-6 pt-6 pb-6 transition-all duration-300 ${
-                collapsed ? "w-24" : "w-72"
-            }`}>
+            {/* Phone header. The sidebar is off screen at this width. */}
+            <header className="lg:hidden fixed top-0 left-0 right-0 z-30 flex items-center gap-3 px-4 h-16 border-b border-white/10 bg-black/80 backdrop-blur-xl">
+                <button
+                    onClick={() => setDrawerOpen(true)}
+                    aria-label="Open menu"
+                    className="p-2 rounded-lg hover:bg-white/10 transition"
+                >
+                    <Menu size={22} />
+                </button>
+
+                <h1 className="text-xl font-black text-[#0097a7]">CS Mastery</h1>
+            </header>
+
+            {drawerOpen && (
+                <div
+                    onClick={() => setDrawerOpen(false)}
+                    className="lg:hidden fixed inset-0 z-30 bg-black/60 backdrop-blur-sm"
+                />
+            )}
+
+            <aside className={`fixed top-0 left-0 h-screen z-40 border-r border-white/10 bg-black/40 backdrop-blur-xl flex flex-col px-6 pt-6 pb-6 transition-all duration-300 w-72 ${
+                collapsed ? "lg:w-24" : "lg:w-72"
+            } ${drawerOpen ? "translate-x-0" : "-translate-x-full"} lg:translate-x-0`}>
                 <div className="shrink-0 mb-6">
                     <div className="flex justify-end">
                         <button onClick={() => setCollapsed(!collapsed)}
-                            className="p-2 rounded-lg hover:bg-white/10 transition">
+                            className="hidden lg:block p-2 rounded-lg hover:bg-white/10 transition">
                             <Menu size={22} />
+                        </button>
+
+                        <button onClick={() => setDrawerOpen(false)}
+                            aria-label="Close menu"
+                            className="lg:hidden p-2 rounded-lg hover:bg-white/10 transition">
+                            <X size={22} />
                         </button>
                     </div>
 
@@ -71,7 +106,7 @@ function ProfessorDashboard() {
                     <nav className="flex-1 min-h-0 overflow-y-auto overscroll-contain space-y-2 pr-1">
                         {navItems.map((item) => (
                             <button key={item.id} title={item.label}
-                                onClick={() => setActivePage(item.id)}
+                                onClick={() => go(item.id)}
                                 className={`w-full flex items-center ${
                                     collapsed ? "justify-center" : "gap-3"
                                 } px-4 py-2.5 rounded-2xl transition ${
@@ -106,8 +141,8 @@ function ProfessorDashboard() {
                 </div>
             </aside>
 
-            <main className={`relative z-10 flex-1 overflow-y-auto transition-all duration-300 ${
-                collapsed ? "ml-24" : "ml-72"
+            <main className={`relative z-10 flex-1 overflow-y-auto transition-all duration-300 ml-0 pt-16 lg:pt-0 ${
+                collapsed ? "lg:ml-24" : "lg:ml-72"
             }`}>
                 {activePage === "reviews" && <ProfessorReviews onChanged={loadStats} />}
                 {activePage === "roadmaps" && <ProfessorRoadmaps />}

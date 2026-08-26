@@ -6,6 +6,7 @@ import {
     Trophy,
     LogOut,
     Menu,
+    X,
     UserRound,
     CalendarDays,
 } from "lucide-react";
@@ -23,7 +24,18 @@ import WorkshopsPage from "./WorkshopsPage";
 function Dashboard() {
     const [activePage, setActivePage] = useState("dashboard");
     const [collapsed, setCollapsed] = useState(false);
+
+    // Below lg the sidebar is an off-canvas drawer: at 375px a fixed 288px
+    // sidebar leaves the page 87px to live in.
+    const [drawerOpen, setDrawerOpen] = useState(false);
+
     const navigate = useNavigate();
+
+    // Picking a destination should also get the drawer out of the way.
+    const go = (page) => {
+        setActivePage(page);
+        setDrawerOpen(false);
+    };
 
     const { logout } = useAuth();
     const handleLogout = async () => {
@@ -35,16 +47,38 @@ function Dashboard() {
         <div className="min-h-screen bg-black text-white flex overflow-hidden">
             <div className="absolute top-0 left-0 w-full h-full bg-[radial-gradient(circle_at_center,rgba(0,255,200,0.15),transparent_55%)] pointer-events-none" />
 
+            {/* Phone header. The sidebar is off screen at this width, so this
+                is the only way back to it. */}
+            <header className="lg:hidden fixed top-0 left-0 right-0 z-30 flex items-center gap-3 px-4 h-16 border-b border-white/10 bg-black/80 backdrop-blur-xl">
+                <button
+                    onClick={() => setDrawerOpen(true)}
+                    aria-label="Open menu"
+                    className="p-2 rounded-lg hover:bg-white/10 transition"
+                >
+                    <Menu size={22} />
+                </button>
+
+                <h1 className="text-xl font-black text-[#0097a7]">CS Mastery</h1>
+            </header>
+
+            {/* Tapping beside the drawer closes it - the usual way out. */}
+            {drawerOpen && (
+                <div
+                    onClick={() => setDrawerOpen(false)}
+                    className="lg:hidden fixed inset-0 z-30 bg-black/60 backdrop-blur-sm"
+                />
+            )}
+
             <aside
-                className={`fixed top-0 left-0 h-screen z-20 border-r border-white/10 bg-black/40 backdrop-blur-xl flex flex-col px-6 pt-6 pb-6 transition-all duration-300 ${
-                    collapsed ? "w-24" : "w-72"
-                }`}
+                className={`fixed top-0 left-0 h-screen z-40 border-r border-white/10 bg-black/40 backdrop-blur-xl flex flex-col px-6 pt-6 pb-6 transition-all duration-300 w-72 ${
+                    collapsed ? "lg:w-24" : "lg:w-72"
+                } ${drawerOpen ? "translate-x-0" : "-translate-x-full"} lg:translate-x-0`}
             >
                 {collapsed ? (
                     <div className="shrink-0 flex flex-col items-center mb-6">
                         <button
                             onClick={() => setCollapsed(!collapsed)}
-                            className="self-end p-2 rounded-lg hover:bg-white/10 transition"
+                            className="hidden lg:block self-end p-2 rounded-lg hover:bg-white/10 transition"
                         >
                             <Menu size={22} />
                         </button>
@@ -56,11 +90,21 @@ function Dashboard() {
                 ) : (
                     <div className="shrink-0 mb-6">
                         <div className="flex justify-end">
+                            {/* Collapsing is a desktop idea; on a phone the
+                                drawer is either open or gone. */}
                             <button
                                 onClick={() => setCollapsed(!collapsed)}
-                                className="p-2 rounded-lg hover:bg-white/10 transition"
+                                className="hidden lg:block p-2 rounded-lg hover:bg-white/10 transition"
                             >
                                 <Menu size={22} />
+                            </button>
+
+                            <button
+                                onClick={() => setDrawerOpen(false)}
+                                aria-label="Close menu"
+                                className="lg:hidden p-2 rounded-lg hover:bg-white/10 transition"
+                            >
+                                <X size={22} />
                             </button>
                         </div>
 
@@ -82,7 +126,7 @@ function Dashboard() {
 
                         <button
                             title="Dashboard"
-                            onClick={() => setActivePage("dashboard")}
+                            onClick={() => go("dashboard")}
                             className={`w-full flex items-center ${
                                 collapsed ? "justify-center" : "gap-3"
                             } px-4 py-2.5 rounded-2xl transition ${
@@ -97,7 +141,7 @@ function Dashboard() {
 
                         <button
                             title="My Learning"
-                            onClick={() => setActivePage("learning")}
+                            onClick={() => go("learning")}
                             className={`w-full flex items-center ${
                                 collapsed ? "justify-center" : "gap-3"
                             } px-4 py-2.5 rounded-2xl transition ${
@@ -112,7 +156,7 @@ function Dashboard() {
 
                         <button
                             title="To-Do List"
-                            onClick={() => setActivePage("todo")}
+                            onClick={() => go("todo")}
                             className={`w-full flex items-center ${
                                 collapsed ? "justify-center" : "gap-3"
                             } px-4 py-2.5 rounded-2xl transition ${
@@ -127,7 +171,7 @@ function Dashboard() {
 
                         <button
                             title="Teams"
-                            onClick={() => setActivePage("teams")}
+                            onClick={() => go("teams")}
                             className={`w-full flex items-center ${
                                 collapsed ? "justify-center" : "gap-3"
                             } px-4 py-2.5 rounded-2xl transition ${
@@ -142,7 +186,7 @@ function Dashboard() {
 
                         <button
                             title="Workshops"
-                            onClick={() => setActivePage("workshops")}
+                            onClick={() => go("workshops")}
                             className={`w-full flex items-center ${
                                 collapsed ? "justify-center" : "gap-3"
                             } px-4 py-2.5 rounded-2xl transition ${
@@ -157,7 +201,7 @@ function Dashboard() {
 
                         <button
                             title="My Profile"
-                            onClick={() => setActivePage("profile")}
+                            onClick={() => go("profile")}
                             className={`w-full flex items-center ${
                                 collapsed ? "justify-center" : "gap-3"
                             } px-4 py-2.5 rounded-2xl transition ${
@@ -212,8 +256,10 @@ function Dashboard() {
             </aside>
 
             <main
-                className={`relative z-10 flex-1 overflow-y-auto transition-all duration-300 ${
-                    collapsed ? "ml-24" : "ml-72"
+                /* No left margin below lg - the sidebar is off screen there -
+                   but room for the fixed phone header. */
+                className={`relative z-10 flex-1 overflow-y-auto transition-all duration-300 ml-0 pt-16 lg:pt-0 ${
+                    collapsed ? "lg:ml-24" : "lg:ml-72"
                 }`}
             >
                 {activePage === "dashboard" && <StudentHomePage />}
