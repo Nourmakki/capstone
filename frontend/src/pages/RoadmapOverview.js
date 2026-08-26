@@ -50,7 +50,7 @@ function RoadmapOverview() {
                 setRoadmap(detailResponse.data.data);
 
                 const {
-                    nodes, edges, completed, current_node,
+                    nodes, edges, completed, current_node, requirements,
                     version: versionInfo, available_versions, is_latest,
                 } = progressResponse.data;
 
@@ -77,6 +77,10 @@ function RoadmapOverview() {
                             completed.includes(id)
                         );
 
+                        // Quizzes and projects that must be finished before
+                        // this module can be completed.
+                        const required_work = requirements?.[nodeId] ?? { done: 0, total: 0 };
+
                         return {
                             id: nodeId,
                             versionNodeId: item.id,
@@ -88,7 +92,15 @@ function RoadmapOverview() {
                                 : isCurrent || isUnlocked
                                 ? "current"
                                 : "locked",
-                            progress: isCompleted ? 100 : 0,
+                            // A finished module is finished regardless; an
+                            // unfinished one is as far along as its work.
+                            progress: isCompleted
+                                ? 100
+                                : required_work.total > 0
+                                ? Math.round((required_work.done / required_work.total) * 100)
+                                : 0,
+                            requiredDone: required_work.done,
+                            requiredTotal: required_work.total,
                             prerequisites: required,
                         };
                     })
@@ -292,93 +304,181 @@ function RoadmapOverview() {
                         This roadmap version has no modules yet.
                     </div>
                 ) : (
-                    <div className="grid grid-cols-1 lg:grid-cols-2 xl:grid-cols-3 gap-6">
-                        {modules.map((module) => {
+                    /* One vertical path rather than a grid: a roadmap is an
+                       order, and a 3-column grid reads left-to-right first,
+                       which is the wrong direction. */
+                    <div className="max-w-4xl">
+                        {modules.map((module, index) => {
                             const statusUI = getStatusUI(module.status);
 
+                            const isLast = index === modules.length - 1;
+                            const isLocked = module.status === "locked";
+                            const isDone = module.status === "completed";
+
+                            // The rail above this stop belongs to the journey
+                            // already travelled, so it lights up once the
+                            // module before it is finished.
+                            const reachedHere = index === 0
+                                || modules[index - 1].status === "completed";
+
                             return (
-                                <div
-                                    key={module.id}
-                                    className={`group relative rounded-3xl border ${statusUI.border} ${statusUI.bg} backdrop-blur-md p-6 hover:border-[#0097a7]/40 transition duration-300 overflow-hidden`}
-                                >
-                                    <div className="absolute inset-0 opacity-0 group-hover:opacity-10 transition bg-gradient-to-br from-blue-400 to-[#0097a7]"></div>
+                                <div key={module.id} className="flex gap-5 sm:gap-6">
+                                    {/* The rail: line, marker, line. */}
+                                    <div className="flex flex-col items-center w-12 sm:w-14 shrink-0">
+                                        <div
+                                            className={`w-0.5 h-5 ${
+                                                index === 0
+                                                    ? "bg-transparent"
+                                                    : reachedHere
+                                                    ? "bg-[#00b0c2] shadow-[0_0_6px_rgba(0,176,194,0.9),0_0_16px_rgba(0,151,167,0.55)]"
+                                                    : "bg-white/10"
+                                            }`}
+                                        />
 
-                                    <div className="relative z-10">
-                                        <div className="flex items-center justify-between mb-6">
-                                            <div className="flex items-center gap-3">
-                                                {statusUI.icon}
-                                                <span className="text-sm text-gray-300">
-                                                    {statusUI.text}
-                                                </span>
-                                            </div>
+                                        <div
+                                            /* Only the lit part of the path glows - a locked
+                                               marker stays flat so the eye is drawn along
+                                               the route already travelled. */
+                                            className={`relative flex items-center justify-center w-12 h-12 rounded-full border-2 transition ${
+                                                isDone
+                                                    ? "bg-[#00b0c2] border-[#00b0c2] text-black shadow-[0_0_10px_rgba(0,176,194,0.81),0_0_26px_rgba(0,151,167,0.5)]"
+                                                    : module.status === "current"
+                                                    ? "bg-[#00b0c2]/10 border-[#00b0c2] text-[#00b0c2] shadow-[0_0_8px_rgba(0,176,194,0.54),0_0_22px_rgba(0,151,167,0.32)]"
+                                                    : "bg-black/40 border-white/10 text-gray-600"
+                                            }`}
+                                        >
+                                            {isDone ? (
+                                                <CheckCircle2 size={22} />
+                                            ) : isLocked ? (
+                                                <Lock size={18} />
+                                            ) : (
+                                                <PlayCircle size={22} />
+                                            )}
 
-                                            <span className="text-xs px-3 py-1 rounded-full bg-white/5 border border-white/10 text-gray-400 capitalize">
-                                                {module.difficulty}
-                                            </span>
+                                            {/* Only the module they can act on pulses. */}
+                                            {module.status === "current" && (
+                                                <span className="absolute inset-0 rounded-full border-2 border-[#00b0c2] animate-ping opacity-40" />
+                                            )}
                                         </div>
 
-                                        <h3 className="text-2xl font-bold leading-snug">
-                                            {module.title}
-                                        </h3>
+                                        {/* Fills as the module's quizzes and
+                                            projects are finished, so the path
+                                            grows with the work rather than
+                                            jumping from nothing to done. */}
+                                        {!isLast && (
+                                            /* No overflow-hidden: it clips the lit
+                                               section's glow at the 2px edge, which is
+                                               the whole of the effect. */
+                                            <div className="w-0.5 flex-1 bg-white/10 relative">
+                                                {/* The glow is conditional: a zero-height
+                                                    box still casts a shadow, which would
+                                                    leave a lit smear on an untouched rail. */}
+                                                {/* Two shadows: a tight bright core and a
+                                                    wider halo. A single blur on a 2px line
+                                                    reads as nothing. */}
+                                                <div
+                                                    className={`absolute top-0 left-0 w-full bg-[#00b0c2] transition-all duration-500 ${
+                                                        module.progress > 0
+                                                            ? "shadow-[0_0_6px_rgba(0,176,194,0.9),0_0_16px_rgba(0,151,167,0.55)]"
+                                                            : ""
+                                                    }`}
+                                                    style={{ height: `${module.progress}%` }}
+                                                />
+                                            </div>
+                                        )}
+                                    </div>
 
-                                        <p className="mt-4 text-gray-400 leading-relaxed text-sm">
-                                            {module.description}
-                                        </p>
+                                    {/* The stop itself. */}
+                                    <div className={`flex-1 min-w-0 ${isLast ? "pb-4" : "pb-10"}`}>
+                                        <div className="flex items-center gap-3 mb-2">
+                                            <span className="text-xs tracking-widest text-gray-500">
+                                                STAGE {index + 1}
+                                            </span>
 
-                                        <div className="mt-4 flex flex-wrap gap-2">
-                                            {module.prerequisites.length > 0 ? (
-                                                module.prerequisites.map((prereq) => (
-                                                    <span
-                                                        key={prereq}
-                                                        className="px-3 py-1 rounded-full text-xs bg-white/5 border border-white/10 text-gray-400"
-                                                    >
-                                                        Requires: {titleById[prereq] ?? prereq}
-                                                    </span>
-                                                ))
-                                            ) : (
-                                                <span className="px-3 py-1 rounded-full text-xs bg-green-500/10 border border-green-500/20 text-green-300">
-                                                    Entry Module
+                                            <span
+                                                className={`text-xs px-3 py-1 rounded-full border ${
+                                                    isDone
+                                                        ? "border-[#0097a7]/30 bg-[#0097a7]/10 text-[#00b0c2]"
+                                                        : module.status === "current"
+                                                        ? "border-[#0097a7]/40 bg-[#0097a7]/15 text-[#00b0c2]"
+                                                        : "border-white/10 bg-white/[0.03] text-gray-500"
+                                                }`}
+                                            >
+                                                {statusUI.text}
+                                            </span>
+
+                                            <span className="text-xs text-gray-500 capitalize">
+                                                {module.difficulty}
+                                            </span>
+
+                                            {/* The bar shows the shape of the
+                                                progress; this says what it is. */}
+                                            {!isDone && module.requiredTotal > 0 && (
+                                                <span className="text-xs text-gray-500">
+                                                    {module.requiredDone} of {module.requiredTotal} done
                                                 </span>
                                             )}
                                         </div>
 
-                                        <div className="mt-6">
-                                            <div className="flex items-center justify-between text-sm mb-2">
-                                                <span className="text-gray-400">
-                                                    Progress
-                                                </span>
-                                                <span className="text-[#0097a7]">
-                                                    {module.progress}%
-                                                </span>
-                                            </div>
-
-                                            <div className="w-full h-2 bg-black/30 rounded-full overflow-hidden">
-                                                <div
-                                                    className="h-full bg-gradient-to-r from-blue-400 to-[#0097a7] rounded-full"
-                                                    style={{ width: `${module.progress}%` }}
-                                                ></div>
-                                            </div>
-                                        </div>
-
-                                        <button
-                                            disabled={module.status === "locked"}
+                                        <div
                                             onClick={() => {
-                                                if (module.status !== "locked") {
+                                                if (!isLocked) {
                                                     navigate(`/learning/${module.versionNodeId}`);
                                                 }
                                             }}
-                                            className={`mt-7 w-full py-3 rounded-2xl font-semibold transition ${
-                                                module.status === "locked"
-                                                    ? "bg-gray-800 text-gray-500 cursor-not-allowed"
-                                                    : "bg-[#0097a7] text-black hover:scale-[1.02]"
+                                            className={`rounded-3xl border p-6 transition ${
+                                                isLocked
+                                                    ? "border-white/10 bg-white/[0.02] opacity-60"
+                                                    : "border-white/10 bg-white/[0.03] hover:border-[#0097a7]/40 cursor-pointer"
                                             }`}
                                         >
-                                            {module.status === "completed"
-                                                ? "Review Module"
-                                                : module.status === "current"
-                                                ? "Continue Learning"
-                                                : "Locked"}
-                                        </button>
+                                            <h3 className="text-xl sm:text-2xl font-bold leading-snug">
+                                                {module.title}
+                                            </h3>
+
+                                            <p className="mt-3 text-gray-400 leading-relaxed text-sm">
+                                                {module.description}
+                                            </p>
+
+                                            <div className="mt-4 flex flex-wrap gap-2">
+                                                {module.prerequisites.length > 0 ? (
+                                                    module.prerequisites.map((prereq) => (
+                                                        <span
+                                                            key={prereq}
+                                                            className="px-3 py-1 rounded-full text-xs bg-white/5 border border-white/10 text-gray-400"
+                                                        >
+                                                            after {titleById[prereq] ?? prereq}
+                                                        </span>
+                                                    ))
+                                                ) : (
+                                                    <span className="px-3 py-1 rounded-full text-xs bg-[#0097a7]/10 border border-[#0097a7]/20 text-[#00b0c2]">
+                                                        Starting module
+                                                    </span>
+                                                )}
+                                            </div>
+
+                                            <button
+                                                disabled={isLocked}
+                                                onClick={(event) => {
+                                                    event.stopPropagation();
+
+                                                    if (!isLocked) {
+                                                        navigate(`/learning/${module.versionNodeId}`);
+                                                    }
+                                                }}
+                                                className={`mt-6 px-6 py-3 rounded-2xl font-semibold transition ${
+                                                    isLocked
+                                                        ? "bg-gray-800 text-gray-500 cursor-not-allowed"
+                                                        : "bg-[#0097a7] text-black hover:scale-[1.02]"
+                                                }`}
+                                            >
+                                                {isDone
+                                                    ? "Review Module"
+                                                    : module.status === "current"
+                                                    ? "Continue Learning"
+                                                    : "Locked"}
+                                            </button>
+                                        </div>
                                     </div>
                                 </div>
                             );

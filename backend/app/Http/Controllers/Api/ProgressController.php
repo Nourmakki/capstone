@@ -74,6 +74,47 @@ class ProgressController extends Controller
      *
      * @return array<int, string>
      */
+    /**
+     * The mandatory work on one module and how much of it is done.
+     *
+     * Counts the same things completionBlockers() refuses on - every quiz
+     * passed, every project submitted - so the two can never disagree about
+     * whether a module is finished.
+     *
+     * @return array{done:int, total:int}
+     */
+    public static function requirementProgress(VersionNode $versionNode, Student $student): array
+    {
+        $total = 0;
+        $done  = 0;
+
+        foreach ($versionNode->quizzes as $quiz) {
+            $total++;
+
+            $best = Submission::where('quiz_id', $quiz->id)
+                ->where('student_id', $student->id)
+                ->max('score');
+
+            if ($best !== null && $best >= QuizController::PASS_MARK) {
+                $done++;
+            }
+        }
+
+        foreach ($versionNode->projects as $project) {
+            $total++;
+
+            $submitted = Submission::where('project_id', $project->id)
+                ->where('student_id', $student->id)
+                ->exists();
+
+            if ($submitted) {
+                $done++;
+            }
+        }
+
+        return ['done' => $done, 'total' => $total];
+    }
+
     public static function completionBlockers(
         VersionNode $versionNode,
         Student $student,
@@ -157,7 +198,7 @@ class ProgressController extends Controller
         // An unknown or unreadable id falls back rather than 404ing.
         $version ??= $availableVersions->first();
 
-        $nodes = VersionNode::with('node')
+        $nodes = VersionNode::with(['node', 'quizzes', 'projects'])
             ->where('roadmap_version_id', $version->id)
             ->get();
 
@@ -203,11 +244,20 @@ class ProgressController extends Controller
             }
         }
 
+        // How far through each module's mandatory work the student is, so the
+        // roadmap can show partial progress rather than only done/not done.
+        $requirements = [];
+
+        foreach ($nodes as $versionNode) {
+            $requirements[$versionNode->node_id] = self::requirementProgress($versionNode, $student);
+        }
+
         return response()->json([
             'version'            => new RoadmapVersionResource($version),
             'is_latest'          => $version->status === 'Published',
             'available_versions' => RoadmapVersionResource::collection($availableVersions),
             'nodes'              => $nodes,
+            'requirements'       => $requirements,
             'edges'              => $edges,
             'completed'          => $completed,
             'current_node'       => $currentNode,
