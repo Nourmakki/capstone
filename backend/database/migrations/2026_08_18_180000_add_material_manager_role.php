@@ -7,6 +7,10 @@ return new class extends Migration
 {
     public function up(): void
     {
+        if (DB::getDriverName() !== 'mysql') {
+            return;
+        }
+
         DB::statement("
             ALTER TABLE users
             MODIFY role ENUM(
@@ -23,6 +27,10 @@ return new class extends Migration
     {
         // Anyone holding the removed role would violate the narrower enum.
         DB::table('users')->where('role', 'MaterialManager')->update(['role' => 'Admin']);
+
+        if (DB::getDriverName() !== 'mysql') {
+            return;
+        }
 
         DB::statement("
             ALTER TABLE users
