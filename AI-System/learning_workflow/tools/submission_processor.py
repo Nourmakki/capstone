@@ -3,9 +3,13 @@ import binascii
 import csv
 import io
 import json
+import os
+import tempfile
 import zipfile
 from pathlib import Path, PurePosixPath
 from typing import Any
+from urllib.parse import urlparse
+import requests
 
 
 # =====================================================================
@@ -111,6 +115,22 @@ MAX_CSV_BYTES = 20_000_000
 MAX_VISUAL_BYTES = 10_000_000
 
 CSV_SAMPLE_ROWS = 5
+
+GITHUB_API_REPOSITORY_URL = (
+    "https://api.github.com/repos/"
+    "{owner}/{repository}"
+)
+
+GITHUB_API_ARCHIVE_URL = (
+    "https://api.github.com/repos/"
+    "{owner}/{repository}/zipball/{ref}"
+)
+
+GITHUB_REQUEST_TIMEOUT_SECONDS = 30
+
+MAX_GITHUB_ARCHIVE_BYTES = (
+    50 * 1024 * 1024
+)
 
 
 # =====================================================================
@@ -546,7 +566,324 @@ def build_text_evidence(
         len(truncated_text),
     )
 
+# =====================================================================
+# GITHUB SUBMISSION
+# =====================================================================
 
+def parse_github_repository_url(
+    repository_url: str,
+) -> tuple[str, str]:
+
+    if (
+        not isinstance(
+            repository_url,
+            str,
+        )
+        or not repository_url.strip()
+    ):
+        raise ValueError(
+            "GitHub repository URL is required."
+        )
+
+    repository_url = (
+        repository_url.strip()
+    )
+
+    parsed_url = urlparse(
+        repository_url
+    )
+
+    if (
+        parsed_url.scheme
+        not in {
+            "http",
+            "https",
+        }
+    ):
+        raise ValueError(
+            "Invalid GitHub repository URL."
+        )
+
+    hostname = (
+        parsed_url.netloc
+        .strip()
+        .lower()
+    )
+
+    if hostname not in {
+        "github.com",
+        "www.github.com",
+    }:
+        raise ValueError(
+            "Submission URL must be a "
+            "GitHub repository URL."
+        )
+
+    path_parts = [
+        part
+        for part in (
+            parsed_url.path
+            .strip("/")
+            .split("/")
+        )
+        if part
+    ]
+
+    if len(path_parts) != 2:
+        raise ValueError(
+            "GitHub submission URL must "
+            "point to the repository root."
+        )
+
+    owner = (
+        path_parts[0]
+        .strip()
+    )
+
+    repository = (
+        path_parts[1]
+        .strip()
+    )
+
+    if repository.endswith(
+        ".git"
+    ):
+        repository = (
+            repository[:-4]
+        )
+
+    if (
+        not owner
+        or not repository
+    ):
+        raise ValueError(
+            "Invalid GitHub repository URL."
+        )
+
+    return (
+        owner,
+        repository,
+    )
+
+
+def build_github_headers(
+) -> dict[str, str]:
+
+    headers = {
+        "Accept": (
+            "application/vnd.github+json"
+        ),
+    }
+
+    github_token = os.getenv("GITHUB_TOKEN")
+
+    if github_token:
+        headers[
+            "Authorization"
+        ] = (
+            f"Bearer {github_token}"
+        )
+
+    return headers
+
+
+def fetch_github_repository_metadata(
+    owner: str,
+    repository: str,
+) -> dict[str, Any]:
+
+    repository_api_url = (
+        GITHUB_API_REPOSITORY_URL.format(
+            owner=owner,
+            repository=repository,
+        )
+    )
+
+    try:
+        response = requests.get(
+            repository_api_url,
+            headers=(
+                build_github_headers()
+            ),
+            timeout=(
+                GITHUB_REQUEST_TIMEOUT_SECONDS
+            ),
+        )
+
+    except requests.RequestException as error:
+        raise RuntimeError(
+            "Could not connect to GitHub "
+            "to verify the repository."
+        ) from error
+
+    if response.status_code == 404:
+        raise ValueError(
+            "GitHub repository was not found "
+            "or is not publicly accessible. "
+            "Only public GitHub repositories "
+            "can be assessed."
+        )
+
+    if response.status_code in {
+        401,
+        403,
+    }:
+        raise RuntimeError(
+            "GitHub repository verification "
+            "failed because GitHub API access "
+            "was denied or rate-limited."
+        )
+
+    try:
+        response.raise_for_status()
+
+    except requests.RequestException as error:
+        raise RuntimeError(
+            "GitHub repository verification "
+            "failed."
+        ) from error
+
+    repository_data = (
+        response.json()
+    )
+
+    if repository_data.get(
+        "private",
+        False,
+    ):
+        raise ValueError(
+            "Private GitHub repositories "
+            "cannot be assessed. "
+            "Only public GitHub repositories "
+            "are visible to the AI system."
+        )
+
+    default_branch = (
+        repository_data.get(
+            "default_branch"
+        )
+    )
+
+    if (
+        not isinstance(
+            default_branch,
+            str,
+        )
+        or not default_branch.strip()
+    ):
+        raise ValueError(
+            "Could not determine the "
+            "repository default branch."
+        )
+
+    return repository_data
+
+
+def download_github_repository_archive(
+    owner: str,
+    repository: str,
+    default_branch: str,
+    destination_path: Path,
+) -> None:
+
+    archive_url = (
+        GITHUB_API_ARCHIVE_URL.format(
+            owner=owner,
+            repository=repository,
+            ref=default_branch,
+        )
+    )
+
+    try:
+        response = requests.get(
+            archive_url,
+            headers=(
+                build_github_headers()
+            ),
+            timeout=(
+                GITHUB_REQUEST_TIMEOUT_SECONDS
+            ),
+            stream=True,
+        )
+
+    except requests.RequestException as error:
+        raise RuntimeError(
+            "Could not download the "
+            "GitHub repository."
+        ) from error
+
+    if response.status_code == 404:
+        raise ValueError(
+            "GitHub repository archive "
+            "could not be accessed. "
+            "Only public GitHub repositories "
+            "can be assessed."
+        )
+
+    try:
+        response.raise_for_status()
+
+    except requests.RequestException as error:
+        raise RuntimeError(
+            "GitHub repository download "
+            "failed."
+        ) from error
+
+    content_length = (
+        response.headers.get(
+            "Content-Length"
+        )
+    )
+
+    if content_length is not None:
+
+        try:
+            archive_size = int(
+                content_length
+            )
+
+        except ValueError:
+            archive_size = None
+
+        if (
+            archive_size is not None
+            and archive_size
+            > MAX_GITHUB_ARCHIVE_BYTES
+        ):
+            raise ValueError(
+                "GitHub repository is too "
+                "large to assess."
+            )
+
+    downloaded_bytes = 0
+
+    with destination_path.open(
+        "wb"
+    ) as archive_file:
+
+        for chunk in response.iter_content(
+            chunk_size=8192
+        ):
+
+            if not chunk:
+                continue
+
+            downloaded_bytes += (
+                len(chunk)
+            )
+
+            if (
+                downloaded_bytes
+                > MAX_GITHUB_ARCHIVE_BYTES
+            ):
+                raise ValueError(
+                    "GitHub repository is too "
+                    "large to assess."
+                )
+
+            archive_file.write(
+                chunk
+            )
 # =====================================================================
 # SUBMISSION PROCESSOR
 # =====================================================================
@@ -1069,3 +1406,84 @@ def process_submission(
     )
 
     return result
+
+# =====================================================================
+# PUBLIC GITHUB REPOSITORY SUBMISSION
+# =====================================================================
+
+def process_github_submission(
+    repository_url: str,
+    student_note: str | None = None,
+) -> dict[str, Any]:
+
+    owner, repository = (
+        parse_github_repository_url(
+            repository_url
+        )
+    )
+
+    repository_data = (
+        fetch_github_repository_metadata(
+            owner,
+            repository,
+        )
+    )
+
+    default_branch = (
+        repository_data[
+            "default_branch"
+        ]
+    )
+
+    with tempfile.TemporaryDirectory() as temp_dir:
+
+        archive_path = (
+            Path(temp_dir)
+            / f"{repository}.zip"
+        )
+
+        download_github_repository_archive(
+            owner=owner,
+            repository=repository,
+            default_branch=default_branch,
+            destination_path=archive_path,
+        )
+
+        submission_evidence = (
+            process_submission(
+                archive_path,
+                student_note=student_note,
+            )
+        )
+
+    canonical_repository_url = (
+        "https://github.com/"
+        f"{owner}/{repository}"
+    )
+
+    submission_evidence[
+        "submission_file_name"
+    ] = (
+        f"{repository}.zip"
+    )
+
+    submission_evidence[
+        "submission_source"
+    ] = "github_repository"
+
+    submission_evidence[
+        "repository_url"
+    ] = canonical_repository_url
+
+    submission_evidence[
+        "repository_full_name"
+    ] = repository_data.get(
+        "full_name",
+        f"{owner}/{repository}",
+    )
+
+    submission_evidence[
+        "repository_default_branch"
+    ] = default_branch
+
+    return submission_evidence
