@@ -257,18 +257,33 @@ class ExternalResourcesResultState(TypedDict):
     resources: list[ExternalResourceState]
 
 # =====================================================================
-# WORKFLOW TRACKING
+# ASSESSMENT SCORE
+# =====================================================================
+
+class AssessmentScoreState(TypedDict):
+    base_score: float
+    bonus_score: int
+    total_score: float
+    max_base_score: int
+    max_bonus_score: int
+
+
+# =====================================================================
+# LEARNING WORKFLOW TRACKING
 # =====================================================================
 
 WorkflowStatus = Literal[
     "starting",
     "running_tutorial_agent",
-    "running_quiz_agent",
-    "running_project_agent",
-    "running_project_assessment_agent",
-    "running_external_resources_agent",
+    "running_learning_agents",
+    "awaiting_manager_review",
     "ready",
+    "rejected",
     "failed",
+]
+
+ReviewStage = Literal[
+    "full_review",
 ]
 
 
@@ -280,45 +295,90 @@ class LearningAgentState(
     TypedDict,
     total=False,
 ):
-    # One unique execution of the learning workflow.
     workflow_id: str
 
-    # Roadmap context.
     roadmap_id: int
     roadmap_topic: str
 
     version_id: int
     version_number: str
 
-    # Current roadmap node being processed.
     node: LearningNode
 
-    # Knowledge the student is expected to already know.
-    prerequisite_nodes: list[
-        LearningNode
-    ]
+    prerequisite_nodes: list[LearningNode]
 
-    # Tutorial Agent final output.
     tutorial_result: TutorialResultState
 
-    # Internal evidence carried from Tutorial Agent
-    # to Quiz Agent and Project Agent.
     tutorial_quiz_evidence: (
         TutorialQuizEvidenceState
     )
 
-    # Quiz Agent final output.
     quiz_result: QuizResultState
 
-    # Project Agent final practical activity output.
     project_result: ProjectResultState
 
-    # Project Assessment Agent final output.
-    project_assessment_result: (ProjectAssessmentResultState)
+    external_resources_result: ( ExternalResourcesResultState)
 
-    # External Resources Agent final output.
-    external_resources_result: ExternalResourcesResultState
-
-    # Workflow tracking.
     status: WorkflowStatus
+    review_stage: (ReviewStage | None)
+    rejection_feedback: (str | None)
+    # Temporary manager feedback used only for
+    # the next regeneration.
+    regeneration_feedback: (
+        str | None
+    )
+    error: Optional[str]
+
+
+# =====================================================================
+# PROJECT ASSESSMENT WORKFLOW TRACKING
+# =====================================================================
+
+ProjectAssessmentWorkflowStatus = Literal[
+    "starting",
+    "running_project_assessment_agent",
+    "ready",
+    "failed",
+]
+
+
+# =====================================================================
+# PROJECT ASSESSMENT WORKFLOW STATE
+# =====================================================================
+
+class ProjectAssessmentState(
+    TypedDict,
+    total=False,
+):
+    workflow_id: str
+
+    project_result: (
+        ProjectResultState
+    )
+
+    submission_type: Literal[
+        "file",
+        "github",
+    ]
+
+    submission_file_name: Optional[str]
+
+    repository_url: Optional[str]
+
+    repository_default_branch: Optional[str]
+
+    student_note: Optional[str]
+
+    project_assessment_result: (
+        ProjectAssessmentResultState
+    )
+
+    assessment_score: (
+        AssessmentScoreState
+    )
+
+    status: (
+        ProjectAssessmentWorkflowStatus
+    )
+
     error: Optional[str]
