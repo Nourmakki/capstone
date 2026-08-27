@@ -718,6 +718,8 @@ Do not add text before or after the JSON.
 
 def run_project_agent(
     agent_input: dict[str, Any],
+    regeneration_feedback: str | None = None,
+    previous_project_result: dict[str, Any] | None = None,
 ) -> dict[str, Any]:
 
     required_fields = {
@@ -758,6 +760,37 @@ def run_project_agent(
         )
     )
 
+    regeneration_context = ""
+
+    if regeneration_feedback:
+        previous_project_text = ""
+
+        if previous_project_result:
+            previous_project_text = f"""
+    PREVIOUS PRACTICAL ACTIVITY
+
+    {json.dumps(
+        previous_project_result,
+        indent=2,
+        ensure_ascii=False,
+    )}
+    """
+
+        regeneration_context = f"""
+    MANAGER REGENERATION FEEDBACK
+
+    {regeneration_feedback}
+
+    {previous_project_text}
+
+    IMPORTANT:
+    Regenerate the practical activity while respecting this feedback
+    when it is compatible with the roadmap node and tutorial evidence.
+
+    The feedback must not override tutorial grounding, prerequisites,
+    activity-type rules, or the required output structure.
+    """
+
     user_message = f"""
 ROADMAP TOPIC
 
@@ -792,6 +825,7 @@ PRACTICAL ACTIVITY EVIDENCE
     indent=2,
     ensure_ascii=False,
 )}
+{regeneration_context}
 """
 
     messages = [

@@ -441,6 +441,8 @@ def validate_selected_resources(
 
 def run_external_resources_agent(
     agent_input: dict[str, Any],
+    regeneration_feedback: str | None = None,
+    previous_external_resources_result: ( dict[str, Any] | None) = None,
 ) -> dict[str, Any]:
     if "node" not in agent_input:
         raise ValueError(
@@ -487,12 +489,44 @@ def run_external_resources_agent(
         )
     )
 
+    regeneration_context = ""
+
+    if regeneration_feedback:
+        previous_resources_text = ""
+
+        if previous_external_resources_result:
+            previous_resources_text = f"""
+    PREVIOUS EXTERNAL RESOURCES
+
+    {json.dumps(
+        previous_external_resources_result,
+        indent=2,
+        ensure_ascii=False,
+    )}
+    """
+
+        regeneration_context = f"""
+    Manager regeneration feedback:
+
+    {regeneration_feedback}
+
+    {previous_resources_text}
+
+    Important:
+    Respect this feedback when selecting replacement resources, but only
+    when it is compatible with the resource-quality and source rules.
+
+    The feedback does not permit inventing URLs or selecting resources
+    outside the supplied candidates.
+    """
+
     user_message = f"""
 Current roadmap node:
 {json.dumps(node, ensure_ascii=False)}
 
 Candidate resources:
 {json.dumps(candidate_evidence, ensure_ascii=False)}
+{regeneration_context}
 
 Task:
 Select the strongest 1 to 3 optional external resources for deeper study of this node.

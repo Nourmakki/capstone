@@ -563,6 +563,8 @@ def build_selected_tutorial_quiz_evidence(
 # =====================================================================
 def run_tutorial_agent(
     agent_input: TutorialAgentInput | dict[str, Any],
+    regeneration_feedback: str | None = None,
+    previous_tutorial_result: dict[str, Any] | None = None,
 ) -> dict[str, Any]:
     """
     Find a strong YouTube tutorial for one roadmap node.
@@ -576,6 +578,43 @@ def run_tutorial_agent(
             "agent_input must be a TutorialAgentInput "
             "or dictionary."
         )
+    regeneration_context = ""
+
+    if regeneration_feedback:
+        previous_tutorial_text = ""
+
+        if previous_tutorial_result:
+            previous_tutorial_text = f"""
+    CURRENT TUTORIAL BEING REGENERATED
+
+    {json.dumps(
+        previous_tutorial_result,
+        indent=2,
+        ensure_ascii=False,
+    )}
+    """
+
+        regeneration_context = f"""
+    MANAGER REGENERATION FEEDBACK
+
+    {regeneration_feedback}
+
+    {previous_tutorial_text}
+
+    IMPORTANT:
+    Treat the manager feedback as a preference for this regeneration.
+
+    Use it when comparing otherwise suitable tutorial candidates.
+
+    For example, feedback about tutorial length should be evaluated using
+    the supplied duration metadata.
+
+    The feedback must not override roadmap relevance, required coverage,
+    educational quality, technical correctness, or evidence rules.
+
+    Use only supplied YouTube candidate evidence.
+    """
+        
 
     candidates = search_youtube_candidates(
         agent_input
@@ -762,6 +801,7 @@ PREREQUISITE NODES
     ensure_ascii=False,
 )}
 
+{regeneration_context}
 
 YOUTUBE CANDIDATE METADATA
 
@@ -973,7 +1013,7 @@ PREREQUISITE NODES
     indent=2,
     ensure_ascii=False,
 )}
-
+{regeneration_context}
 SHORTLISTED YOUTUBE TUTORIAL EVIDENCE
 
 {json.dumps(

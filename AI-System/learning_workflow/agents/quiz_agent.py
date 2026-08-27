@@ -363,6 +363,7 @@ def build_quiz_evidence(
     )
 
 
+
 # =====================================================================
 # RESULT VALIDATION
 # =====================================================================
@@ -822,6 +823,8 @@ Do not add any text before or after the JSON.
 
 def run_quiz_agent(
     agent_input: dict[str, Any],
+    regeneration_feedback: str | None = None,
+    previous_quiz_result: dict[str, Any] | None = None,
 ) -> dict[str, Any]:
 
     required_fields = {
@@ -859,6 +862,37 @@ def run_quiz_agent(
     quiz_evidence = build_quiz_evidence(
         agent_input
     )
+
+    regeneration_context = ""
+
+    if regeneration_feedback:
+        previous_quiz_text = ""
+
+        if previous_quiz_result:
+            previous_quiz_text = f"""
+    PREVIOUS QUIZ
+
+    {json.dumps(
+        previous_quiz_result,
+        indent=2,
+        ensure_ascii=False,
+    )}
+    """
+
+        regeneration_context = f"""
+    MANAGER REGENERATION FEEDBACK
+
+    {regeneration_feedback}
+
+    {previous_quiz_text}
+
+    IMPORTANT:
+    Regenerate the quiz while respecting this feedback when it is
+    compatible with the roadmap node and tutorial evidence.
+
+    The feedback must not override grounding, exactly 10 questions,
+    the required output structure, scoring rules, or validation rules.
+    """
 
     user_message = f"""
 ROADMAP TOPIC
@@ -903,6 +937,8 @@ TUTORIAL QUIZ EVIDENCE
     indent=2,
     ensure_ascii=False,
 )}
+
+{regeneration_context}
 """
 
     messages = [
