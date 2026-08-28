@@ -80,7 +80,11 @@ class ProjectSubmissionTest extends TestCase
             ->assertJsonValidationErrors('github_url');
     }
 
-    public function test_a_non_zip_upload_is_refused(): void
+    /**
+     * A single script or notebook is a legitimate hand-in, not only a zip -
+     * the AI grader reads all of these.
+     */
+    public function test_the_grader_s_other_formats_are_accepted(): void
     {
         Storage::fake('local');
         $this->makeProject();
@@ -89,10 +93,51 @@ class ProjectSubmissionTest extends TestCase
         $this->actingAs($user, 'sanctum')
             ->post("/api/projects/{$this->project->id}/submit", [
                 'github_url' => 'https://github.com/sara/todo',
-                'file'       => UploadedFile::fake()->create('notes.txt', 10, 'text/plain'),
+                'file'       => UploadedFile::fake()->create('solution.py', 10, 'text/plain'),
+            ], ['Accept' => 'application/json'])
+            ->assertStatus(201);
+    }
+
+    /**
+     * .js is not on the grader's list, and it reports as text/plain like every
+     * other text format here - so the content check alone would pass it.
+     */
+    public function test_an_extension_the_grader_cannot_read_is_refused(): void
+    {
+        Storage::fake('local');
+        $this->makeProject();
+        $user = $this->makeStudent();
+
+        $this->actingAs($user, 'sanctum')
+            ->post("/api/projects/{$this->project->id}/submit", [
+                'github_url' => 'https://github.com/sara/todo',
+                'file'       => UploadedFile::fake()->create('app.js', 10, 'text/plain'),
             ], ['Accept' => 'application/json'])
             ->assertStatus(422)
             ->assertJsonValidationErrors('file');
+
+        $this->assertSame(0, Submission::count());
+    }
+
+    /**
+     * The mirror of the above: the name is on the list but the contents are
+     * not, which the grader would only discover when it failed to unzip it.
+     */
+    public function test_a_file_renamed_to_an_accepted_extension_is_refused(): void
+    {
+        Storage::fake('local');
+        $this->makeProject();
+        $user = $this->makeStudent();
+
+        $this->actingAs($user, 'sanctum')
+            ->post("/api/projects/{$this->project->id}/submit", [
+                'github_url' => 'https://github.com/sara/todo',
+                'file'       => UploadedFile::fake()->create('fake.zip', 10, 'text/plain'),
+            ], ['Accept' => 'application/json'])
+            ->assertStatus(422)
+            ->assertJsonValidationErrors('file');
+
+        $this->assertSame(0, Submission::count());
     }
 
     public function test_a_valid_submission_is_stored_with_its_file(): void

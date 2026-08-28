@@ -10,6 +10,13 @@ import {
 // rule, so the browser has to know the real ceiling.
 const MAX_UPLOAD_BYTES = 2 * 1024 * 1024;
 
+// Matches SubmitProjectRequest::ACCEPTED, which in turn matches what the AI
+// grader can read. A zip is still the answer for a multi-file project; the
+// rest save wrapping a single notebook or script in one.
+const ACCEPTED_TYPES = [
+    "zip", "sql", "py", "ipynb", "csv", "png", "jpg", "jpeg", "pdf", "txt", "md",
+];
+
 /**
  * A rejected upload is not always a validation error. When the body exceeds
  * PHP's post_max_size the server discards it and answers 413 with no errors
@@ -28,7 +35,7 @@ function submitErrorMessage(err) {
     }
 
     if (response.status === 413) {
-        return "That ZIP is too large for the server to accept. "
+        return "That file is too large for the server to accept. "
             + `Keep it under ${MAX_UPLOAD_BYTES / 1024 / 1024} MB.`;
     }
 
@@ -68,7 +75,7 @@ function ProjectSubmissionPage() {
         }
 
         if (!file) {
-            alert("Attach your project as a ZIP file.");
+            alert("Attach your work as a file.");
             return;
         }
 
@@ -76,7 +83,7 @@ function ProjectSubmissionPage() {
         // request body, which surfaces as an unexplained failure.
         if (file.size > MAX_UPLOAD_BYTES) {
             alert(
-                `That ZIP is ${(file.size / 1024 / 1024).toFixed(1)} MB. ` +
+                `That file is ${(file.size / 1024 / 1024).toFixed(1)} MB. ` +
                 `The server accepts up to ${MAX_UPLOAD_BYTES / 1024 / 1024} MB.`
             );
             return;
@@ -187,17 +194,22 @@ function ProjectSubmissionPage() {
                             </div>
 
                             <label className="block text-gray-300 mb-2">
-                                Project ZIP <span className="text-red-400">*</span>
+                                Your work <span className="text-red-400">*</span>
                                 <span className="text-gray-500 text-sm">
                                     {" "}(max {MAX_UPLOAD_BYTES / 1024 / 1024} MB)
                                 </span>
                             </label>
                             <input
                                 type="file"
-                                accept=".zip"
+                                accept={ACCEPTED_TYPES.map((t) => `.${t}`).join(",")}
                                 onChange={(e) => setFile(e.target.files[0] ?? null)}
                                 className="w-full p-4 rounded-2xl bg-black/30 border border-white/10"
                             />
+
+                            <p className="text-xs text-gray-500 mt-2">
+                                A ZIP for a whole project, or a single{" "}
+                                {ACCEPTED_TYPES.filter((t) => t !== "zip").join(", ")} file.
+                            </p>
                             {file && (
                                 <p className="text-xs text-[#00b0c2] mt-2">
                                     {file.name} ({Math.round(file.size / 1024)} KB)
@@ -265,7 +277,7 @@ function ProjectSubmissionPage() {
                                             )}
 
                                             {s.has_file && (
-                                                <p className="text-xs text-gray-400 mt-2">ZIP file attached</p>
+                                                <p className="text-xs text-gray-400 mt-2">File attached</p>
                                             )}
 
                                             {/* Appears automatically once the AI service fills ai_score. */}
