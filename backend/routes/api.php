@@ -17,6 +17,7 @@ use App\Http\Controllers\Api\WorkshopController;
 use App\Http\Controllers\Api\ProfileController;
 use App\Http\Controllers\Api\VersionGraphController;
 use App\Http\Controllers\Api\LearningWorkflowController;
+use App\Http\Controllers\Api\MaterialAuthoringController;
 use Illuminate\Support\Facades\Route;
 
 /*
@@ -133,6 +134,17 @@ Route::middleware('auth:sanctum')->group(function () {
         Route::put('/version-nodes/{versionNode}', [VersionGraphController::class, 'update']);
         Route::delete('/version-nodes/{versionNode}', [VersionGraphController::class, 'destroy']);
 
+        // Correcting the quizzes and projects on a module.
+        Route::get('/version-nodes/{versionNode}/material', [MaterialAuthoringController::class, 'index']);
+
+        Route::post('/version-nodes/{versionNode}/quizzes', [MaterialAuthoringController::class, 'storeQuiz']);
+        Route::put('/quizzes/{quiz}', [MaterialAuthoringController::class, 'updateQuiz']);
+        Route::delete('/quizzes/{quiz}', [MaterialAuthoringController::class, 'destroyQuiz']);
+
+        Route::post('/version-nodes/{versionNode}/projects', [MaterialAuthoringController::class, 'storeProject']);
+        Route::put('/projects/{project}', [MaterialAuthoringController::class, 'updateProject']);
+        Route::delete('/projects/{project}', [MaterialAuthoringController::class, 'destroyProject']);
+        
         Route::apiResource('tutorials', TutorialController::class)->except(['index']);
 
         // Feeds the LangGraph AI service its AgentState input.

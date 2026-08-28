@@ -5,6 +5,7 @@ import { useAuth } from "../context/AuthContext";
 import {
     Bot, ClipboardCheck, History, UserRound, LogOut, Menu, X, Layers, Map, Video,
     Sparkles,
+    Pencil,
 } from "lucide-react";
 
 import MaterialAiReview from "./material/MaterialAiReview";
@@ -14,6 +15,7 @@ import AdminRoadmaps from "./admin/AdminRoadmaps";
 import AdminTutorials from "./admin/AdminTutorials";
 import ProfilePage from "./ProfilePage";
 import MaterialLearningReview from "./material/MaterialLearningReview";
+import MaterialEditor from "./material/MaterialEditor";
 
 function MaterialManagerDashboard() {
     const navigate = useNavigate();
@@ -65,6 +67,8 @@ function MaterialManagerDashboard() {
         // Roadmap shape comes from AI Proposals; what fills each module comes
         // from here.
         { id: "learning", label: "Learning Material", icon: <Sparkles size={20} /> },
+        // Fixing what is already on a module, AI-written or not.
+        { id: "edit", label: "Edit Material", icon: <Pencil size={20} /> },
         { id: "queue", label: "Content Queue", icon: <ClipboardCheck size={20} />, badge: pending },
         { id: "roadmaps", label: "Roadmaps", icon: <Map size={20} /> },
         { id: "tutorials", label: "Tutorials", icon: <Video size={20} /> },
@@ -169,6 +173,7 @@ function MaterialManagerDashboard() {
             }`}>
                 {activePage === "ai" && <MaterialAiReview onChanged={loadStats} />}
                 {activePage === "learning" && <MaterialLearningReview onChanged={loadStats} />}
+                {activePage === "edit" && <MaterialEditor onChanged={loadStats} />}
                 {activePage === "queue" && <MaterialQueue onChanged={loadStats} />}
                 {activePage === "roadmaps" && <AdminRoadmaps onChanged={loadStats} />}
                 {activePage === "tutorials" && <AdminTutorials onChanged={loadStats} />}
