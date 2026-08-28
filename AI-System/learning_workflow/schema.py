@@ -455,19 +455,12 @@ class ProjectAgentResult(BaseModel):
     )
 
     node_id: PositiveNodeId
-
     tutorial_resource_id: NonEmptyString
-
     activity_type: PracticalActivityType
-
     title: NonEmptyString
-
     overview: NonEmptyString
-
     activity_context: NonEmptyString
-
     learning_objective: NonEmptyString
-
     tasks: list[
         NonEmptyString
     ] = Field(
