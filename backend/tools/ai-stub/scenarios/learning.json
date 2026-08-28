@@ -1,0 +1,113 @@
+{
+  "_comment": "An approved learning-workflow run for one module, in the exact shape api/learning/schema.py LearningWorkflowResponse describes. Note the terminal status is 'ready', not 'ready_for_commit' - her two workflows use different words for the same state.",
+  "status": "ready",
+  "review_stage": null,
+  "data": {
+    "tutorial_result": {
+      "node_id": 1,
+      "status": "ready",
+      "tutorial": {
+        "resource_type": "youtube_video",
+        "resource_id": "w7ejDZ8SWv8",
+        "title": "React JS Crash Course",
+        "url": "https://www.youtube.com/watch?v=w7ejDZ8SWv8",
+        "channel_name": "Traversy Media",
+        "selection_reason": "Covers JSX, components and props end to end without assuming prior framework experience."
+      },
+      "coverage": {
+        "summary": "A complete introduction to React: JSX syntax, function components, props and rendering lists.",
+        "covered_concepts": ["JSX", "function components", "props"],
+        "practical_skills": ["building a component tree"],
+        "assumed_knowledge": ["basic JavaScript"],
+        "not_covered_node_concepts": []
+      }
+    },
+    "quiz_result": {
+      "node_id": 1,
+      "tutorial_resource_id": "w7ejDZ8SWv8",
+      "max_score": 100,
+      "questions": [
+        {
+          "question_id": "q1",
+          "question_type": "conceptual",
+          "question": "What is React primarily used for?",
+          "options": [
+            { "key": "A", "text": "Managing databases" },
+            { "key": "B", "text": "Building user interfaces" },
+            { "key": "C", "text": "Configuring servers" },
+            { "key": "D", "text": "Compiling C code" }
+          ],
+          "correct_option": "B",
+          "correct_answer_explanation": "React is a library for building user interfaces from components.",
+          "points": 10
+        },
+        {
+          "question_id": "q2",
+          "question_type": "code_analysis",
+          "question": "In JSX, how do you embed a JavaScript expression?",
+          "options": [
+            { "key": "A", "text": "With double braces {{ }}" },
+            { "key": "B", "text": "With single braces { }" },
+            { "key": "C", "text": "With <% %> tags" },
+            { "key": "D", "text": "With $() syntax" }
+          ],
+          "correct_option": "B",
+          "correct_answer_explanation": "JSX evaluates any expression placed inside single curly braces.",
+          "points": 10
+        }
+      ]
+    },
+    "project_result": {
+      "node_id": 1,
+      "tutorial_resource_id": "w7ejDZ8SWv8",
+      "activity_type": "project",
+      "title": "Build a Component-Driven To-Do App",
+      "overview": "Create a small to-do application built from reusable React components.",
+      "activity_context": "You have learned JSX, components and props. This puts all three together in one app.",
+      "learning_objective": "Compose a UI from small components and pass data between them with props.",
+      "tasks": [
+        "Create a TaskList component that renders an array of tasks",
+        "Create a TaskItem component that receives one task as a prop",
+        "Add a form that appends a new task"
+      ],
+      "technical_requirements": [
+        "Use function components only",
+        "Every list item must have a stable key"
+      ],
+      "constraints": [
+        "No state management library",
+        "No UI component library"
+      ],
+      "deliverables": [
+        "A running React app",
+        "A README explaining how to start it"
+      ],
+      "acceptance_criteria": [
+        "Tasks can be added",
+        "Tasks render from an array rather than being hard coded",
+        "The empty state shows a message"
+      ]
+    },
+    "external_resources_result": {
+      "node_id": 1,
+      "resources": [
+        {
+          "title": "Describing the UI",
+          "url": "https://react.dev/learn/describing-the-ui",
+          "resource_type": "official_documentation",
+          "source_name": "React",
+          "description": "The official guide to components, JSX and props.",
+          "why_recommended": "Written by the React team and kept current with the library."
+        },
+        {
+          "title": "React TypeScript Cheatsheet",
+          "url": "https://github.com/typescript-cheatsheets/react",
+          "resource_type": "github_repository",
+          "source_name": "typescript-cheatsheets",
+          "description": "Community reference for typing React components.",
+          "why_recommended": "Useful once the student moves past plain JavaScript."
+        }
+      ]
+    }
+  }
+}

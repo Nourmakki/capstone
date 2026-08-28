@@ -111,13 +111,16 @@ class Handler(BaseHTTPRequestHandler):
         if path.startswith("/roadmap-workflows/"):
             return self.workflow_response(path.rsplit("/", 1)[1])
 
+        if path.startswith("/learning-workflows/"):
+            return self.workflow_response(path.rsplit("/", 1)[1])
+
         self.send_json({"message": "Not found."}, 404)
 
     def do_POST(self):
         path = self.path.rstrip("/")
 
         # Laravel starting a run: mint a fresh id under the current scenario.
-        if path == "/roadmap-workflows":
+        if path in ("/roadmap-workflows", "/learning-workflows"):
             self.drain()
             counter["n"] += 1
             return self.workflow_response(
@@ -126,10 +129,11 @@ class Handler(BaseHTTPRequestHandler):
 
         # Reviewer decisions are accepted and ignored - the scenario file is
         # the source of truth for what the proposal looks like.
-        if path.startswith("/roadmap-workflows/") and path.endswith("/resume"):
-            self.drain()
-            name = path.split("/roadmap-workflows/", 1)[1].rsplit("/", 1)[0]
-            return self.workflow_response(name)
+        for prefix in ("/roadmap-workflows/", "/learning-workflows/"):
+            if path.startswith(prefix) and path.endswith("/resume"):
+                self.drain()
+                name = path.split(prefix, 1)[1].rsplit("/", 1)[0]
+                return self.workflow_response(name)
 
         self.drain()
         self.send_json({"message": "Not found."}, 404)

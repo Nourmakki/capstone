@@ -16,6 +16,7 @@ use App\Http\Controllers\Api\TodoController;
 use App\Http\Controllers\Api\WorkshopController;
 use App\Http\Controllers\Api\ProfileController;
 use App\Http\Controllers\Api\VersionGraphController;
+use App\Http\Controllers\Api\LearningWorkflowController;
 use Illuminate\Support\Facades\Route;
 
 /*
@@ -161,6 +162,11 @@ Route::middleware('auth:sanctum')->group(function () {
         Route::post('/ai-workflows/{workflow}/resume', [AiWorkflowController::class, 'resume']);
         Route::post('/roadmap-versions/{version}/ai-workflows', [AiWorkflowController::class, 'store']);
         Route::post('/ai-workflows/{workflow}/commit', [AiWorkflowController::class, 'commit']);
+        Route::get('/learning-runs', [LearningWorkflowController::class, 'index']);
+        Route::get('/learning-runs/{run}', [LearningWorkflowController::class, 'show']);
+        Route::post('/learning-runs/{run}/resume', [LearningWorkflowController::class, 'resume']);
+        Route::post('/learning-runs/{run}/commit', [LearningWorkflowController::class, 'commit']);
+        Route::post('/version-nodes/{versionNode}/learning-runs', [LearningWorkflowController::class, 'store']);
 
         // Material that reached the database and still needs a decision.
         Route::prefix('material')->group(function () {

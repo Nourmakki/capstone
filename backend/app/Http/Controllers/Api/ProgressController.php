@@ -115,6 +115,33 @@ class ProgressController extends Controller
         return ['done' => $done, 'total' => $total];
     }
 
+    /**
+     * The modules that come before this one, in the shape the AI service
+     * expects, so generated material does not repeat earlier ground.
+     */
+    public static function prerequisiteNodesFor(VersionNode $versionNode): array
+    {
+        $prerequisiteIds = VersionEdge::with('edge')
+            ->where('roadmap_version_id', $versionNode->roadmap_version_id)
+            ->get()
+            ->filter(fn ($ve) => $ve->edge && $ve->edge->to_node_id === $versionNode->node_id)
+            ->map(fn ($ve) => $ve->edge->from_node_id)
+            ->values();
+
+        return VersionNode::with('node')
+            ->where('roadmap_version_id', $versionNode->roadmap_version_id)
+            ->whereIn('node_id', $prerequisiteIds)
+            ->get()
+            ->map(fn ($vn) => [
+                'id'          => $vn->node_id,
+                'title'       => $vn->node->title,
+                'description' => $vn->node->description,
+                'difficulty'  => $vn->node->difficulty,
+            ])
+            ->values()
+            ->all();
+    }
+
     public static function completionBlockers(
         VersionNode $versionNode,
         Student $student,
