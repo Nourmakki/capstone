@@ -100,10 +100,10 @@ function MaterialManagerDashboard() {
                 />
             )}
 
-            <aside className={`fixed top-0 left-0 h-screen z-40 border-r border-white/10 bg-black/40 backdrop-blur-xl flex flex-col px-6 pt-6 pb-6 transition-all duration-300 w-72 ${
+            <aside className={`fixed top-0 left-0 h-screen z-40 border-r border-white/10 bg-black/40 backdrop-blur-xl flex flex-col px-6 pt-6 pb-6 short:pt-4 short:pb-4 shorter:pt-3 shorter:pb-3 transition-all duration-300 w-72 ${
                 collapsed ? "lg:w-24" : "lg:w-72"
             } ${drawerOpen ? "translate-x-0" : "-translate-x-full"} lg:translate-x-0`}>
-                <div className="shrink-0 mb-6">
+                <div className="shrink-0 mb-6 short:mb-4 shorter:mb-2">
                     <div className="flex justify-end">
                         <button onClick={() => setCollapsed(!collapsed)}
                             className="hidden lg:block p-2 rounded-lg hover:bg-white/10 transition">
@@ -122,21 +122,28 @@ function MaterialManagerDashboard() {
                             <Layers size={28} className="text-[#0097a7]" />
                         </div>
                     ) : (
-                        <div className="mt-2">
-                            <h1 className="text-3xl font-black text-[#0097a7]">CS Mastery</h1>
-                            <p className="text-sm text-gray-500 mt-1">Material Manager</p>
+                        <div className="mt-2 shorter:mt-0">
+                            <h1 className="text-3xl short:text-2xl font-black text-[#0097a7]">CS Mastery</h1>
+
+                            {/* The role is a nicety, not a control. On a short
+                                screen the eight nav items need the space more. */}
+                            <p className="text-sm text-gray-500 mt-1 shorter:hidden">Material Manager</p>
                         </div>
                     )}
                 </div>
 
                 <div className="flex-1 min-h-0 flex flex-col">
-                    <nav className="flex-1 min-h-0 overflow-y-auto overscroll-contain space-y-2 pr-1">
+                    {/* The items share out whatever height is left rather than
+                        each claiming a fixed 46px. On a tall screen they settle
+                        at their max and nothing moves; on a short one they give
+                        up padding down to 36px before the nav has to scroll. */}
+                    <nav className="flex-1 min-h-0 overflow-y-auto overscroll-contain flex flex-col gap-2 shorter:gap-1 pr-1">
                         {navItems.map((item) => (
                             <button key={item.id} title={item.label}
                                 onClick={() => go(item.id)}
-                                className={`w-full flex items-center ${
+                                className={`w-full flex-1 min-h-[36px] max-h-[46px] flex items-center ${
                                     collapsed ? "justify-center" : "gap-3"
-                                } px-4 py-2.5 rounded-2xl transition ${
+                                } px-4 rounded-2xl transition ${
                                     activePage === item.id
                                         ? "bg-[#0097a7]/10 border border-[#0097a7]/20 text-[#00b0c2]"
                                         : "hover:bg-white/5 text-gray-300"
@@ -156,11 +163,11 @@ function MaterialManagerDashboard() {
                         ))}
                     </nav>
 
-                    <div className="shrink-0 mt-6">
+                    <div className="shrink-0 mt-6 short:mt-4 shorter:mt-2">
                         <button title="Logout" onClick={handleLogout}
                             className={`w-full flex items-center ${
                                 collapsed ? "justify-center" : "justify-center gap-3"
-                            } py-3 rounded-2xl border border-red-500/20 bg-red-500/5 text-red-400 hover:bg-red-500/10 hover:border-red-500/40 transition`}>
+                            } py-3 short:py-2.5 rounded-2xl border border-red-500/20 bg-red-500/5 text-red-400 hover:bg-red-500/10 hover:border-red-500/40 transition`}>
                             <LogOut size={18} />
                             {!collapsed && "Logout"}
                         </button>
