@@ -24,6 +24,17 @@ class MaterialAuthoringController extends Controller
     /** Only these can be graded without a human. */
     private const QUESTION_TYPES = ['multiple_choice', 'true_false', 'short_answer'];
 
+    /**
+     * How many options each type carries. A multiple choice question with two
+     * options is a true/false question wearing the wrong label, and one with
+     * five reads badly next to the rest, so the count is fixed rather than
+     * left to whoever is typing.
+     */
+    private const OPTION_COUNT = [
+        'multiple_choice' => 4,
+        'true_false'      => 2,
+    ];
+
     private const DIFFICULTIES = ['beginner', 'intermediate', 'advanced'];
 
     /**
@@ -178,8 +189,12 @@ class MaterialAuthoringController extends Controller
             // A chooseable question whose answer is not among its options can
             // never be passed, and nothing else would catch it.
             if ($question['type'] !== 'short_answer') {
-                if (empty($options)) {
-                    abort(422, "\"{$question['question']}\" needs at least one option.");
+                $expected = self::OPTION_COUNT[$question['type']];
+
+                // Blanks were stripped above, so a half-filled set of four
+                // arrives here as a short one and is caught by the same check.
+                if (count($options) !== $expected) {
+                    abort(422, "\"{$question['question']}\" needs exactly {$expected} options.");
                 }
 
                 $matches = array_filter(

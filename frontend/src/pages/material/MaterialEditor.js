@@ -10,11 +10,24 @@ const QUESTION_TYPES = [
     { id: "short_answer", label: "Short answer" },
 ];
 
+// Mirrors MaterialAuthoringController::OPTION_COUNT. Short answer has none.
+const OPTION_COUNT = { multiple_choice: 4, true_false: 2 };
+
+/**
+ * The slots a question of this type gets. Switching type resets them because
+ * the two sets never carry over sensibly - True and False are not the start of
+ * a multiple choice question.
+ */
+const optionsForType = (type) =>
+    type === "true_false" ? ["True", "False"]
+    : type === "short_answer" ? []
+    : Array(OPTION_COUNT.multiple_choice).fill("");
+
 const blankQuestion = () => ({
     id: null,
     question: "",
     type: "multiple_choice",
-    options: ["", "", "", ""],
+    options: optionsForType("multiple_choice"),
     answer: "",
 });
 
@@ -282,10 +295,19 @@ function MaterialEditor({ onChanged }) {
     const publishedVersion = versions.find((v) => v.status === "Published");
     const editingOffstage = selectedVersion && selectedVersion.status !== "Published";
 
+    // Every option filled, not just some - the server refuses a short set, and
+    // finding that out on save is worse than a disabled button.
+    const filledOptions = (q) => q.options.filter((o) => o.trim()).length;
+
+    const questionValid = (q) =>
+        q.question.trim()
+        && q.answer.trim()
+        && (q.type === "short_answer" || filledOptions(q) === OPTION_COUNT[q.type]);
+
     const quizValid = quizDraft
         && quizDraft.title.trim()
         && quizDraft.questions.length > 0
-        && quizDraft.questions.every((q) => q.question.trim() && q.answer.trim());
+        && quizDraft.questions.every(questionValid);
 
     const projectValid = projectDraft
         && projectDraft.title.trim()
@@ -446,11 +468,7 @@ function MaterialEditor({ onChanged }) {
                                         <select value={q.type}
                                             onChange={(e) => patchQuestion(qi, {
                                                 type: e.target.value,
-                                                // True/false has exactly two options; anything
-                                                // else the manager typed is not reusable.
-                                                options: e.target.value === "true_false"
-                                                    ? ["True", "False"]
-                                                    : q.options,
+                                                options: optionsForType(e.target.value),
                                                 answer: "",
                                             })}
                                             className="p-3 rounded-xl bg-black/40 border border-white/10 text-white mb-4">
@@ -471,7 +489,9 @@ function MaterialEditor({ onChanged }) {
                                         ) : (
                                             <div>
                                                 <label className="block text-xs text-gray-500 mb-2">
-                                                    Options — click one to mark it correct
+                                                    {q.type === "multiple_choice"
+                                                        ? "All four options — click one to mark it correct"
+                                                        : "Options — click one to mark it correct"}
                                                 </label>
 
                                                 <div className="space-y-2">
@@ -503,6 +523,24 @@ function MaterialEditor({ onChanged }) {
                                                         );
                                                     })}
                                                 </div>
+
+                                                {/* Both directions, because older material can
+                                                    arrive with more than four and a disabled
+                                                    Save button with no reason is a dead end. */}
+                                                {filledOptions(q) < OPTION_COUNT[q.type] && (
+                                                    <p className="text-xs text-yellow-300 mt-2">
+                                                        {OPTION_COUNT[q.type] - filledOptions(q)} more
+                                                        {" "}option{OPTION_COUNT[q.type] - filledOptions(q) === 1 ? "" : "s"}
+                                                        {" "}to fill in.
+                                                    </p>
+                                                )}
+
+                                                {filledOptions(q) > OPTION_COUNT[q.type] && (
+                                                    <p className="text-xs text-yellow-300 mt-2">
+                                                        Only {OPTION_COUNT[q.type]} options are allowed.
+                                                        Clear {filledOptions(q) - OPTION_COUNT[q.type]} of them.
+                                                    </p>
+                                                )}
 
                                                 {!q.answer.trim() && (
                                                     <p className="text-xs text-yellow-300 mt-2">
