@@ -9,6 +9,7 @@ use App\Models\Submission;
 use Illuminate\Foundation\Testing\RefreshDatabase;
 use Illuminate\Http\UploadedFile;
 use Illuminate\Support\Facades\Storage;
+use PHPUnit\Framework\Attributes\DataProvider;
 use Tests\Concerns\BuildsPlatform;
 use Tests\TestCase;
 
@@ -37,30 +38,58 @@ class ProjectSubmissionTest extends TestCase
     }
 
     // -----------------------------------------------------------------
-    // Both fields are required
+    // A repository, a file, or both - but not neither
     // -----------------------------------------------------------------
 
-    public function test_a_submission_needs_both_a_repository_and_an_archive(): void
+    public function test_a_repository_link_alone_is_a_submission(): void
     {
         Storage::fake('local');
         $this->makeProject();
         $user = $this->makeStudent();
 
-        // The repository is what a reviewer reads; the archive is the fixed
-        // snapshot of what was handed in. Neither substitutes for the other.
         $this->actingAs($user, 'sanctum')
             ->postJson("/api/projects/{$this->project->id}/submit", [
                 'github_url' => 'https://github.com/sara/todo',
             ])
-            ->assertStatus(422)
-            ->assertJsonValidationErrors('file');
+            ->assertStatus(201);
+
+        $submission = Submission::sole();
+        $this->assertSame('https://github.com/sara/todo', $submission->github_url);
+        $this->assertNull($submission->file_path);
+    }
+
+    public function test_a_file_alone_is_a_submission(): void
+    {
+        Storage::fake('local');
+        $this->makeProject();
+        $user = $this->makeStudent();
 
         $this->actingAs($user, 'sanctum')
             ->post("/api/projects/{$this->project->id}/submit", [
                 'file' => $this->zip(),
             ], ['Accept' => 'application/json'])
+            ->assertStatus(201);
+
+        $submission = Submission::sole();
+        $this->assertNull($submission->github_url);
+        $this->assertNotNull($submission->file_path);
+        Storage::disk('local')->assertExists($submission->file_path);
+    }
+
+    public function test_a_submission_with_neither_is_refused(): void
+    {
+        Storage::fake('local');
+        $this->makeProject();
+        $user = $this->makeStudent();
+
+        // Both fields report the failure, because the student is missing one
+        // requirement rather than two.
+        $this->actingAs($user, 'sanctum')
+            ->postJson("/api/projects/{$this->project->id}/submit", [
+                'notes' => 'I did the work, honest.',
+            ])
             ->assertStatus(422)
-            ->assertJsonValidationErrors('github_url');
+            ->assertJsonValidationErrors(['github_url', 'file']);
 
         $this->assertSame(0, Submission::count());
     }
@@ -96,6 +125,65 @@ class ProjectSubmissionTest extends TestCase
                 'file'       => UploadedFile::fake()->create('solution.py', 10, 'text/plain'),
             ], ['Accept' => 'application/json'])
             ->assertStatus(201);
+    }
+
+    /**
+     * The stored file keeps the extension it was submitted with.
+     *
+     * Laravel's store() names the file from the detected content type, so every
+     * text format on the list used to land on disk as .txt. The grader
+     * dispatches on the extension: a notebook arriving as .txt is read as plain
+     * text, and validating the format is pointless if storage then erases it.
+     */
+    #[DataProvider('acceptedTextFormats')]
+    public function test_the_stored_file_keeps_its_extension(string $filename, string $expected): void
+    {
+        Storage::fake('local');
+        $this->makeProject();
+        $user = $this->makeStudent();
+
+        $this->actingAs($user, 'sanctum')
+            ->post("/api/projects/{$this->project->id}/submit", [
+                'github_url' => 'https://github.com/sara/todo',
+                // text/plain is what all of these genuinely report as; that is
+                // the whole reason the extension was being lost.
+                'file'       => UploadedFile::fake()->create($filename, 10, 'text/plain'),
+            ], ['Accept' => 'application/json'])
+            ->assertStatus(201);
+
+        $this->assertSame($expected, pathinfo(Submission::sole()->file_path, PATHINFO_EXTENSION));
+    }
+
+    /** @return array<string,array{string,string}> */
+    public static function acceptedTextFormats(): array
+    {
+        return [
+            'python'    => ['solution.py', 'py'],
+            'sql'       => ['schema.sql', 'sql'],
+            'notebook'  => ['analysis.ipynb', 'ipynb'],
+            'markdown'  => ['README.md', 'md'],
+            'plaintext' => ['notes.txt', 'txt'],
+        ];
+    }
+
+    /**
+     * An uppercase extension is still the same format, and the grader's list is
+     * lowercase.
+     */
+    public function test_the_stored_extension_is_lowercased(): void
+    {
+        Storage::fake('local');
+        $this->makeProject();
+        $user = $this->makeStudent();
+
+        $this->actingAs($user, 'sanctum')
+            ->post("/api/projects/{$this->project->id}/submit", [
+                'github_url' => 'https://github.com/sara/todo',
+                'file'       => UploadedFile::fake()->create('SOLUTION.PY', 10, 'text/plain'),
+            ], ['Accept' => 'application/json'])
+            ->assertStatus(201);
+
+        $this->assertSame('py', pathinfo(Submission::sole()->file_path, PATHINFO_EXTENSION));
     }
 
     /**

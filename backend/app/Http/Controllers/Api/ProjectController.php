@@ -10,6 +10,7 @@ use App\Models\Student;
 use App\Models\Submission;
 use Illuminate\Http\Request;
 use Illuminate\Support\Facades\Storage;
+use Illuminate\Support\Str;
 
 class ProjectController extends Controller
 {
@@ -50,9 +51,9 @@ class ProjectController extends Controller
 
         $student = $this->studentFor($request);
 
+        // Private disk - served only through the download route below.
         $path = $request->hasFile('file')
-            // Private disk - served only through the download route below.
-            ? $request->file('file')->store('submissions')
+            ? $this->storeSubmission($request->file('file'))
             : null;
 
         $submission = Submission::create([
@@ -68,6 +69,28 @@ class ProjectController extends Controller
             'message'    => 'Project submitted.',
             'submission' => $this->submissionPayload($submission),
         ], 201);
+    }
+
+    /**
+     * Store an upload under a random name that keeps the extension the student
+     * actually submitted.
+     *
+     * Laravel's store() names the file from the *detected* content type, and
+     * every text format we accept reports as text/plain - so .py, .sql, .md and
+     * .ipynb all landed on disk as .txt. The AI grader dispatches on the
+     * extension, which meant validating the format and then discarding the one
+     * fact the grader needs.
+     *
+     * The name itself stays random rather than the student's: two people
+     * submitting solution.py must not collide, and a filename off the wire is
+     * not something to write to disk unexamined. Only the extension is carried
+     * over, and SubmitProjectRequest has already pinned that to ACCEPTED.
+     */
+    private function storeSubmission(\Illuminate\Http\UploadedFile $file): string
+    {
+        $extension = strtolower($file->getClientOriginalExtension());
+
+        return $file->storeAs('submissions', Str::random(40) . '.' . $extension);
     }
 
     /**

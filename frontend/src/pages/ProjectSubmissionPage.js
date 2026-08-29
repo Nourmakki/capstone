@@ -31,7 +31,9 @@ function submitErrorMessage(err) {
 
     const errors = response.data?.errors;
     if (errors) {
-        return Object.values(errors).flat().join("\n");
+        // Deduplicated: a hand-in with neither a link nor a file fails on both
+        // fields, and printing one sentence twice reads like two problems.
+        return [...new Set(Object.values(errors).flat())].join("\n");
     }
 
     if (response.status === 413) {
@@ -68,20 +70,19 @@ function ProjectSubmissionPage() {
 
     useEffect(() => { load(); }, [load]);
 
-    const handleSubmit = async () => {
-        if (!githubUrl.trim()) {
-            alert("Add the link to your GitHub repository.");
-            return;
-        }
+    // Either one stands on its own, so the only thing that is not a
+    // submission is neither of them.
+    const hasSomethingToHandIn = Boolean(githubUrl.trim() || file);
 
-        if (!file) {
-            alert("Attach your work as a file.");
+    const handleSubmit = async () => {
+        if (!hasSomethingToHandIn) {
+            alert("Hand in a repository link, a file, or both.");
             return;
         }
 
         // Caught here so the server does not silently discard the whole
         // request body, which surfaces as an unexplained failure.
-        if (file.size > MAX_UPLOAD_BYTES) {
+        if (file && file.size > MAX_UPLOAD_BYTES) {
             alert(
                 `That file is ${(file.size / 1024 / 1024).toFixed(1)} MB. ` +
                 `The server accepts up to ${MAX_UPLOAD_BYTES / 1024 / 1024} MB.`
@@ -179,8 +180,13 @@ function ProjectSubmissionPage() {
                                 <h2 className="text-2xl font-bold">Submit Your Work</h2>
                             </div>
 
+                            <p className="text-sm text-gray-400 -mt-3 mb-6">
+                                Give a repository link, attach a file, or both —
+                                whichever fits your work.
+                            </p>
+
                             <label className="block text-gray-300 mb-2">
-                                GitHub Repository Link <span className="text-red-400">*</span>
+                                GitHub Repository Link
                             </label>
                             <div className="relative mb-6">
                                 <GitBranch size={18} className="absolute left-4 top-4 text-gray-400" />
@@ -194,7 +200,7 @@ function ProjectSubmissionPage() {
                             </div>
 
                             <label className="block text-gray-300 mb-2">
-                                Your work <span className="text-red-400">*</span>
+                                Your work
                                 <span className="text-gray-500 text-sm">
                                     {" "}(max {MAX_UPLOAD_BYTES / 1024 / 1024} MB)
                                 </span>
@@ -228,9 +234,11 @@ function ProjectSubmissionPage() {
 
                             <button
                                 onClick={handleSubmit}
-                                disabled={submitting}
+                                disabled={submitting || !hasSomethingToHandIn}
                                 className={`w-full py-4 rounded-2xl font-bold transition ${
-                                    submitting ? "bg-gray-700 text-gray-400" : "bg-[#0097a7] text-black hover:scale-[1.01]"
+                                    submitting || !hasSomethingToHandIn
+                                        ? "bg-gray-700 text-gray-400 cursor-not-allowed"
+                                        : "bg-[#0097a7] text-black hover:scale-[1.01]"
                                 }`}
                             >
                                 {submitting ? "Submitting..." : "Submit Project"}

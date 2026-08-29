@@ -8,7 +8,7 @@ class SubmitProjectRequest extends FormRequest
 {
     /**
      * What the AI grader can actually read, from
-     * AI-System/learning_workflow/tools/submission_processor.py
+     * AI-System/project_assessment_workflow/tools/submission_processor.py
      * ALLOWED_SUBMISSION_EXTENSIONS. Accepting anything else would take a
      * submission the grader then refuses.
      *
@@ -26,12 +26,15 @@ class SubmitProjectRequest extends FormRequest
 
     public function rules(): array
     {
-        // Both are required: the repository is what a reviewer reads, and the
-        // file is the fixed snapshot of what was actually handed in.
+        // Either one is a hand-in on its own. A repository suits work that
+        // lives in git; a file suits a single notebook or a project that was
+        // never pushed anywhere. Requiring both turned one of them into
+        // busywork for whichever student had only the other.
         return [
-            'github_url' => ['required', 'url', 'max:255'],
+            'github_url' => ['required_without:file', 'nullable', 'url', 'max:255'],
             'file'       => [
-                'required',
+                'required_without:github_url',
+                'nullable',
                 'file',
                 // Both checks are needed. mimes reads the file's contents, so
                 // a renamed archive is caught - but every text format here
@@ -88,8 +91,13 @@ class SubmitProjectRequest extends FormRequest
     public function messages(): array
     {
         return [
-            'github_url.required' => 'Add the link to your GitHub repository.',
-            'file.required'       => 'Attach your work as a file.',
+            // Both fire together when the form is empty, so they say the same
+            // thing: the student is missing one requirement, not two.
+            'github_url.required_without' => 'Hand in a repository link, a file, or both.',
+            'file.required_without'       => 'Hand in a repository link, a file, or both.',
+            // The default names the field as "github url", and the usual
+            // mistake is a pasted address with no https:// in front of it.
+            'github_url.url'              => 'That is not a full link. It should start with https://.',
             'file.mimes'          => 'That file type is not accepted. Use a ZIP, or one of: '
                                      . implode(', ', self::ACCEPTED) . '.',
             'file.extensions'     => 'That file type is not accepted. Use a ZIP, or one of: '
