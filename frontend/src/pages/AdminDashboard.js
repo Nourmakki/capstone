@@ -3,7 +3,7 @@ import { useNavigate } from "react-router-dom";
 import api from "../api";
 import { useAuth } from "../context/AuthContext";
 import {
-    LayoutDashboard, Users, LogOut, Menu, X, ShieldCheck,
+    LayoutDashboard, Users, LogOut, Menu, X,
 } from "lucide-react";
 
 import AdminOverview from "./admin/AdminOverview";
@@ -61,6 +61,7 @@ function AdminDashboard() {
                     <Menu size={22} />
                 </button>
 
+                <img src="/logo-mark.png" alt="" className="w-8 h-8 object-contain" />
                 <h1 className="text-xl font-black text-[#0097a7]">CS Mastery</h1>
             </header>
 
@@ -90,11 +91,14 @@ function AdminDashboard() {
 
                     {collapsed ? (
                         <div className="flex flex-col items-center mt-2">
-                            <ShieldCheck size={28} className="text-[#0097a7]" />
+                            <img src="/logo-mark.png" alt="CS Mastery" className="w-8 h-8 object-contain" />
                         </div>
                     ) : (
                         <div className="mt-2">
-                            <h1 className="text-3xl font-black text-[#0097a7]">CS Mastery</h1>
+                            <div className="flex items-center gap-2.5">
+                                <img src="/logo-mark.png" alt="" className="w-9 h-9 shrink-0 object-contain" />
+                                <h1 className="text-3xl font-black text-[#0097a7]">CS Mastery</h1>
+                            </div>
                             <p className="text-sm text-gray-500 mt-1">Admin Panel</p>
                         </div>
                     )}

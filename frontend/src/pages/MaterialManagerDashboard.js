@@ -3,7 +3,7 @@ import { useNavigate } from "react-router-dom";
 import api from "../api";
 import { useAuth } from "../context/AuthContext";
 import {
-    Bot, ClipboardCheck, History, UserRound, LogOut, Menu, X, Layers, Map, Video,
+    Bot, ClipboardCheck, History, UserRound, LogOut, Menu, X, Map, Video,
     Sparkles,
     Pencil,
 } from "lucide-react";
@@ -90,6 +90,7 @@ function MaterialManagerDashboard() {
                     <Menu size={22} />
                 </button>
 
+                <img src="/logo-mark.png" alt="" className="w-8 h-8 object-contain" />
                 <h1 className="text-xl font-black text-[#0097a7]">CS Mastery</h1>
             </header>
 
@@ -119,11 +120,17 @@ function MaterialManagerDashboard() {
 
                     {collapsed ? (
                         <div className="flex flex-col items-center mt-2">
-                            <Layers size={28} className="text-[#0097a7]" />
+                            <img src="/logo-mark.png" alt="CS Mastery" className="w-8 h-8 object-contain" />
                         </div>
                     ) : (
                         <div className="mt-2 shorter:mt-0">
-                            <h1 className="text-3xl short:text-2xl font-black text-[#0097a7]">CS Mastery</h1>
+                            {/* Beside the title, not above it: stacking would add
+                                ~48 px back to a sidebar that was just trimmed to
+                                fit short screens. */}
+                            <div className="flex items-center gap-2.5">
+                                <img src="/logo-mark.png" alt="" className="w-9 h-9 shrink-0 object-contain" />
+                                <h1 className="text-3xl short:text-2xl font-black text-[#0097a7]">CS Mastery</h1>
+                            </div>
 
                             {/* The role is a nicety, not a control. On a short
                                 screen the eight nav items need the space more. */}

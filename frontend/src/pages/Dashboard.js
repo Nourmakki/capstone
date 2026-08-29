@@ -58,6 +58,7 @@ function Dashboard() {
                     <Menu size={22} />
                 </button>
 
+                <img src="/logo-mark.png" alt="" className="w-8 h-8 object-contain" />
                 <h1 className="text-xl font-black text-[#0097a7]">CS Mastery</h1>
             </header>
 
@@ -109,9 +110,13 @@ function Dashboard() {
                         </div>
 
                         <div className="mt-2">
-                            <h1 className="text-3xl font-black text-[#0097a7]">
-                                CS Mastery
-                            </h1>
+                            <div className="flex items-center gap-2.5">
+                                <img src="/logo-mark.png" alt="" className="w-9 h-9 shrink-0 object-contain" />
+
+                                <h1 className="text-3xl font-black text-[#0097a7]">
+                                    CS Mastery
+                                </h1>
+                            </div>
 
                             <p className="text-sm text-gray-500 mt-1">
                                 Student Dashboard
