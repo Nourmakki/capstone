@@ -10,6 +10,9 @@ module.exports = {
         // up its padding on a short screen while leaving a tall one untouched.
         short: { raw: "(max-height: 780px)" },
         shorter: { raw: "(max-height: 660px)" },
+        // A small desktop window or a phone held sideways. Used by the login
+        // card, which is one tall column with nothing to give up but padding.
+        tiny: { raw: "(max-height: 520px)" },
       },
     },
   },
