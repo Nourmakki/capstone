@@ -64,7 +64,7 @@ class LearningController extends Controller
                 'id'             => $versionNode->roadmapVersion->id,
                 'version_number' => $versionNode->roadmapVersion->version_number,
             ],
-            'tutorials'          => $versionNode->tutorials,
+            'tutorials'          => $this->tutorialsWithProgress($request, $versionNode),
             'quizzes'            => $versionNode->quizzes,
             'projects'           => $versionNode->projects,
             'external_resources' => $versionNode->externalResources,
@@ -145,6 +145,32 @@ class LearningController extends Controller
             'percent_complete' => $total > 0
                 ? (int) round((count($completed) / $total) * 100)
                 : 0,
+        ]);
+    }
+
+    /**
+     * The module's tutorials, each carrying whether this student has marked it
+     * watched, so the button knows which state to render.
+     *
+     * Staff have no student record; for them nothing is marked, and the page
+     * shows the tutorials without progress rather than failing.
+     */
+    private function tutorialsWithProgress(Request $request, VersionNode $versionNode)
+    {
+        $student = Student::where('user_id', $request->user()->id)->first();
+
+        $watched = $student
+            ? ProgressController::watchedTutorialIds($versionNode->tutorials, $student)
+            : [];
+
+        return $versionNode->tutorials->map(fn ($tutorial) => [
+            'id'              => $tutorial->id,
+            'version_node_id' => $tutorial->version_node_id,
+            'title'           => $tutorial->title,
+            'url'             => $tutorial->url,
+            'description'     => $tutorial->description,
+            'source_name'     => $tutorial->source_name,
+            'completed'       => in_array($tutorial->id, $watched, true),
         ]);
     }
 

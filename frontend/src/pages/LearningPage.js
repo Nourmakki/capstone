@@ -41,6 +41,32 @@ function LearningPage() {
         load();
     }, [versionNodeId]);
 
+    // Reloads the whole module rather than patching the one tutorial, because
+    // marking it changes the completion blockers and the progress count too.
+    const reload = async () => {
+        const response = await api.get(`/version-nodes/${versionNodeId}`);
+        setDetail(response.data);
+    };
+
+    const toggleTutorial = async (tutorial) => {
+        setSaving(true);
+
+        try {
+            if (tutorial.completed) {
+                await api.delete(`/tutorials/${tutorial.id}/complete`);
+            } else {
+                await api.post(`/tutorials/${tutorial.id}/complete`);
+            }
+
+            await reload();
+        } catch (err) {
+            console.error(err);
+            alert(err.response?.data?.message ?? "Could not update that tutorial.");
+        } finally {
+            setSaving(false);
+        }
+    };
+
     const handleCompleteModule = async () => {
         setSaving(true);
 
@@ -196,25 +222,55 @@ function LearningPage() {
                                     <EmptyState text="No tutorials for this module yet." />
                                 ) : (
                                     detail.tutorials.map((tutorial) => (
-                                        <div key={tutorial.id} className="rounded-3xl border border-white/10 bg-white/[0.03] p-6">
-                                            <div className="flex items-center justify-between gap-4">
-                                                <div>
-                                                    <h3 className="text-xl font-bold">{tutorial.title}</h3>
+                                        <div key={tutorial.id} className={`rounded-3xl border p-6 transition ${
+                                            tutorial.completed
+                                                ? "border-[#0097a7]/40 bg-[#0097a7]/[0.07]"
+                                                : "border-white/10 bg-white/[0.03]"
+                                        }`}>
+                                            <div className="flex flex-col lg:flex-row lg:items-center justify-between gap-4">
+                                                <div className="min-w-0">
+                                                    <div className="flex items-center gap-3 flex-wrap">
+                                                        <h3 className="text-xl font-bold">{tutorial.title}</h3>
+
+                                                        {tutorial.completed && (
+                                                            <span className="flex items-center gap-1 text-xs px-3 py-1 rounded-full border border-[#0097a7]/40 bg-[#0097a7]/10 text-[#00b0c2]">
+                                                                <CheckCircle2 size={12} /> Done
+                                                            </span>
+                                                        )}
+                                                    </div>
+
                                                     <p className="text-gray-400 mt-2">{tutorial.description}</p>
                                                     <div className="mt-4 flex gap-3 text-sm">
                                                         <span className="text-[#00b0c2]">{tutorial.source_name}</span>
                                                     </div>
                                                 </div>
 
-                                                <a
-                                                    href={tutorial.url}
-                                                    target="_blank"
-                                                    rel="noreferrer"
-                                                    className="flex items-center gap-2 px-5 py-3 rounded-2xl bg-[#0097a7] text-black font-semibold shrink-0"
-                                                >
-                                                    <PlayCircle size={18} />
-                                                    Watch
-                                                </a>
+                                                <div className="flex gap-3 shrink-0">
+                                                    <a
+                                                        href={tutorial.url}
+                                                        target="_blank"
+                                                        rel="noreferrer"
+                                                        className="flex items-center gap-2 px-5 py-3 rounded-2xl bg-[#0097a7] text-black font-semibold"
+                                                    >
+                                                        <PlayCircle size={18} />
+                                                        Watch
+                                                    </a>
+
+                                                    {/* Nothing can tell whether a video was watched, so
+                                                        this is the student's own word for it. */}
+                                                    <button
+                                                        onClick={() => toggleTutorial(tutorial)}
+                                                        disabled={saving}
+                                                        className={`flex items-center gap-2 px-5 py-3 rounded-2xl border font-semibold transition ${
+                                                            tutorial.completed
+                                                                ? "border-[#0097a7]/40 text-[#00b0c2] hover:bg-[#0097a7]/10"
+                                                                : "border-white/15 text-gray-300 hover:border-[#0097a7]/40 hover:text-[#00b0c2]"
+                                                        } ${saving ? "opacity-50 cursor-not-allowed" : ""}`}
+                                                    >
+                                                        <CheckCircle2 size={18} />
+                                                        {tutorial.completed ? "Undo" : "Mark as done"}
+                                                    </button>
+                                                </div>
                                             </div>
                                         </div>
                                     ))
@@ -299,7 +355,14 @@ function LearningPage() {
                             <h2 className="text-2xl font-bold mb-6">Module Status</h2>
 
                             <div className="space-y-5">
-                                <StatusRow label="Tutorials" done={detail.tutorials.length > 0} />
+                                {/* Every tutorial marked, not merely "this module
+                                    has tutorials". An empty list counts as done
+                                    because there is nothing outstanding, which is
+                                    what completionBlockers decides too. */}
+                                <StatusRow
+                                    label="Tutorials"
+                                    done={detail.tutorials.every((t) => t.completed)}
+                                />
                                 <StatusRow label="Quiz" done={detail.quizzes.length > 0} />
                                 <StatusRow label="Project" done={detail.projects.length > 0} />
                                 <StatusRow label="Prerequisites" done={detail.is_unlocked} />

@@ -10,6 +10,8 @@ use App\Models\UserRoadmapProgress;
 use App\Models\Student;
 use Illuminate\Http\Request;
 use App\Models\RoadmapVersion;
+use App\Models\Tutorial;
+use App\Models\TutorialCompletion;
 use App\Models\VersionNode;
 use App\Models\VersionEdge;
 use App\Models\Submission;
@@ -88,6 +90,17 @@ class ProgressController extends Controller
         $total = 0;
         $done  = 0;
 
+        $tutorials = self::approvedTutorials($versionNode);
+        $watched   = self::watchedTutorialIds($tutorials, $student);
+
+        foreach ($tutorials as $tutorial) {
+            $total++;
+
+            if (in_array($tutorial->id, $watched, true)) {
+                $done++;
+            }
+        }
+
         foreach ($versionNode->quizzes as $quiz) {
             $total++;
 
@@ -113,6 +126,75 @@ class ProgressController extends Controller
         }
 
         return ['done' => $done, 'total' => $total];
+    }
+
+    /**
+     * A student says they have watched a tutorial.
+     *
+     * Idempotent: pressing it twice is the same fact, and a duplicate would
+     * only trip the unique index.
+     */
+    public function completeTutorial(Request $request, Tutorial $tutorial)
+    {
+        $student = Student::where('user_id', $request->user()->id)->firstOrFail();
+
+        // An unapproved tutorial is not visible to a student, so it is not
+        // theirs to mark either.
+        if (! $tutorial->isApproved()) {
+            return response()->json(['message' => 'That tutorial is not available.'], 404);
+        }
+
+        TutorialCompletion::firstOrCreate([
+            'student_id'  => $student->id,
+            'tutorial_id' => $tutorial->id,
+        ]);
+
+        return response()->json(['message' => 'Marked as done.', 'completed' => true]);
+    }
+
+    /**
+     * Undo. A misclick should not leave a module permanently claiming work the
+     * student has not done.
+     */
+    public function uncompleteTutorial(Request $request, Tutorial $tutorial)
+    {
+        $student = Student::where('user_id', $request->user()->id)->firstOrFail();
+
+        TutorialCompletion::where('student_id', $student->id)
+            ->where('tutorial_id', $tutorial->id)
+            ->delete();
+
+        return response()->json(['message' => 'Marked as not done.', 'completed' => false]);
+    }
+
+    /**
+     * Only approved tutorials count.
+     *
+     * Queried rather than read off the relation because completionBlockers is
+     * reached two ways: LearningController pre-loads tutorials already filtered
+     * to approved, while completeNode loads the node bare. Reading
+     * $versionNode->tutorials would mean the two disagreed, and a student could
+     * be blocked by a tutorial their page never showed them.
+     */
+    private static function approvedTutorials(VersionNode $versionNode)
+    {
+        return Tutorial::where('version_node_id', $versionNode->id)->approved()->get();
+    }
+
+    /**
+     * @param  \Illuminate\Support\Collection<int,Tutorial> $tutorials
+     * @return array<int,int>
+     */
+    public static function watchedTutorialIds($tutorials, Student $student): array
+    {
+        if ($tutorials->isEmpty()) {
+            return [];
+        }
+
+        return TutorialCompletion::where('student_id', $student->id)
+            ->whereIn('tutorial_id', $tutorials->pluck('id'))
+            ->pluck('tutorial_id')
+            ->all();
     }
 
     /**
@@ -174,7 +256,19 @@ class ProgressController extends Controller
             $blockers[] = "Finish the earlier module(s) first: {$titles}.";
         }
 
-        // 2. Every quiz on this module must be passed.
+        // 2. Every tutorial has to be watched and marked. Nothing can verify a
+        // video was actually watched, so this is the student's own word for
+        // it - which is still more than the nothing that was there before.
+        $tutorials = self::approvedTutorials($versionNode);
+        $watched   = self::watchedTutorialIds($tutorials, $student);
+
+        foreach ($tutorials as $tutorial) {
+            if (! in_array($tutorial->id, $watched, true)) {
+                $blockers[] = "Watch \"{$tutorial->title}\" and mark it done.";
+            }
+        }
+
+        // 3. Every quiz on this module must be passed.
         foreach ($versionNode->quizzes as $quiz) {
             $best = Submission::where('quiz_id', $quiz->id)
                 ->where('student_id', $student->id)

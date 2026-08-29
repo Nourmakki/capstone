@@ -73,6 +73,11 @@ Route::middleware('auth:sanctum')->group(function () {
     Route::get('/progress/continue', [LearningController::class, 'continueLearning']);
     Route::post('/progress/complete-node', [ProgressController::class, 'completeNode']);
 
+    // A student's own word that they watched a tutorial - nothing else can
+    // tell, and until now nothing recorded it at all.
+    Route::post('/tutorials/{tutorial}/complete', [ProgressController::class, 'completeTutorial']);
+    Route::delete('/tutorials/{tutorial}/complete', [ProgressController::class, 'uncompleteTutorial']);
+
         // To-do tasks
     Route::get('/todos', [TodoController::class, 'index']);
     Route::post('/todos', [TodoController::class, 'store']);
