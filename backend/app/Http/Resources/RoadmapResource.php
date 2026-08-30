@@ -25,6 +25,12 @@ class RoadmapResource extends JsonResource
         return [
             'id'                => $this->id,
             'parent_roadmap_id' => $this->parent_roadmap_id,
+            // Enough to link back to the roadmap this one branched off.
+            // Deliberately not a RoadmapResource: the parent would render its
+            // children, one of which is this roadmap.
+            'parent'            => $this->relationLoaded('parent') && $this->parent
+                ? ['id' => $this->parent->id, 'title' => $this->parent->title]
+                : null,
             'children'          => $children->isEmpty()
                 ? []
                 : RoadmapResource::collection($children),

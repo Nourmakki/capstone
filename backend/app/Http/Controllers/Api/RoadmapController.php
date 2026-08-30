@@ -78,6 +78,10 @@ class RoadmapController extends Controller
         $roadmap->load([
             'versions' => $published,
             'versions.versionNodes',
+            // So a specialization can offer a way back to the roadmap it
+            // belongs to. Scoped, or a student would be pointed at a parent
+            // they are not allowed to open.
+            'parent' => fn ($q) => $q->when(! $staff, fn ($inner) => $inner->approved()),
             'children' => fn ($q) => $q->when(! $staff, fn ($inner) => $inner->approved())->orderBy('title'),
             'children.versions' => $published,
             'children.versions.versionNodes',

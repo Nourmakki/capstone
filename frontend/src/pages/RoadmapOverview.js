@@ -229,11 +229,16 @@ function RoadmapOverview() {
             <header className="relative z-10 px-8 lg:px-20 py-8 border-b border-white/10">
                 <div className="flex flex-col lg:flex-row lg:items-center lg:justify-between gap-6">
                     <div>
-                        <button onClick={() => navigate("/dashboard")}
+                        {/* A specialization was reached through its parent, so
+                            back means the chooser, not the dashboard - going
+                            two steps up loses the other paths. */}
+                        <button onClick={() => navigate(
+                            roadmap?.parent ? `/roadmap/${roadmap.parent.id}` : "/dashboard"
+                        )}
                             className="flex items-center gap-2 text-gray-400 hover:text-[#0097a7] transition mb-5"
                         >
                             <ArrowLeft size={18} />
-                            Back to Dashboard
+                            {roadmap?.parent ? `Back to ${roadmap.parent.title}` : "Back to Dashboard"}
                         </button>
 
                         <div className="flex items-center flex-wrap gap-3 mb-5">
