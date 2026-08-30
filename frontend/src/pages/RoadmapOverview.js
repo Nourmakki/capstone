@@ -52,6 +52,14 @@ function RoadmapOverview() {
                     return;
                 }
 
+                // A leaf with nothing published is not a failure, it is a
+                // roadmap nobody has filled in yet. Asking for progress
+                // against it 404s, which would paint a red error over what
+                // is really an empty shelf.
+                if (! detail.latest_version) {
+                    return;
+                }
+
                 const progressUrl = selectedVersionId
                     ? `/roadmaps/${roadmapId}/student/${user.id}?version=${selectedVersionId}`
                     : `/roadmaps/${roadmapId}/student/${user.id}`;
@@ -355,7 +363,9 @@ function RoadmapOverview() {
                     </div>
                 ) : modules.length === 0 ? (
                     <div className="text-center text-gray-400 py-20">
-                        This roadmap version has no modules yet.
+                        {version
+                            ? "This roadmap version has no modules yet."
+                            : "This roadmap has no published version yet."}
                     </div>
                 ) : (
                     /* One vertical path rather than a grid: a roadmap is an

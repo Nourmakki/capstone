@@ -3,7 +3,7 @@ import { useNavigate } from "react-router-dom";
 import api from "../api";
 import { useAuth } from "../context/AuthContext";
 import {
-    Bot, ClipboardCheck, History, UserRound, LogOut, Menu, X, Map, Video,
+    Bot, ClipboardCheck, History, UserRound, LogOut, Menu, X, Map, Video, BookOpen,
     Sparkles,
     Pencil,
 } from "lucide-react";
@@ -13,6 +13,7 @@ import MaterialQueue from "./material/MaterialQueue";
 import MaterialHistory from "./material/MaterialHistory";
 import AdminRoadmaps from "./admin/AdminRoadmaps";
 import AdminTutorials from "./admin/AdminTutorials";
+import AdminResources from "./admin/AdminResources";
 import ProfilePage from "./ProfilePage";
 import MaterialLearningReview from "./material/MaterialLearningReview";
 import MaterialEditor from "./material/MaterialEditor";
@@ -72,6 +73,7 @@ function MaterialManagerDashboard() {
         { id: "queue", label: "Content Queue", icon: <ClipboardCheck size={20} />, badge: pending },
         { id: "roadmaps", label: "Roadmaps", icon: <Map size={20} /> },
         { id: "tutorials", label: "Tutorials", icon: <Video size={20} /> },
+        { id: "resources", label: "Resources", icon: <BookOpen size={20} /> },
         { id: "history", label: "History", icon: <History size={20} /> },
         { id: "profile", label: "My Profile", icon: <UserRound size={20} /> },
     ];
@@ -191,6 +193,7 @@ function MaterialManagerDashboard() {
                 {activePage === "queue" && <MaterialQueue onChanged={loadStats} />}
                 {activePage === "roadmaps" && <AdminRoadmaps onChanged={loadStats} />}
                 {activePage === "tutorials" && <AdminTutorials onChanged={loadStats} />}
+                {activePage === "resources" && <AdminResources onChanged={loadStats} />}
                 {activePage === "history" && <MaterialHistory />}
                 {activePage === "profile" && <ProfilePage />}
             </main>

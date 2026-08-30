@@ -1,7 +1,8 @@
 import React from "react";
 import {
     Code2, Brain, Smartphone, Database, Cloud, Cpu, ShieldCheck,
-    Gamepad2, Monitor, Layout, Server, Layers, ArrowRight,
+    Gamepad2, Monitor, Layout, Server, Layers, Network, Sparkles, Terminal,
+    Activity, ArrowRight,
 } from "lucide-react";
 
 // Presentation only - the database stores content, not styling. Keyed by
@@ -19,6 +20,16 @@ export const CARD_STYLES = {
     "Frontend":           { icon: <Layout size={28} />,      color: "from-sky-400 to-cyan-500" },
     "Backend":            { icon: <Server size={28} />,      color: "from-violet-500 to-indigo-600" },
     "Full Stack":         { icon: <Layers size={28} />,      color: "from-emerald-400 to-teal-500" },
+
+    // Specializations under AI / ML
+    "Machine Learning":     { icon: <Brain size={28} />,      color: "from-[#0097a7] to-green-400" },
+    "Deep Learning":        { icon: <Network size={28} />,    color: "from-purple-500 to-indigo-600" },
+    "Generative AI":        { icon: <Sparkles size={28} />,   color: "from-fuchsia-500 to-pink-600" },
+
+    // Specializations under DevOps / Cloud
+    "Platform Foundations": { icon: <Terminal size={28} />,   color: "from-slate-400 to-slate-600" },
+    "Cloud Infrastructure": { icon: <Cloud size={28} />,      color: "from-sky-400 to-blue-600" },
+    "Site Reliability":     { icon: <Activity size={28} />,   color: "from-amber-400 to-orange-500" },
 };
 
 /**

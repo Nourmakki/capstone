@@ -7,6 +7,7 @@ use App\Http\Controllers\Api\LearningController;
 use App\Http\Controllers\Api\MaterialController;
 use App\Http\Controllers\Api\ProgressController;
 use App\Http\Controllers\Api\RoadmapController;
+use App\Http\Controllers\Api\ExternalResourceController;
 use App\Http\Controllers\Api\TutorialController;
 use App\Http\Controllers\Api\QuizController;
 use App\Http\Controllers\Api\ProfessorController;
@@ -55,6 +56,7 @@ Route::middleware('auth:sanctum')->group(function () {
     Route::get('/roadmaps/{roadmap}/latest-version', [RoadmapController::class, 'latestVersion']);
     Route::get('/roadmap-versions/{version}/graph', [RoadmapController::class, 'graph']);
     Route::get('/version-nodes/{versionNodeId}/tutorials', [TutorialController::class, 'index']);
+    Route::get('/version-nodes/{versionNodeId}/external-resources', [ExternalResourceController::class, 'index']);
 
     // Everything LearningPage needs for one module.
     Route::get('/version-nodes/{versionNode}', [LearningController::class, 'nodeDetail']);
@@ -166,6 +168,12 @@ Route::middleware('auth:sanctum')->group(function () {
             ->except(['index', 'update']);
 
         Route::post('/tutorials/{tutorial}/regenerate', [TutorialController::class, 'regenerate']);
+
+        // The reading list on a module. Editable, unlike a tutorial - a link
+        // and a title are things a human can sensibly correct.
+        Route::post('/external-resources', [ExternalResourceController::class, 'store']);
+        Route::put('/external-resources/{id}', [ExternalResourceController::class, 'update']);
+        Route::delete('/external-resources/{id}', [ExternalResourceController::class, 'destroy']);
 
         // Feeds the LangGraph AI service its AgentState input.
         Route::get('/roadmap-versions/{version}/ai-export', [RoadmapController::class, 'aiExport']);
