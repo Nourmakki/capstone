@@ -26,9 +26,14 @@ class RoadmapController extends Controller
      * Material managers see every status, including unapproved. Students
      * only ever see approved material.
      */
+    /**
+     * The landing page calls index() with no user at all, so this cannot
+     * assume one. A guest sees exactly what a student sees: approved roadmaps
+     * with a published version.
+     */
     private function seesUnapproved(Request $request): bool
     {
-        return $request->user()->role === 'MaterialManager';
+        return $request->user()?->role === 'MaterialManager';
     }
 
     public function index(Request $request)

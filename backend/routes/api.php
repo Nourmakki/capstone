@@ -28,6 +28,12 @@ use Illuminate\Support\Facades\Route;
 Route::post('/register', [AuthController::class, 'register']);
 Route::post('/login', [AuthController::class, 'login']);
 
+// The landing page shows the roadmaps on offer, which is marketing copy the
+// platform already publishes to every logged-in student. Same controller, and
+// it already filters a non-manager down to approved roadmaps with a published
+// version - a guest simply has no user, which seesUnapproved() now allows for.
+Route::get('/public/roadmaps', [RoadmapController::class, 'index']);
+
 /*
 |--------------------------------------------------------------------------
 | Authenticated routes
