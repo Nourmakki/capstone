@@ -17,6 +17,7 @@ use App\Models\UserRoadmapProgress;
 use App\Models\VersionEdge;
 use App\Models\VersionNode;
 use App\Models\Workshop;
+use App\Services\VersionPublishRules;
 use Illuminate\Http\Request;
 use Illuminate\Support\Facades\DB;
 
@@ -264,6 +265,9 @@ class RoadmapController extends Controller
                 'message' => 'This version must be approved by a material manager before publishing.',
             ], 409);
         }
+
+        // And every module has to have something in all three tabs.
+        (new VersionPublishRules)->assertReadyToPublish($version);
 
         RoadmapVersion::where('roadmap_id', $version->roadmap_id)
             ->where('status', 'Published')

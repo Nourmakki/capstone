@@ -9,6 +9,7 @@ use App\Models\Quiz;
 use App\Models\Roadmap;
 use App\Models\RoadmapVersion;
 use App\Models\Tutorial;
+use App\Services\VersionPublishRules;
 use Illuminate\Http\Request;
 
 class MaterialController extends Controller
@@ -178,6 +179,14 @@ class MaterialController extends Controller
         $data = $request->validate([
             'notes' => ['nullable', 'string', 'max:2000'],
         ]);
+
+        // Approving a version publishes it, so the readiness check has to run
+        // here too - otherwise the rule on publishVersion() is one the approve
+        // button walks straight past. Before approveBy(), so a version that
+        // cannot go live is not left marked approved either.
+        if ($item instanceof RoadmapVersion) {
+            (new VersionPublishRules)->assertReadyToPublish($item);
+        }
 
         $item->approveBy($request->user(), $data['notes'] ?? null);
 
