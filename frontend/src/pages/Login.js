@@ -2,7 +2,7 @@ import React, { useState } from "react";
 import api from "../api";
 import { useNavigate } from "react-router-dom";
 import { useAuth } from "../context/AuthContext";
-import { Mail, Lock, Eye, EyeOff, ArrowRight } from "lucide-react";
+import { Mail, Lock, Eye, EyeOff, ArrowRight, ArrowLeft } from "lucide-react";
 
 const Login = () => {
     const [email, setEmail] = useState("");
@@ -61,12 +61,29 @@ const Login = () => {
             <div className="absolute inset-0 bg-[radial-gradient(circle_at_80%_85%,rgba(0,176,194,0.10),transparent_55%)] pointer-events-none" />
 
             <header className="relative z-10 shrink-0 flex items-center gap-3 px-6 lg:px-10 py-6 short:py-4 shorter:py-3 tiny:py-2">
-                <img
-                    src="/logo-mark.png"
-                    alt=""
-                    className="w-10 h-10 shorter:w-8 shorter:h-8 object-contain"
-                />
-                <span className="text-xl font-black tracking-tight">CS Mastery</span>
+                {/* The mark doubles as the way back - it is where people click
+                    first anyway. The explicit link is for everyone else. */}
+                <button
+                    type="button"
+                    onClick={() => navigate("/")}
+                    className="flex items-center gap-3 hover:opacity-80 transition"
+                >
+                    <img
+                        src="/logo-mark.png"
+                        alt=""
+                        className="w-10 h-10 shorter:w-8 shorter:h-8 object-contain"
+                    />
+                    <span className="text-xl font-black tracking-tight">CS Mastery</span>
+                </button>
+
+                <button
+                    type="button"
+                    onClick={() => navigate("/")}
+                    className="ml-auto flex items-center gap-1.5 text-sm text-gray-400 hover:text-[#00b0c2] transition"
+                >
+                    <ArrowLeft size={15} />
+                    Back to home
+                </button>
             </header>
 
             {/* overflow-y-auto, not hidden: below about 470px nothing will make
