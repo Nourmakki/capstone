@@ -1,6 +1,6 @@
 import React, { useCallback, useEffect, useState } from "react";
 import api from "../../api";
-import { Video, Plus, Pencil, Trash2, ExternalLink, X } from "lucide-react";
+import { Video, Plus, Trash2, ExternalLink, RefreshCw } from "lucide-react";
 
 const EMPTY = {
     title: "",
@@ -19,7 +19,6 @@ function AdminTutorials({ onChanged }) {
 
     const [tutorials, setTutorials] = useState([]);
     const [form, setForm] = useState(EMPTY);
-    const [editingId, setEditingId] = useState(null);
     const [loading, setLoading] = useState(true);
     const [busy, setBusy] = useState(false);
 
@@ -112,14 +111,10 @@ function AdminTutorials({ onChanged }) {
                 version_node_id: nodeId,
             };
 
-            if (editingId) {
-                await api.put(`/tutorials/${editingId}`, payload);
-            } else {
-                await api.post("/tutorials", payload);
-            }
+            // Create only - a tutorial cannot be edited once it exists.
+            await api.post("/tutorials", payload);
 
             setForm(EMPTY);
-            setEditingId(null);
             await loadTutorials();
             onChanged?.();
         } catch (err) {
@@ -132,17 +127,33 @@ function AdminTutorials({ onChanged }) {
         }
     };
 
-    const startEdit = (t) => {
-        setEditingId(t.id);
-        setForm({
-            title: t.title,
-            url: t.url,
-            description: t.description,
-            source_name: t.source_name,
-        });
-    };
+    /**
+     * A tutorial is somebody else's video - there is nothing in it worth
+     * rewriting by hand, so the AI picks a different one instead. Nour's schema
+     * draws the same line: an edit of stage "tutorial" is refused with
+     * "Tutorial cannot be edited. Use regenerate instead."
+     */
+    const regenerate = async (t) => {
+        if (!window.confirm(
+            `Ask the AI for a different video for "${t.title}"?\n\n`
+            + "This starts a new generation run for the whole module - quiz and "
+            + "project included - which you review under Learning Material. The "
+            + "current tutorial stays until you delete it."
+        )) return;
 
-    const cancelEdit = () => { setEditingId(null); setForm(EMPTY); };
+        setBusy(true);
+
+        try {
+            const response = await api.post(`/tutorials/${t.id}/regenerate`);
+            alert(response.data.message);
+            await loadTutorials();
+            onChanged?.();
+        } catch (err) {
+            alert(err.response?.data?.message ?? "Could not start a new run.");
+        } finally {
+            setBusy(false);
+        }
+    };
 
     const remove = async (id) => {
         if (!window.confirm("Delete this tutorial?")) return;
@@ -169,7 +180,8 @@ function AdminTutorials({ onChanged }) {
         <div className="p-8">
             <h1 className="text-3xl lg:text-5xl font-black text-[#0097a7]">Tutorials</h1>
             <p className="text-gray-400 mt-2 mb-10">
-                Add and edit the video tutorials attached to each module.
+                The video tutorials attached to each module. A tutorial cannot be
+                edited - if it is the wrong video, have the AI pick another.
             </p>
 
             {loading ? (
@@ -222,20 +234,14 @@ function AdminTutorials({ onChanged }) {
                         </div>
                     </div>
 
-                    {/* Add / edit form */}
+                    {/* Add only. An existing tutorial is regenerated or deleted,
+                        never edited. */}
                     <div className="rounded-3xl border border-white/10 bg-white/[0.03] p-6 mb-10">
                         <div className="flex items-center justify-between mb-6">
                             <h2 className="text-2xl font-bold flex items-center gap-2">
-                                {editingId ? <Pencil size={20} /> : <Plus size={20} />}
-                                {editingId ? "Edit Tutorial" : "New Tutorial"}
+                                <Plus size={20} />
+                                New Tutorial
                             </h2>
-
-                            {editingId && (
-                                <button onClick={cancelEdit}
-                                    className="flex items-center gap-2 text-sm text-gray-400 hover:text-white">
-                                    <X size={16} /> Cancel
-                                </button>
-                            )}
                         </div>
 
                         <div className="grid md:grid-cols-2 gap-4">
@@ -269,7 +275,7 @@ function AdminTutorials({ onChanged }) {
                                     ? "bg-gray-700 text-gray-400 cursor-not-allowed"
                                     : "bg-[#0097a7] text-black hover:scale-105"
                             }`}>
-                            {busy ? "Saving..." : editingId ? "Save Changes" : "Add Tutorial"}
+                            {busy ? "Saving..." : "Add Tutorial"}
                         </button>
                     </div>
 
@@ -317,9 +323,9 @@ function AdminTutorials({ onChanged }) {
                                         </div>
 
                                         <div className="flex gap-3 shrink-0">
-                                            <button onClick={() => startEdit(t)}
-                                                className="p-3 rounded-xl border border-[#0097a7]/30 text-[#0097a7] hover:bg-[#0097a7]/10">
-                                                <Pencil size={18} />
+                                            <button onClick={() => regenerate(t)} disabled={busy} title="Ask the AI for a different video"
+                                                className="flex items-center gap-2 px-4 py-3 rounded-xl border border-[#0097a7]/30 text-[#00b0c2] hover:bg-[#0097a7]/10 transition text-sm disabled:opacity-50">
+                                                <RefreshCw size={16} /> Regenerate
                                             </button>
                                             <button onClick={() => remove(t.id)}
                                                 className="p-3 rounded-xl border border-red-400/30 text-red-400 hover:bg-red-400/10">

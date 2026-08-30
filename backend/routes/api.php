@@ -150,7 +150,16 @@ Route::middleware('auth:sanctum')->group(function () {
         Route::put('/projects/{project}', [MaterialAuthoringController::class, 'updateProject']);
         Route::delete('/projects/{project}', [MaterialAuthoringController::class, 'destroyProject']);
         
-        Route::apiResource('tutorials', TutorialController::class)->except(['index']);
+        // No 'update'. A tutorial is a video somebody else made - the only
+        // things a manager can change about it are which video it is and
+        // whether it stays, and both of those are covered by regenerate and
+        // destroy. Nour's schema takes the same line: LearningReviewStage
+        // allows an edit of quiz, project and external_resources, and raises
+        // "Tutorial cannot be edited. Use regenerate instead."
+        Route::apiResource('tutorials', TutorialController::class)
+            ->except(['index', 'update']);
+
+        Route::post('/tutorials/{tutorial}/regenerate', [TutorialController::class, 'regenerate']);
 
         // Feeds the LangGraph AI service its AgentState input.
         Route::get('/roadmap-versions/{version}/ai-export', [RoadmapController::class, 'aiExport']);
