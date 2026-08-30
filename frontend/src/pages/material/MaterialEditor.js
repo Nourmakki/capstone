@@ -299,10 +299,19 @@ function MaterialEditor({ onChanged }) {
     // finding that out on save is worse than a disabled button.
     const filledOptions = (q) => q.options.filter((o) => o.trim()).length;
 
+    // Two options that read the same make a question unanswerable - the answer
+    // is matched on text, so a duplicate is both right and wrong.
+    const duplicateOptions = (q) => {
+        const filled = q.options.map((o) => o.trim().toLowerCase()).filter(Boolean);
+
+        return filled.length - new Set(filled).size;
+    };
+
     const questionValid = (q) =>
         q.question.trim()
         && q.answer.trim()
-        && (q.type === "short_answer" || filledOptions(q) === OPTION_COUNT[q.type]);
+        && (q.type === "short_answer"
+            || (filledOptions(q) === OPTION_COUNT[q.type] && duplicateOptions(q) === 0));
 
     const quizValid = quizDraft
         && quizDraft.title.trim()
@@ -539,6 +548,12 @@ function MaterialEditor({ onChanged }) {
                                                     <p className="text-xs text-yellow-300 mt-2">
                                                         Only {OPTION_COUNT[q.type]} options are allowed.
                                                         Clear {filledOptions(q) - OPTION_COUNT[q.type]} of them.
+                                                    </p>
+                                                )}
+
+                                                {duplicateOptions(q) > 0 && (
+                                                    <p className="text-xs text-yellow-300 mt-2">
+                                                        Two options say the same thing.
                                                     </p>
                                                 )}
 

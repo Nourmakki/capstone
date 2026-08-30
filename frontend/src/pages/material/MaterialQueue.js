@@ -2,7 +2,7 @@ import React, { useCallback, useEffect, useState } from "react";
 import api from "../../api";
 import {
     Check, X, ExternalLink, CheckCircle2, Map, GitBranch, Video, FileText,
-    Brain, Code2,
+    Brain, Code2, PencilLine,
 } from "lucide-react";
 
 // Slug must match MaterialController::TYPES.
@@ -111,6 +111,20 @@ function MaterialQueue({ onChanged }) {
                                                         {item.topic && (
                                                             <p className="text-xs text-gray-500 mt-1">
                                                                 Topic: {item.topic}
+                                                            </p>
+                                                        )}
+
+                                                        {/* Present only when the item is back in the
+                                                            queue because someone edited it. New material
+                                                            has no note, which is how the two are told
+                                                            apart at a glance. */}
+                                                        {item.change_note && (
+                                                            <p className="mt-3 flex items-start gap-2 rounded-xl border border-yellow-400/30 bg-yellow-400/5 px-3 py-2 text-xs text-yellow-200">
+                                                                <PencilLine size={14} className="shrink-0 mt-px" />
+                                                                <span>
+                                                                    <span className="font-semibold">Edited since it was approved. </span>
+                                                                    {item.change_note}
+                                                                </span>
                                                             </p>
                                                         )}
 

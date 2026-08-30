@@ -85,6 +85,7 @@ class MaterialController extends Controller
                     'url'         => $t->url,
                     'source'      => $t->source_name,
                     'topic'       => $t->versionNode->node->title ?? null,
+                    'change_note' => $t->change_note,
                     'created_at'  => $t->created_at,
                 ]),
 
@@ -117,6 +118,7 @@ class MaterialController extends Controller
                         'options'  => $question->options ?? [],
                         'answer'   => $question->answer,
                     ]),
+                    'change_note' => $q->change_note,
                     'created_at'  => $q->created_at,
                 ]),
 
@@ -131,6 +133,7 @@ class MaterialController extends Controller
                     'difficulty'  => $p->difficulty,
                     'url'         => $p->github_url,
                     'topic'       => $p->versionNode->node->title ?? null,
+                    'change_note' => $p->change_note,
                     'created_at'  => $p->created_at,
                 ]),
         ]);

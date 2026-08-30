@@ -17,6 +17,7 @@ class Tutorial extends Model
         'reviewed_by',
         'reviewed_at',
         'review_notes',
+        'change_note',
     'version_node_id',
     'title',
     'url',

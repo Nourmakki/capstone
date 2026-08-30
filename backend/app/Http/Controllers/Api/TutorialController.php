@@ -82,14 +82,20 @@ class TutorialController extends Controller
 
         $tutorial->update($data);
 
-        // Edited content has to be reviewed again.
-        if ($tutorial->wasChanged() && $tutorial->review_status === 'approved') {
-            $tutorial->update([
-                'review_status' => 'pending',
-                'reviewed_by'   => null,
-                'reviewed_at'   => null,
-                'review_notes'  => null,
-            ]);
+        // Edited content has to be reviewed again, and the queue needs to say
+        // what changed or the item is indistinguishable from a new one.
+        $changed = array_values(array_intersect_key([
+            'title'       => 'title',
+            'url'         => 'link',
+            'description' => 'description',
+            'source_name' => 'source',
+        ], $tutorial->getChanges()));
+
+        if ($changed !== [] && $tutorial->review_status === 'approved') {
+            $last = array_pop($changed);
+            $text = $changed === [] ? $last : implode(', ', $changed) . ' and ' . $last;
+
+            $tutorial->sendBackForReview(ucfirst($text) . ' changed.');
         }
 
         return response()->json([

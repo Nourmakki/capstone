@@ -119,14 +119,15 @@ class MaterialAuthoringController extends Controller
 
         DB::transaction(function () use ($data, $quiz) {
             $quiz->update(['title' => $data['title']]);
+            $titleChanged = $quiz->wasChanged('title');
 
             // The questions are a separate model, so the quiz row can be
             // untouched while its content has changed completely. Without
             // this an approved quiz would keep its approval after an answer
             // was rewritten.
-            $questionsChanged = $this->syncQuestions($quiz, $data['questions']);
+            $counts = $this->syncQuestions($quiz, $data['questions']);
 
-            $this->sendBackForReview($quiz, $questionsChanged);
+            $this->sendBackForReview($quiz, $this->quizChangeNote($titleChanged, $counts));
         });
 
         return response()->json(['message' => 'Quiz updated.']);
@@ -176,12 +177,14 @@ class MaterialAuthoringController extends Controller
      * it. Replacing the set wholesale would leave every earlier attempt
      * showing no answers at all.
      *
-     * @return bool whether anything was actually added, changed or removed
+     * @return array{added:int,edited:int,removed:int} what the edit did, so
+     *         the review queue can say where to look
      */
-    private function syncQuestions(Quiz $quiz, array $questions): bool
+    private function syncQuestions(Quiz $quiz, array $questions): array
     {
         $kept    = [];
-        $changed = false;
+        $added   = 0;
+        $edited  = 0;
 
         foreach ($questions as $question) {
             $options = array_values(array_filter($question['options'] ?? []));
@@ -195,6 +198,18 @@ class MaterialAuthoringController extends Controller
                 // arrives here as a short one and is caught by the same check.
                 if (count($options) !== $expected) {
                     abort(422, "\"{$question['question']}\" needs exactly {$expected} options.");
+                }
+
+                // Two identical options make a question unanswerable: the
+                // answer check below matches on text, so a duplicate is both
+                // right and wrong. Nour's generator forbids this too - see the
+                // unique-answers validator in learning_workflow/schema.py - so
+                // this keeps hand-authored quizzes to the same standard as
+                // generated ones.
+                $normalised = array_map(fn ($o) => mb_strtolower(trim($o)), $options);
+
+                if (count(array_unique($normalised)) !== count($normalised)) {
+                    abort(422, "\"{$question['question']}\" has two options that say the same thing.");
                 }
 
                 $matches = array_filter(
@@ -221,15 +236,15 @@ class MaterialAuthoringController extends Controller
 
                 if ($existing) {
                     $existing->update($attributes);
-                    $changed = $changed || $existing->wasChanged();
+                    $edited += $existing->wasChanged() ? 1 : 0;
                     $kept[]  = $existing->id;
 
                     continue;
                 }
             }
 
-            $kept[]  = QuizQuestion::create($attributes + ['quiz_id' => $quiz->id])->id;
-            $changed = true;
+            $kept[] = QuizQuestion::create($attributes + ['quiz_id' => $quiz->id])->id;
+            $added++;
         }
 
         // Only what the manager actually removed. Those answers do become
@@ -238,7 +253,29 @@ class MaterialAuthoringController extends Controller
             ->whereNotIn('id', $kept)
             ->delete();
 
-        return $changed || $removed > 0;
+        return ['added' => $added, 'edited' => $edited, 'removed' => $removed];
+    }
+
+    /**
+     * @param array{added:int,edited:int,removed:int} $counts
+     */
+    private function quizChangeNote(bool $titleChanged, array $counts): ?string
+    {
+        $parts = [];
+
+        if ($titleChanged) {
+            $parts[] = 'title changed';
+        }
+
+        foreach (['edited' => 'edited', 'added' => 'added', 'removed' => 'removed'] as $key => $word) {
+            if ($counts[$key] > 0) {
+                $parts[] = $counts[$key] . ' question' . ($counts[$key] === 1 ? '' : 's') . ' ' . $word;
+            }
+        }
+
+        // A save that changed nothing is not worth a note, and must not send
+        // an approved quiz back for review either.
+        return $parts === [] ? null : ucfirst(implode(', ', $parts)) . '.';
     }
 
     // -----------------------------------------------------------------
@@ -275,7 +312,7 @@ class MaterialAuthoringController extends Controller
             'github_url'  => $data['github_url'] ?? null,
         ]);
 
-        $this->sendBackForReview($project);
+        $this->sendBackForReview($project, $this->fieldChangeNote($project));
 
         return response()->json(['message' => 'Project updated.']);
     }
@@ -306,17 +343,46 @@ class MaterialAuthoringController extends Controller
     // -----------------------------------------------------------------
 
     /**
-     * Approved content that changes has not been approved in its new form.
+     * Which fields an edit touched, in words a reviewer can act on.
+     *
+     * getChanges() is read after the update, so it reflects what the database
+     * actually took - retyping a value identically is not a change and should
+     * not put the item back in the queue.
      */
-    private function sendBackForReview($model, bool $alsoChanged = false): void
+    private function fieldChangeNote($model): ?string
     {
-        if (($model->wasChanged() || $alsoChanged) && $model->review_status === 'approved') {
-            $model->update([
-                'review_status' => 'pending',
-                'reviewed_by'   => null,
-                'reviewed_at'   => null,
-                'review_notes'  => null,
-            ]);
+        $labels = [
+            'title'       => 'title',
+            'description' => 'description',
+            'difficulty'  => 'difficulty',
+            'github_url'  => 'starter repository',
+            'url'         => 'link',
+            'source_name' => 'source',
+        ];
+
+        $changed = array_values(array_intersect_key($labels, $model->getChanges()));
+
+        if ($changed === []) {
+            return null;
+        }
+
+        // "Title and difficulty changed." reads better than a bare list.
+        $last = array_pop($changed);
+        $text = $changed === [] ? $last : implode(', ', $changed) . ' and ' . $last;
+
+        return ucfirst($text) . ' changed.';
+    }
+
+    /**
+     * Approved content that changes has not been approved in its new form.
+     *
+     * A null note means nothing actually changed, so the item stays approved -
+     * that is what stops an idempotent save from filling the queue.
+     */
+    private function sendBackForReview($model, ?string $changeNote): void
+    {
+        if ($changeNote !== null && $model->review_status === 'approved') {
+            $model->sendBackForReview($changeNote);
         }
     }
 }
