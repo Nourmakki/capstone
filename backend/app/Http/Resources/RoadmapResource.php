@@ -16,8 +16,18 @@ class RoadmapResource extends JsonResource
             ? $this->versions->first()
             : null;
 
+        // A parent is a chooser - it has children instead of modules, so the
+        // client shows its specializations rather than trying to open it.
+        $children = $this->relationLoaded('children')
+            ? $this->children
+            : collect();
+
         return [
-            'id'             => $this->id,
+            'id'                => $this->id,
+            'parent_roadmap_id' => $this->parent_roadmap_id,
+            'children'          => $children->isEmpty()
+                ? []
+                : RoadmapResource::collection($children),
             'title'          => $this->title,
             'description'    => $this->description,
             'review_status'  => $this->review_status,

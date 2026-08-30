@@ -40,13 +40,24 @@ class RoadmapController extends Controller
     {
         $staff = $this->seesUnapproved($request);
 
-        $query = Roadmap::query()->when(! $staff, fn ($q) => $q->approved());
+        // A student sees only the top of the tree - a specialization is reached
+        // by choosing it from its parent, not by sitting beside it in the same
+        // list. A manager sees every roadmap flat, because the content they
+        // author lives on the children, and a picker that hid them would put
+        // the material out of reach.
+        $query = Roadmap::query()
+            ->when(! $staff, fn ($q) => $q->topLevel()->approved());
+
+        $published = fn ($q) => $q->where('status', 'Published')
+            ->when(! $staff, fn ($inner) => $inner->approved())
+            ->orderByDesc('id');
 
         $roadmaps = $query->with([
-            'versions' => fn ($q) => $q->where('status', 'Published')
-                ->when(! $staff, fn ($inner) => $inner->approved())
-                ->orderByDesc('id'),
+            'versions' => $published,
             'versions.versionNodes',
+            'children' => fn ($q) => $q->when(! $staff, fn ($inner) => $inner->approved())->orderBy('title'),
+            'children.versions' => $published,
+            'children.versions.versionNodes',
         ])->orderBy('title')->get();
 
         return RoadmapResource::collection($roadmaps);
@@ -58,11 +69,18 @@ class RoadmapController extends Controller
 
         abort_if(! $staff && ! $roadmap->isApproved(), 404);
 
+        $published = fn ($q) => $q->where('status', 'Published')
+            ->when(! $staff, fn ($inner) => $inner->approved())
+            ->orderByDesc('id');
+
+        // Children too: a parent roadmap has no modules of its own, so the
+        // page shows its specializations instead of an empty rail.
         $roadmap->load([
-            'versions' => fn ($q) => $q->where('status', 'Published')
-                ->when(! $staff, fn ($inner) => $inner->approved())
-                ->orderByDesc('id'),
+            'versions' => $published,
             'versions.versionNodes',
+            'children' => fn ($q) => $q->when(! $staff, fn ($inner) => $inner->approved())->orderBy('title'),
+            'children.versions' => $published,
+            'children.versions.versionNodes',
         ]);
 
         return new RoadmapResource($roadmap);
@@ -167,6 +185,11 @@ class RoadmapController extends Controller
                 'title'           => $vn->node->title,
                 'description'     => $vn->node->description,
                 'difficulty'      => $vn->node->difficulty,
+                // Null on every module until someone groups them, so an
+                // ungrouped roadmap still renders as a flat list.
+                'stage'           => $vn->stage,
+                'stage_title'     => $vn->stage_title,
+                'is_recommended'  => $vn->is_recommended,
             ]);
     }
 

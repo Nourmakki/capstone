@@ -1,11 +1,11 @@
 import React from "react";
 import {
     Code2, Brain, Smartphone, Database, Cloud, Cpu, ShieldCheck,
-    Gamepad2, Monitor, ArrowRight,
+    Gamepad2, Monitor, Layout, Server, Layers, ArrowRight,
 } from "lucide-react";
 
 // Presentation only - the database stores content, not styling. Keyed by
-// title, so a roadmap nobody styled still renders with the default.
+// title, so the roadmaps we know about keep a deliberate look.
 export const CARD_STYLES = {
     "Web Development":    { icon: <Code2 size={28} />,       color: "from-cyan-500 to-blue-500" },
     "AI / ML":            { icon: <Brain size={28} />,       color: "from-[#0097a7] to-green-400" },
@@ -16,12 +16,46 @@ export const CARD_STYLES = {
     "Desktop Apps":       { icon: <Monitor size={28} />,     color: "from-fuchsia-500 to-purple-600" },
     "Data Engineering":   { icon: <Database size={28} />,    color: "from-indigo-500 to-blue-600" },
     "Game Development":   { icon: <Gamepad2 size={28} />,    color: "from-lime-500 to-emerald-500" },
+    "Frontend":           { icon: <Layout size={28} />,      color: "from-sky-400 to-cyan-500" },
+    "Backend":            { icon: <Server size={28} />,      color: "from-violet-500 to-indigo-600" },
+    "Full Stack":         { icon: <Layers size={28} />,      color: "from-emerald-400 to-teal-500" },
 };
 
-const DEFAULT_STYLE = {
-    icon: <Code2 size={28} />,
-    color: "from-gray-500 to-gray-700",
+/**
+ * Every roadmap gets a colour, including ones nobody has styled.
+ *
+ * The map above cannot keep up: specializations are created by managers and
+ * roadmaps by the AI, so a hard-coded list means anything new lands grey and
+ * looks broken next to the rest. Picking from a palette by title keeps that
+ * from happening, and keying on the title rather than the id means a roadmap
+ * looks the same wherever it appears and after any reseed.
+ */
+const PALETTE = [
+    "from-cyan-500 to-blue-500",
+    "from-[#0097a7] to-green-400",
+    "from-violet-500 to-indigo-600",
+    "from-amber-400 to-orange-500",
+    "from-emerald-400 to-teal-500",
+    "from-rose-500 to-pink-600",
+    "from-sky-400 to-cyan-500",
+    "from-lime-500 to-emerald-500",
+];
+
+const paletteFor = (title = "") => {
+    let hash = 0;
+
+    for (let i = 0; i < title.length; i++) {
+        hash = (hash * 31 + title.charCodeAt(i)) | 0;
+    }
+
+    return PALETTE[Math.abs(hash) % PALETTE.length];
 };
+
+const styleFor = (roadmap) =>
+    CARD_STYLES[roadmap.title] ?? {
+        icon: <Code2 size={28} />,
+        color: paletteFor(roadmap.title),
+    };
 
 /**
  * One roadmap, as it appears on both the public landing page and the student
@@ -33,8 +67,13 @@ const DEFAULT_STYLE = {
  * differs: a guest is sent to sign up, a student to the roadmap itself.
  */
 function RoadmapCard({ roadmap, onOpen, ctaLabel = "View Roadmap" }) {
-    const style = CARD_STYLES[roadmap.title] ?? DEFAULT_STYLE;
-    const available = Boolean(roadmap.latest_version);
+    const style = styleFor(roadmap);
+
+    // A parent has no modules of its own - it is a choice between
+    // specializations, so it is available on the strength of its children.
+    const children = roadmap.children ?? [];
+    const isChooser = children.length > 0;
+    const available = isChooser || Boolean(roadmap.latest_version);
 
     const open = () => {
         if (available) onOpen(roadmap);
@@ -72,7 +111,9 @@ function RoadmapCard({ roadmap, onOpen, ctaLabel = "View Roadmap" }) {
             </p>
 
             <p className="mt-4 text-xs text-gray-500">
-                {available
+                {isChooser
+                    ? `${children.length} paths · ${children.map((c) => c.title).join(", ")}`
+                    : available
                     ? `${roadmap.node_count} modules · v${roadmap.latest_version.version_number}`
                     : "No published version yet"}
             </p>
@@ -83,7 +124,7 @@ function RoadmapCard({ roadmap, onOpen, ctaLabel = "View Roadmap" }) {
                     available ? "text-[#0097a7] group-hover:gap-3" : "text-gray-600"
                 }`}
             >
-                {available ? ctaLabel : "Unavailable"}
+                {isChooser ? "Choose a path" : available ? ctaLabel : "Unavailable"}
                 <ArrowRight size={16} />
             </span>
         </div>

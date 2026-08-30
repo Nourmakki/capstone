@@ -7,6 +7,11 @@ const EMPTY = {
     description: "",
     difficulty: "beginner",
     prerequisite_node_ids: [],
+    // Blank means ungrouped, which is a perfectly good roadmap - the rail
+    // numbers each module instead of showing stage headings.
+    stage: "",
+    stage_title: "",
+    is_recommended: false,
 };
 
 /**
@@ -143,6 +148,9 @@ function VersionModulesEditor({ versionId, onChanged }) {
             description: module.description,
             difficulty: module.difficulty,
             prerequisite_node_ids: module.prerequisite_node_ids,
+            stage: module.stage ?? "",
+            stage_title: module.stage_title ?? "",
+            is_recommended: Boolean(module.is_recommended),
         });
     };
 
@@ -247,6 +255,50 @@ function VersionModulesEditor({ versionId, onChanged }) {
                         onChange={(e) => setForm({ ...form, description: e.target.value })}
                         className="w-full mt-4 p-3 rounded-xl bg-black/40 border border-white/10 text-white" />
 
+                    {/* Grouping. Modules sharing a stage number are drawn under
+                        one heading on the student's rail; leaving it blank keeps
+                        the roadmap flat, which is what every roadmap is until
+                        someone groups it. */}
+                    <div className="grid md:grid-cols-[110px_1fr_auto] gap-4 mt-4">
+                        <input
+                            type="number"
+                            min="1"
+                            max="99"
+                            placeholder="Stage"
+                            value={form.stage}
+                            onChange={(e) => setForm({ ...form, stage: e.target.value })}
+                            className="p-3 rounded-xl bg-black/40 border border-white/10 text-white"
+                        />
+
+                        <input
+                            type="text"
+                            placeholder="Stage name (e.g. Foundations) — modules with the same number share it"
+                            value={form.stage_title}
+                            onChange={(e) => setForm({ ...form, stage_title: e.target.value })}
+                            className="p-3 rounded-xl bg-black/40 border border-white/10 text-white"
+                        />
+
+                        <label className="flex items-center gap-3 px-4 rounded-xl bg-black/40 border border-white/10 cursor-pointer select-none">
+                            <input
+                                type="checkbox"
+                                checked={form.is_recommended}
+                                onChange={(e) => setForm({ ...form, is_recommended: e.target.checked })}
+                                className="w-4 h-4 accent-[#0097a7]"
+                            />
+                            <span className="text-sm text-gray-300 whitespace-nowrap">
+                                Recommended
+                            </span>
+                        </label>
+                    </div>
+
+                    {form.is_recommended && !form.stage && (
+                        <p className="text-xs text-yellow-300 mt-2">
+                            The badge marks the one worth starting with among several
+                            in the same stage. On an ungrouped module there is nothing
+                            for it to stand out from.
+                        </p>
+                    )}
+
                     <p className="text-sm text-gray-300 mt-6 mb-3">
                         Comes after
                         <span className="text-gray-500"> — a student must finish these first</span>
@@ -323,6 +375,21 @@ function VersionModulesEditor({ versionId, onChanged }) {
                                             <span className="text-xs text-gray-500 capitalize">
                                                 {m.difficulty}
                                             </span>
+
+                                            {/* So the grouping is visible here and not
+                                                only on the student's rail. */}
+                                            {m.stage && (
+                                                <span className="text-xs px-3 py-1 rounded-full border border-[#0097a7]/30 bg-[#0097a7]/10 text-[#00b0c2]">
+                                                    Stage {m.stage}
+                                                    {m.stage_title ? ` · ${m.stage_title}` : ""}
+                                                </span>
+                                            )}
+
+                                            {m.is_recommended && (
+                                                <span className="text-[10px] font-bold tracking-widest px-2.5 py-1 rounded-full bg-[#0097a7] text-black">
+                                                    RECOMMENDED
+                                                </span>
+                                            )}
                                         </div>
 
                                         <p className="text-sm text-gray-400 mt-1">{m.description}</p>

@@ -16,7 +16,14 @@ class VersionNode extends Model
     use HasFactory;
     protected $fillable = [
         'roadmap_version_id',
-        'node_id'
+        'node_id',
+        'stage',
+        'stage_title',
+        'is_recommended',
+    ];
+
+    protected $casts = [
+        'is_recommended' => 'boolean',
     ];
 
     public function roadmapVersion()

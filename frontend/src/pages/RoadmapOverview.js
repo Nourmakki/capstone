@@ -2,6 +2,7 @@ import React, { useEffect, useState } from "react";
 import { useNavigate, useParams } from "react-router-dom";
 import api from "../api";
 import { useAuth } from "../context/AuthContext";
+import RoadmapCard from "../components/RoadmapCard";
 import {
     ArrowLeft,
     CheckCircle2,
@@ -38,16 +39,24 @@ function RoadmapOverview() {
             setLoading(true);
 
             try {
+                // The roadmap first, on its own. A parent has no version of its
+                // own, so asking for progress against it 404s - and fetching
+                // both together meant that 404 sank the whole page instead of
+                // showing the chooser.
+                const detailResponse = await api.get(`/roadmaps/${roadmapId}`);
+                const detail = detailResponse.data.data;
+
+                setRoadmap(detail);
+
+                if ((detail.children ?? []).length > 0) {
+                    return;
+                }
+
                 const progressUrl = selectedVersionId
                     ? `/roadmaps/${roadmapId}/student/${user.id}?version=${selectedVersionId}`
                     : `/roadmaps/${roadmapId}/student/${user.id}`;
 
-                const [detailResponse, progressResponse] = await Promise.all([
-                    api.get(`/roadmaps/${roadmapId}`),
-                    api.get(progressUrl),
-                ]);
-
-                setRoadmap(detailResponse.data.data);
+                const progressResponse = await api.get(progressUrl);
 
                 const {
                     nodes, edges, completed, current_node, requirements,
@@ -102,6 +111,11 @@ function RoadmapOverview() {
                             requiredDone: required_work.done,
                             requiredTotal: required_work.total,
                             prerequisites: required,
+                            // Null on an ungrouped roadmap, which is every one
+                            // until a manager groups it.
+                            stage: item.stage ?? null,
+                            stageTitle: item.stage_title ?? null,
+                            isRecommended: Boolean(item.is_recommended),
                         };
                     })
                 );
@@ -159,6 +173,46 @@ function RoadmapOverview() {
             text: "Locked",
         };
     };
+
+    // A parent roadmap has no modules of its own - it is a choice between
+    // specializations. Rendering the rail here would draw an empty one.
+    const paths = roadmap?.children ?? [];
+
+    if (paths.length > 0) {
+        return (
+            <div className="min-h-screen bg-[#050B0D] text-white">
+                <div className="absolute top-0 left-0 w-full h-full bg-[radial-gradient(circle_at_center,rgba(0,255,200,0.15),transparent_55%)] pointer-events-none" />
+
+                <div className="relative z-10 px-8 lg:px-20 py-10">
+                    <button
+                        onClick={() => navigate("/dashboard")}
+                        className="flex items-center gap-2 text-gray-400 hover:text-[#0097a7] transition mb-8"
+                    >
+                        <ArrowLeft size={18} />
+                        Back to Dashboard
+                    </button>
+
+                    <h1 className="text-4xl lg:text-5xl font-black">{roadmap.title}</h1>
+
+                    <p className="text-gray-400 mt-3 max-w-2xl">
+                        {roadmap.description} Choose a path to follow — each one is a
+                        roadmap of its own, and you can come back for the others.
+                    </p>
+
+                    <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6 mt-10">
+                        {paths.map((child) => (
+                            <RoadmapCard
+                                key={child.id}
+                                roadmap={child}
+                                onOpen={(r) => navigate(`/roadmap/${r.id}`)}
+                                ctaLabel="Start this path"
+                            />
+                        ))}
+                    </div>
+                </div>
+            </div>
+        );
+    }
 
     return (
         <div className="min-h-screen bg-[#050B0D] text-white overflow-hidden">
@@ -390,10 +444,35 @@ function RoadmapOverview() {
 
                                     {/* The stop itself. */}
                                     <div className={`flex-1 min-w-0 ${isLast ? "pb-4" : "pb-10"}`}>
+                                        {/* A heading only where a new group starts.
+                                            Ungrouped roadmaps fall back to numbering
+                                            each module, which is what this did for
+                                            every module before stages existed. */}
+                                        {module.stage !== null && module.stage !== modules[index - 1]?.stage && (
+                                            <div className="mb-4 -mt-1">
+                                                <p className="text-[11px] tracking-[0.2em] text-[#0097a7] font-semibold">
+                                                    STAGE {module.stage}
+                                                </p>
+                                                {module.stageTitle && (
+                                                    <h3 className="text-lg font-bold mt-0.5">
+                                                        {module.stageTitle}
+                                                    </h3>
+                                                )}
+                                            </div>
+                                        )}
+
                                         <div className="flex items-center gap-3 mb-2">
-                                            <span className="text-xs tracking-widest text-gray-500">
-                                                STAGE {index + 1}
-                                            </span>
+                                            {module.stage === null && (
+                                                <span className="text-xs tracking-widest text-gray-500">
+                                                    STAGE {index + 1}
+                                                </span>
+                                            )}
+
+                                            {module.isRecommended && (
+                                                <span className="text-[10px] font-bold tracking-widest px-2.5 py-1 rounded-full bg-[#0097a7] text-black">
+                                                    RECOMMENDED
+                                                </span>
+                                            )}
 
                                             <span
                                                 className={`text-xs px-3 py-1 rounded-full border ${

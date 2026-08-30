@@ -72,6 +72,11 @@ class VersionGraphController extends Controller
             'difficulty'              => ['required', Rule::in(self::DIFFICULTIES)],
             'prerequisite_node_ids'   => ['sometimes', 'array'],
             'prerequisite_node_ids.*' => ['integer'],
+            // Grouping. Null means ungrouped, which every module is until
+            // someone says otherwise - a roadmap with no stages is a flat list.
+            'stage'                   => ['nullable', 'integer', 'min:1', 'max:99'],
+            'stage_title'             => ['nullable', 'string', 'max:255'],
+            'is_recommended'          => ['sometimes', 'boolean'],
         ]);
 
         return DB::transaction(function () use ($data, $version) {
@@ -85,6 +90,9 @@ class VersionGraphController extends Controller
             $versionNode = VersionNode::create([
                 'roadmap_version_id' => $version->id,
                 'node_id'            => $node->id,
+                'stage'              => $data['stage'] ?? null,
+                'stage_title'        => $data['stage_title'] ?? null,
+                'is_recommended'     => $data['is_recommended'] ?? false,
             ]);
 
             $this->syncPrerequisites(
@@ -114,6 +122,11 @@ class VersionGraphController extends Controller
             'difficulty'              => ['required', Rule::in(self::DIFFICULTIES)],
             'prerequisite_node_ids'   => ['sometimes', 'array'],
             'prerequisite_node_ids.*' => ['integer'],
+            // Grouping. Null means ungrouped, which every module is until
+            // someone says otherwise - a roadmap with no stages is a flat list.
+            'stage'                   => ['nullable', 'integer', 'min:1', 'max:99'],
+            'stage_title'             => ['nullable', 'string', 'max:255'],
+            'is_recommended'          => ['sometimes', 'boolean'],
         ]);
 
         // Checked against the current id, before copyOnWrite can change it -
@@ -131,6 +144,15 @@ class VersionGraphController extends Controller
                 'title'       => $data['title'],
                 'description' => $data['description'],
                 'difficulty'  => $data['difficulty'],
+            ]);
+
+            // On the version_node, not the Node: a Node is shared across
+            // versions and roadmaps, but a module's place in a sequence
+            // belongs to the version it sits in.
+            $versionNode->update([
+                'stage'          => $data['stage'] ?? null,
+                'stage_title'    => $data['stage_title'] ?? null,
+                'is_recommended' => $data['is_recommended'] ?? false,
             ]);
 
             if (array_key_exists('prerequisite_node_ids', $data)) {
@@ -216,6 +238,9 @@ class VersionGraphController extends Controller
                 'title'                 => $vn->node->title,
                 'description'           => $vn->node->description,
                 'difficulty'            => $vn->node->difficulty,
+                'stage'                 => $vn->stage,
+                'stage_title'           => $vn->stage_title,
+                'is_recommended'        => $vn->is_recommended,
                 'prerequisite_node_ids' => $prerequisites[$vn->node_id] ?? [],
                 'material_counts'       => [
                     'tutorials' => $vn->tutorials()->count(),
