@@ -165,6 +165,10 @@ class MaterialAuthoringController extends Controller
             'questions.*.options'   => ['array'],
             'questions.*.options.*' => ['string', 'max:500'],
             'questions.*.answer'    => ['required', 'string', 'max:500'],
+            // Why the answer is right. Optional because a hand-written question
+            // may not have one; where it exists it has to stay true - see
+            // syncQuestions().
+            'questions.*.explanation' => ['nullable', 'string', 'max:2000'],
         ]);
     }
 
@@ -235,7 +239,10 @@ class MaterialAuthoringController extends Controller
                     ->first();
 
                 if ($existing) {
-                    $existing->update($attributes);
+                    $existing->fill($attributes);
+                    $this->requireExplanationToKeepUp($existing, $question['explanation'] ?? null);
+                    $existing->save();
+
                     $edited += $existing->wasChanged() ? 1 : 0;
                     $kept[]  = $existing->id;
 
@@ -243,7 +250,15 @@ class MaterialAuthoringController extends Controller
                 }
             }
 
-            $kept[] = QuizQuestion::create($attributes + ['quiz_id' => $quiz->id])->id;
+            $explanation = trim((string) ($question['explanation'] ?? ''));
+
+            $kept[] = QuizQuestion::create($attributes + [
+                'quiz_id'     => $quiz->id,
+                'ai_metadata' => $explanation === ''
+                    ? null
+                    : ['correct_answer_explanation' => $explanation],
+            ])->id;
+
             $added++;
         }
 
@@ -254,6 +269,51 @@ class MaterialAuthoringController extends Controller
             ->delete();
 
         return ['added' => $added, 'edited' => $edited, 'removed' => $removed];
+    }
+
+    /**
+     * An explanation must not outlive the question it explained.
+     *
+     * This is Nour's rule, matched deliberately. validate_edited_quiz() in
+     * learning_workflow/graph/workflow.py refuses an edit where the question,
+     * its options or its correct answer changed while
+     * correct_answer_explanation did not, with:
+     *
+     *   "When a quiz question, its options, or its correct answer is edited,
+     *    correct_answer_explanation must also be updated."
+     *
+     * Rejecting is stronger than quietly dropping the old text: dropping
+     * leaves a question with no explanation at all, while this guarantees that
+     * whenever one exists it describes the question as it now stands.
+     *
+     * Only applies where an explanation already exists. A hand-written
+     * question has none, and there is nothing to keep in step.
+     */
+    private function requireExplanationToKeepUp(QuizQuestion $question, ?string $explanation): void
+    {
+        $metadata = $question->ai_metadata;
+        $current  = is_array($metadata) ? ($metadata['correct_answer_explanation'] ?? null) : null;
+
+        $given = $explanation === null ? null : trim($explanation);
+
+        // Sending no explanation at all is as much a failure to update it as
+        // sending the old one back unchanged.
+        if ($question->isDirty(['question', 'options', 'answer'])
+            && $current !== null
+            && ($given === null || $given === '' || $given === trim($current))
+        ) {
+            abort(422, "\"{$question->question}\" was edited, so its explanation of the "
+                . 'correct answer has to be updated too.');
+        }
+
+        if ($given === null || $given === '' || $given === $current) {
+            return;
+        }
+
+        $question->ai_metadata = array_merge(
+            is_array($metadata) ? $metadata : [],
+            ['correct_answer_explanation' => $given]
+        );
     }
 
     /**

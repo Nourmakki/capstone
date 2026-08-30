@@ -203,15 +203,20 @@ class MaterialAuthoringTest extends TestCase
             ->putJson("/api/quizzes/{$quiz->id}", compact('title', 'questions'));
     }
 
-    private function fourOptions(string $question, string $answer, ?int $id = null): array
-    {
-        return [
-            'id'       => $id,
-            'question' => $question,
-            'type'     => 'multiple_choice',
-            'options'  => ['Databases', 'User interfaces', 'Networking', 'Operating systems'],
-            'answer'   => $answer,
-        ];
+    private function fourOptions(
+        string $question,
+        string $answer,
+        ?int $id = null,
+        ?string $explanation = null
+    ): array {
+        return array_filter([
+            'id'          => $id,
+            'question'    => $question,
+            'type'        => 'multiple_choice',
+            'options'     => ['Databases', 'User interfaces', 'Networking', 'Operating systems'],
+            'answer'      => $answer,
+            'explanation' => $explanation,
+        ], fn ($value) => $value !== null);
     }
 
     public function test_editing_a_question_records_what_changed(): void
@@ -324,6 +329,168 @@ class MaterialAuthoringTest extends TestCase
 
         $this->assertSame('approved', $quiz->review_status);
         $this->assertNull($quiz->change_note);
+    }
+
+    // -----------------------------------------------------------------
+    // The AI's explanation must not outlive the question it explained
+    // -----------------------------------------------------------------
+
+    /** A question as the AI commit service leaves it, explanation and all. */
+    private function aiQuestion(Quiz $quiz): QuizQuestion
+    {
+        $question = QuizQuestion::sole();
+
+        $question->update(['ai_metadata' => [
+            'question_type'              => 'conceptual',
+            'question'                   => $question->question,
+            'correct_answer_explanation' => 'React is a library for building user interfaces.',
+        ]]);
+
+        return $question->fresh();
+    }
+
+    /**
+     * The rule matched from validate_edited_quiz() in
+     * learning_workflow/graph/workflow.py: content and explanation move
+     * together or the edit is refused.
+     */
+    public function test_rewording_a_question_without_updating_the_explanation_is_refused(): void
+    {
+        $quiz     = $this->approvedQuiz();
+        $question = $this->aiQuestion($quiz);
+
+        $this->putQuiz($quiz, 'Basics Quiz', [
+            $this->fourOptions('What does React actually do?', 'User interfaces', $question->id),
+        ])->assertStatus(422);
+
+        // The whole update is one transaction, so nothing moved.
+        $this->assertSame('What is React primarily used for?', $question->fresh()->question);
+    }
+
+    /** Sending the old explanation back unchanged is the same failure. */
+    public function test_resending_the_same_explanation_is_refused(): void
+    {
+        $quiz     = $this->approvedQuiz();
+        $question = $this->aiQuestion($quiz);
+
+        $this->putQuiz($quiz, 'Basics Quiz', [
+            $this->fourOptions(
+                'What does React actually do?',
+                'User interfaces',
+                $question->id,
+                'React is a library for building user interfaces.'
+            ),
+        ])->assertStatus(422);
+    }
+
+    public function test_updating_both_together_is_accepted(): void
+    {
+        $quiz     = $this->approvedQuiz();
+        $question = $this->aiQuestion($quiz);
+
+        $this->putQuiz($quiz, 'Basics Quiz', [
+            $this->fourOptions(
+                'What does React actually do?',
+                'User interfaces',
+                $question->id,
+                'It renders and updates the user interface as state changes.'
+            ),
+        ])->assertStatus(200);
+
+        $metadata = $question->fresh()->ai_metadata;
+
+        $this->assertSame(
+            'It renders and updates the user interface as state changes.',
+            $metadata['correct_answer_explanation']
+        );
+
+        // The rest is provenance and survives untouched.
+        $this->assertSame('conceptual', $metadata['question_type']);
+    }
+
+    /** Changing only which option is correct counts as content changing. */
+    public function test_changing_only_the_answer_needs_a_new_explanation_too(): void
+    {
+        $quiz     = $this->approvedQuiz();
+        $question = $this->aiQuestion($quiz);
+
+        $this->putQuiz($quiz, 'Basics Quiz', [
+            $this->fourOptions($question->question, 'Networking', $question->id),
+        ])->assertStatus(422);
+    }
+
+    /**
+     * A hand-written question has no explanation, so there is nothing to keep
+     * in step and the rule must not block ordinary editing.
+     */
+    public function test_a_question_with_no_explanation_edits_freely(): void
+    {
+        $quiz     = $this->approvedQuiz();
+        $question = QuizQuestion::sole();
+
+        $this->assertNull($question->ai_metadata);
+
+        $this->putQuiz($quiz, 'Basics Quiz', [
+            $this->fourOptions('Reworded with no explanation anywhere', 'Networking', $question->id),
+        ])->assertStatus(200);
+    }
+
+    /**
+     * The explanation is about the question, not the quiz. Renaming the quiz
+     * leaves every question exactly as the AI wrote it, so the explanations
+     * are still true and must survive.
+     */
+    public function test_renaming_the_quiz_leaves_the_explanation_alone(): void
+    {
+        $quiz     = $this->approvedQuiz();
+        $question = $this->aiQuestion($quiz);
+
+        $this->putQuiz($quiz, 'A Better Quiz Title', [
+            $this->fourOptions($question->question, $question->answer, $question->id),
+        ])->assertStatus(200);
+
+        $this->assertSame(
+            'React is a library for building user interfaces.',
+            $question->fresh()->ai_metadata['correct_answer_explanation']
+        );
+    }
+
+    /**
+     * The editor loads the explanation from here, so it has to come back or a
+     * manager cannot satisfy the rule without retyping it from memory.
+     */
+    public function test_the_material_endpoint_serves_the_explanation(): void
+    {
+        $quiz = $this->approvedQuiz();
+        $this->aiQuestion($quiz);
+
+        $this->actingAs($this->manager, 'sanctum')
+            ->getJson("/api/version-nodes/{$this->module->id}/material")
+            ->assertJsonPath(
+                'quizzes.0.questions.0.explanation',
+                'React is a library for building user interfaces.'
+            );
+    }
+
+    /** A new question can carry one, so hand-authored quizzes can have them. */
+    public function test_a_new_question_can_be_given_an_explanation(): void
+    {
+        $this->createQuiz([
+            'title'     => 'Basics Quiz',
+            'questions' => [
+                $this->fourOptions(
+                    'What is React primarily used for?',
+                    'User interfaces',
+                    null,
+                    'Because it builds and updates user interfaces.'
+                ),
+            ],
+        ])->assertStatus(201);
+
+        $this->assertSame(
+            'Because it builds and updates user interfaces.',
+            QuizQuestion::sole()->ai_metadata['correct_answer_explanation']
+        );
     }
 
     public function test_the_queue_carries_the_note(): void

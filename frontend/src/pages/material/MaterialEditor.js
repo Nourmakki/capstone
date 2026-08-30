@@ -29,6 +29,7 @@ const blankQuestion = () => ({
     type: "multiple_choice",
     options: optionsForType("multiple_choice"),
     answer: "",
+    explanation: "",
 });
 
 const blankQuiz = () => ({ id: null, title: "", questions: [blankQuestion()] });
@@ -155,6 +156,10 @@ function MaterialEditor({ onChanged }) {
                     ? [...q.options, "", "", "", ""].slice(0, Math.max(4, q.options.length))
                     : [...q.options],
                 answer: q.answer,
+                // Why the answer is right. Sent back on save because the
+                // server refuses an edit that changes the question and
+                // leaves this describing the old one.
+                explanation: q.explanation ?? "",
             })),
         });
     };
@@ -191,6 +196,7 @@ function MaterialEditor({ onChanged }) {
                         ? []
                         : q.options.map((o) => o.trim()).filter(Boolean),
                     answer: q.answer,
+                    explanation: q.explanation?.trim() || null,
                 })),
             };
 
@@ -307,9 +313,32 @@ function MaterialEditor({ onChanged }) {
         return filled.length - new Set(filled).size;
     };
 
+    /**
+     * An explanation that was written for a different question is worse than
+     * none, so the server refuses an edit that changes a question and leaves
+     * its explanation untouched. Same rule as validate_edited_quiz() in the AI
+     * system. Caught here so Save explains instead of the server erroring.
+     */
+    const explanationOutOfDate = (q) => {
+        const original = material?.quizzes
+            ?.find((quiz) => quiz.id === quizDraft?.id)
+            ?.questions.find((existing) => existing.id === q.id);
+
+        if (!original || !original.explanation) return false;
+
+        const contentChanged =
+            original.question !== q.question
+            || original.answer !== q.answer
+            || original.options.join(" ")
+                !== q.options.map((o) => o.trim()).filter(Boolean).join(" ");
+
+        return contentChanged && (q.explanation ?? "").trim() === original.explanation.trim();
+    };
+
     const questionValid = (q) =>
         q.question.trim()
         && q.answer.trim()
+        && !explanationOutOfDate(q)
         && (q.type === "short_answer"
             || (filledOptions(q) === OPTION_COUNT[q.type] && duplicateOptions(q) === 0));
 
@@ -564,6 +593,36 @@ function MaterialEditor({ onChanged }) {
                                                 )}
                                             </div>
                                         )}
+
+                                        {/* Why the answer is right. Optional on a
+                                            hand-written question; where one already
+                                            exists it has to be rewritten alongside
+                                            the question it explains. */}
+                                        <div className="mt-4">
+                                            <label className="block text-xs text-gray-500 mb-2">
+                                                Why the answer is right
+                                                <span className="text-gray-600"> (optional)</span>
+                                            </label>
+
+                                            <textarea
+                                                rows="2"
+                                                value={q.explanation ?? ""}
+                                                onChange={(e) => patchQuestion(qi, { explanation: e.target.value })}
+                                                placeholder="Explain the correct answer"
+                                                className={`w-full p-3 rounded-xl bg-black/40 border text-white text-sm ${
+                                                    explanationOutOfDate(q)
+                                                        ? "border-yellow-400/50"
+                                                        : "border-white/10"
+                                                }`}
+                                            />
+
+                                            {explanationOutOfDate(q) && (
+                                                <p className="text-xs text-yellow-300 mt-2">
+                                                    You changed this question, so its explanation
+                                                    needs updating too.
+                                                </p>
+                                            )}
+                                        </div>
                                     </div>
                                 ))}
                             </div>
