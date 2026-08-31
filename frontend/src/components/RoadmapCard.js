@@ -84,7 +84,17 @@ function RoadmapCard({ roadmap, onOpen, ctaLabel = "View Roadmap" }) {
     // specializations, so it is available on the strength of its children.
     const children = roadmap.children ?? [];
     const isChooser = children.length > 0;
-    const available = isChooser || Boolean(roadmap.latest_version);
+
+    // But only as available as its paths actually are. Having children is not
+    // the same as having somewhere to go: a parent whose topics are all
+    // unpublished opened onto a page of "Unavailable" cards, which is worse
+    // than the greyed-out card it replaced, because the student has to click
+    // to find out there is nothing there.
+    const openablePaths = children.filter((child) => child.latest_version);
+
+    const available = isChooser
+        ? openablePaths.length > 0
+        : Boolean(roadmap.latest_version);
 
     const open = () => {
         if (available) onOpen(roadmap);
@@ -123,7 +133,12 @@ function RoadmapCard({ roadmap, onOpen, ctaLabel = "View Roadmap" }) {
 
             <p className="mt-4 text-xs text-gray-500">
                 {isChooser
-                    ? `${children.length} paths · ${children.map((c) => c.title).join(", ")}`
+                    ? available
+                        // Every path is named, including the ones not open yet:
+                        // this line describes the page behind the card, and that
+                        // page shows them all, greying out what is not ready.
+                        ? `${children.length} paths · ${children.map((c) => c.title).join(", ")}`
+                        : "No published paths yet"
                     : available
                     ? `${roadmap.node_count} modules · v${roadmap.latest_version.version_number}`
                     : "No published version yet"}
