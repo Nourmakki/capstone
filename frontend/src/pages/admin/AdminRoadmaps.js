@@ -36,7 +36,12 @@ function AdminRoadmaps({ onChanged }) {
             const response = await api.get("/roadmaps");
             const list = response.data.data ?? [];
             setRoadmaps(list);
-            setSelectedId((prev) => prev ?? list[0]?.id ?? null);
+
+            // Open on a roadmap proper, not whichever topic happens to sort
+            // first - the top row is where the panel starts.
+            setSelectedId((prev) =>
+                prev ?? list.find((r) => !r.parent_roadmap_id)?.id ?? list[0]?.id ?? null
+            );
         } catch (err) {
             console.error(err);
         } finally {
@@ -157,6 +162,17 @@ function AdminRoadmaps({ onChanged }) {
         }
     };
 
+    // The roadmaps proper. Topics reach the panel through their parent.
+    const parents = roadmaps.filter((r) => !r.parent_roadmap_id);
+
+    const selected = roadmaps.find((r) => r.id === selectedId);
+
+    // Which parent's topics to show. Opening a topic keeps its siblings on
+    // screen, so moving between them does not mean going back up first.
+    const activeParentId = selected?.parent_roadmap_id ?? selected?.id ?? null;
+    const activeParent = roadmaps.find((r) => r.id === activeParentId);
+    const topics = roadmaps.filter((r) => r.parent_roadmap_id === activeParentId);
+
     const statusStyle = (s) =>
         s === "Published" ? "border-green-400/30 bg-green-400/10 text-green-300"
         : s === "Draft" ? "border-yellow-400/30 bg-yellow-400/10 text-yellow-300"
@@ -228,32 +244,35 @@ function AdminRoadmaps({ onChanged }) {
                 <p className="text-gray-400">Loading...</p>
             ) : (
                 <>
-                    <div className="flex flex-wrap gap-3 mb-8">
-                        {roadmaps.map((r) => (
+                    {/* Two rows, not one flat list. Thirteen roadmaps side by
+                        side put a topic next to the roadmap that contains it,
+                        as though they were peers - so the top row is the
+                        roadmaps proper, and a parent's topics appear beneath
+                        it once it is chosen. */}
+                    <div className="flex flex-wrap gap-3 mb-4">
+                        {parents.map((r) => (
                             <button key={r.id} onClick={() => { setSelectedId(r.id); setGraph(null); }}
                                 className={`px-6 py-3 rounded-2xl transition flex items-center gap-2 ${
-                                    selectedId === r.id
+                                    activeParentId === r.id
                                         ? "bg-[#0097a7] text-black font-semibold"
                                         : "bg-white/5 border border-white/10 text-gray-300"
                                 }`}>
-                                {/* A topic reads as a peer of its own parent in
-                                    this flat list, so name the parent it
-                                    belongs to. Two roadmaps can reasonably
-                                    both have a "Foundations" topic. */}
-                                {r.parent?.title && (
-                                    <span className={`text-xs ${
-                                        selectedId === r.id ? "text-black/60" : "text-gray-500"
+                                {r.title}
+
+                                {/* How many topics sit under it, so a parent
+                                    does not look empty before it is opened. */}
+                                {(r.children?.length ?? 0) > 0 && (
+                                    <span className={`text-xs px-2 py-0.5 rounded-full ${
+                                        activeParentId === r.id ? "bg-black/20 text-black" : "bg-white/10 text-gray-400"
                                     }`}>
-                                        {r.parent.title} ›
+                                        {r.children.length}
                                     </span>
                                 )}
-
-                                {r.title}
 
                                 {/* Without this a rejected roadmap looks approved. */}
                                 {r.review_status !== "approved" && (
                                     <span className={`text-xs px-2 py-0.5 rounded-full ${
-                                        selectedId === r.id
+                                        activeParentId === r.id
                                             ? "bg-black/20 text-black"
                                             : r.review_status === "rejected"
                                             ? "bg-red-400/20 text-red-300"
@@ -265,6 +284,46 @@ function AdminRoadmaps({ onChanged }) {
                             </button>
                         ))}
                     </div>
+
+                    {topics.length > 0 && (
+                        <div className="flex flex-wrap items-center gap-3 mb-8 pl-4 border-l-2 border-[#0097a7]/30">
+                            <span className="text-xs text-gray-500">Topics in {activeParent?.title}:</span>
+
+                            {/* The parent itself, so its own versions stay
+                                reachable once a topic has been opened. */}
+                            <button onClick={() => { setSelectedId(activeParentId); setGraph(null); }}
+                                className={`px-4 py-2 rounded-xl text-sm transition ${
+                                    selectedId === activeParentId
+                                        ? "bg-[#0097a7] text-black font-semibold"
+                                        : "bg-white/5 border border-white/10 text-gray-400"
+                                }`}>
+                                {activeParent?.title} itself
+                            </button>
+
+                            {topics.map((r) => (
+                                <button key={r.id} onClick={() => { setSelectedId(r.id); setGraph(null); }}
+                                    className={`px-4 py-2 rounded-xl text-sm transition flex items-center gap-2 ${
+                                        selectedId === r.id
+                                            ? "bg-[#0097a7] text-black font-semibold"
+                                            : "bg-white/5 border border-white/10 text-gray-300"
+                                    }`}>
+                                    {r.title}
+
+                                    {r.review_status !== "approved" && (
+                                        <span className={`text-xs px-2 py-0.5 rounded-full ${
+                                            selectedId === r.id
+                                                ? "bg-black/20 text-black"
+                                                : r.review_status === "rejected"
+                                                ? "bg-red-400/20 text-red-300"
+                                                : "bg-yellow-400/20 text-yellow-300"
+                                        }`}>
+                                            {r.review_status}
+                                        </span>
+                                    )}
+                                </button>
+                            ))}
+                        </div>
+                    )}
 
                     <div className="rounded-3xl border border-white/10 bg-white/[0.03] p-8">
                         <div className="flex items-center justify-between mb-8">
