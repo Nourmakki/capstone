@@ -1,18 +1,27 @@
 from typing import Literal, Optional, TypedDict
 
-# =====================================================================
-# ROADMAP CHOICE STATE
-# =====================================================================
+
+class RoadmapScopePathState(TypedDict):
+    path_id: int
+    title: str
+    description: str
+
+
+class RoadmapScopeResultState(TypedDict):
+    input_topic: str
+    is_broad_topic: bool
+    paths: list[RoadmapScopePathState]
+    scope_summary: str
+
+
 class RoadmapChoiceState(TypedDict):
     choice_id: int
     title: str
     description: str
+    separate_roadmap: bool
     recommended: bool
     recommendation_reason: Optional[str]
 
-# =====================================================================
-# BASE ROADMAP NODE STATE
-# =====================================================================
 
 class BaseRoadmapNodeState(TypedDict):
     node_id: int
@@ -22,35 +31,21 @@ class BaseRoadmapNodeState(TypedDict):
     prerequisite_node_ids: list[int]
     learning_outcomes: list[str]
 
-# =====================================================================
-# STANDARD ROADMAP NODE STATE
-# =====================================================================
 
-class StandardRoadmapNodeState(
-    BaseRoadmapNodeState
-):
+class StandardRoadmapNodeState(BaseRoadmapNodeState):
     type: Literal["standard"]
 
-# =====================================================================
-# CHOICE ROADMAP NODE STATE
-# =====================================================================
 
-class ChoiceRoadmapNodeState(
-    BaseRoadmapNodeState
-):
+class ChoiceRoadmapNodeState(BaseRoadmapNodeState):
     type: Literal["choice"]
-    choices: list[ RoadmapChoiceState]
+    choices: list[RoadmapChoiceState]
 
-# =====================================================================
-# ROADMAP NODE STATE
-# =====================================================================
+
 RoadmapNodeState = (
     StandardRoadmapNodeState
     | ChoiceRoadmapNodeState
 )
-# =====================================================================
-# ROADMAP RESULT STATE
-# =====================================================================
+
 
 class RoadmapResultState(TypedDict):
     roadmap_topic: str
@@ -60,37 +55,84 @@ class RoadmapResultState(TypedDict):
     freshness_summary: str
 
 
-# =====================================================================
-# ROADMAP RESEARCH STATE
-# =====================================================================
+class GeneratedChildRoadmapState(TypedDict):
+    parent_node_id: int
+    choice_id: int
+    choice_title: str
+    roadmap_result: RoadmapResultState
 
-class RoadmapResearchState(TypedDict):
-    summary: str
-    sources: list[str]
 
-# =====================================================================
-# WORKFLOW STATUS
-# =====================================================================
-RoadmapBuilderWorkflowStatus = Literal[
+class GeneratedPathRoadmapState(TypedDict):
+    path_id: int
+    path_title: str
+    roadmap_result: RoadmapResultState
+    child_roadmaps: list[
+        GeneratedChildRoadmapState
+    ]
+
+
+WorkflowStatus = Literal[
     "starting",
-    "researching_current_domain",
-    "running_roadmap_builder_agent",
-    "validating_roadmap",
-    "ready",
+    "generating_scope",
+    "awaiting_review",
+    "generating_roadmaps",
+    "ready_for_commit",
+    "rejected",
     "failed",
 ]
-# =====================================================================
-# ROADMAP BUILDER WORKFLOW STATE
-# =====================================================================
+
+
+ReviewStage = Literal[
+    "scope_review",
+    "roadmap_review",
+]
+
+
 class RoadmapBuilderState(
     TypedDict,
     total=False,
 ):
     workflow_id: str
+
+    # Original Laravel input.
     roadmap_topic: str
-    current_domain_research: (RoadmapResearchState)
-    roadmap_result: (RoadmapResultState)
-    validation_errors: list[str]
-    generation_attempts: int
-    status: RoadmapBuilderWorkflowStatus
-    error: Optional[str]
+
+    # Current and accepted scope.
+    scope_result: RoadmapScopeResultState
+    approved_scope_result: (
+        RoadmapScopeResultState
+    )
+
+    # All generated roadmap packages.
+    roadmap_packages: list[
+        GeneratedPathRoadmapState
+    ]
+
+    # Packages explicitly approved so far.
+    approved_roadmap_packages: list[
+        GeneratedPathRoadmapState
+    ]
+
+    # Which roadmap package the manager
+    # is currently reviewing.
+    current_roadmap_review_index: int
+
+    # Generation tracking.
+    scope_generation_attempts: int
+    roadmap_generation_attempts: int
+
+    # Regeneration feedback.
+    scope_regeneration_feedback: (
+        str
+        | None
+    )
+    roadmap_regeneration_feedback: (
+        str
+        | None
+    )
+
+    # Workflow control.
+    status: WorkflowStatus
+    review_stage: ReviewStage | None
+    rejection_feedback: str | None
+    error: str | None
