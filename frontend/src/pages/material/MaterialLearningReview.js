@@ -48,7 +48,10 @@ function MaterialLearningReview({ onChanged }) {
             .then((r) => {
                 const list = r.data.data ?? [];
                 setRoadmaps(list);
-                setRoadmapId((prev) => prev ?? list[0]?.id ?? null);
+                // Open on a roadmap proper, not whichever topic sorts first.
+                setRoadmapId((prev) =>
+                    prev ?? list.find((r) => !r.parent_roadmap_id)?.id ?? list[0]?.id ?? null
+                );
             })
             .catch((err) => console.error(err));
     }, []);
@@ -227,9 +230,40 @@ function MaterialLearningReview({ onChanged }) {
                     <select value={roadmapId ?? ""}
                         onChange={(e) => setRoadmapId(Number(e.target.value))}
                         className="p-3 rounded-xl bg-black/30 border border-white/10 text-white">
-                        {roadmaps.map((r) => (
-                            <option key={r.id} value={r.id}>{r.title}</option>
-                        ))}
+                        {/* A dropdown nests with optgroup rather than a second
+                            row, so a topic reads as belonging to its roadmap
+                            instead of sitting beside it as a peer. */}
+                        {roadmaps
+                            .filter((r) => !r.parent_roadmap_id)
+                            .map((parent) => {
+                                const topics = roadmaps.filter(
+                                    (r) => r.parent_roadmap_id === parent.id
+                                );
+
+                                if (topics.length === 0) {
+                                    return (
+                                        <option key={parent.id} value={parent.id}>
+                                            {parent.title}
+                                        </option>
+                                    );
+                                }
+
+                                return (
+                                    <optgroup key={parent.id} label={parent.title}>
+                                        {/* The parent can hold content of its
+                                            own, so it stays selectable. */}
+                                        <option value={parent.id}>
+                                            {parent.title} itself
+                                        </option>
+
+                                        {topics.map((r) => (
+                                            <option key={r.id} value={r.id}>
+                                                {r.title}
+                                            </option>
+                                        ))}
+                                    </optgroup>
+                                );
+                            })}
                     </select>
 
                     <select value={versionId ?? ""}

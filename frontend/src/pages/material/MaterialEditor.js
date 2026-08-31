@@ -1,5 +1,6 @@
 import React, { useCallback, useEffect, useState } from "react";
 import api from "../../api";
+import RoadmapPicker from "../../components/RoadmapPicker";
 import {
     Brain, Code2, Plus, Pencil, Trash2, X, Save, Sparkles, AlertTriangle,
 } from "lucide-react";
@@ -71,7 +72,10 @@ function MaterialEditor({ onChanged }) {
             .then((r) => {
                 const list = r.data.data ?? [];
                 setRoadmaps(list);
-                setRoadmapId((prev) => prev ?? list[0]?.id ?? null);
+                // Open on a roadmap proper, not whichever topic sorts first.
+            setRoadmapId((prev) =>
+                prev ?? list.find((r) => !r.parent_roadmap_id)?.id ?? list[0]?.id ?? null
+            );
             })
             .catch((err) => console.error(err))
             .finally(() => setLoading(false));
@@ -371,16 +375,8 @@ function MaterialEditor({ onChanged }) {
                 <>
                     {/* Roadmap */}
                     <div className="flex flex-wrap gap-3 mb-5">
-                        {roadmaps.map((r) => (
-                            <button key={r.id} onClick={() => setRoadmapId(r.id)}
-                                className={`px-6 py-3 rounded-2xl transition ${
-                                    roadmapId === r.id
-                                        ? "bg-[#0097a7] text-black font-semibold"
-                                        : "bg-white/5 border border-white/10 text-gray-300"
-                                }`}>
-                                {r.title}
-                            </button>
-                        ))}
+                        <RoadmapPicker roadmaps={roadmaps} selectedId={roadmapId}
+                            onSelect={setRoadmapId} />
                     </div>
 
                     {/* Version + module */}
