@@ -50,6 +50,25 @@ from project_assessment_workflow.graph.workflow_options import (
 from project_assessment_workflow.graph.state import (
     ProjectAssessmentState,
 )
+
+
+from api.roadmap_builder.schema import (
+    RoadmapBuilderManagerDecisionRequest,
+    RoadmapBuilderWorkflowResponse,
+    StartRoadmapBuilderRequest,
+)
+from api.roadmap_builder.response_mapper import (
+    build_roadmap_builder_workflow_response,
+)
+from roadmap_workflow.graph.workflow_options import (
+    get_roadmap_builder_workflow_state,
+    resume_roadmap_builder_workflow,
+    start_roadmap_builder_workflow,
+)
+from roadmap_workflow.graph.state import (
+    RoadmapBuilderState,
+)
+
 app = FastAPI(
     title="AI System API",
     version="1.0.0",
@@ -458,6 +477,107 @@ def get_project_assessment_endpoint(
 
     return (
         build_project_assessment_workflow_response(
+            thread_id=thread_id,
+            result=state,
+        )
+    )
+
+# =====================================================================
+# ROADMAP BUILDER WORKFLOW ENDPOINTS
+# =====================================================================
+
+@app.post(
+    "/roadmap-builder-workflows",
+    response_model=RoadmapBuilderWorkflowResponse,
+)
+def start_roadmap_builder_endpoint(
+    request: StartRoadmapBuilderRequest,
+) -> RoadmapBuilderWorkflowResponse:
+
+    initial_state: RoadmapBuilderState = (
+        request.model_dump()
+    )
+
+    workflow_output = (
+        start_roadmap_builder_workflow(
+            initial_state
+        )
+    )
+
+    return (
+        build_roadmap_builder_workflow_response(
+            thread_id=workflow_output[
+                "thread_id"
+            ],
+            result=workflow_output[
+                "result"
+            ],
+        )
+    )
+
+
+@app.post(
+    "/roadmap-builder-workflows/{thread_id}/resume",
+    response_model=RoadmapBuilderWorkflowResponse,
+)
+def resume_roadmap_builder_endpoint(
+    thread_id: str,
+    decision: RoadmapBuilderManagerDecisionRequest,
+) -> RoadmapBuilderWorkflowResponse:
+
+    try:
+        result = (
+            resume_roadmap_builder_workflow(
+                thread_id=thread_id,
+                manager_decision=(
+                    decision.model_dump(
+                        exclude_none=True
+                    )
+                ),
+            )
+        )
+
+    except ValueError as exc:
+        raise HTTPException(
+            status_code=409,
+            detail=str(exc),
+        ) from exc
+
+    return (
+        build_roadmap_builder_workflow_response(
+            thread_id=thread_id,
+            result=result,
+        )
+    )
+
+
+@app.get(
+    "/roadmap-builder-workflows/{thread_id}",
+    response_model=RoadmapBuilderWorkflowResponse,
+)
+def get_roadmap_builder_endpoint(
+    thread_id: str,
+) -> RoadmapBuilderWorkflowResponse:
+
+    try:
+        workflow_snapshot = (
+            get_roadmap_builder_workflow_state(
+                thread_id
+            )
+        )
+
+    except ValueError as exc:
+        raise HTTPException(
+            status_code=404,
+            detail=str(exc),
+        ) from exc
+
+    state = workflow_snapshot[
+        "state"
+    ]
+
+    return (
+        build_roadmap_builder_workflow_response(
             thread_id=thread_id,
             result=state,
         )
