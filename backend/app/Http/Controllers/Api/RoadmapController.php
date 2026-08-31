@@ -56,6 +56,11 @@ class RoadmapController extends Controller
         $roadmaps = $query->with([
             'versions' => $published,
             'versions.versionNodes',
+            // A manager sees this list flat, so a topic needs to say which
+            // roadmap it belongs to - two roadmaps may both have a
+            // "Foundations". Always null for a student, who only gets the
+            // top level.
+            'parent' => fn ($q) => $q->when(! $staff, fn ($inner) => $inner->approved()),
             'children' => fn ($q) => $q->when(! $staff, fn ($inner) => $inner->approved())->orderBy('title'),
             'children.versions' => $published,
             'children.versions.versionNodes',

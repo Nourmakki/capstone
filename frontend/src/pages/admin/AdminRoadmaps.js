@@ -8,7 +8,7 @@ function AdminRoadmaps({ onChanged }) {
     const [selectedId, setSelectedId] = useState(null);
     const [versions, setVersions] = useState([]);
     const [graph, setGraph] = useState(null);
-    const [form, setForm] = useState({ title: "", description: "" });
+    const [form, setForm] = useState({ title: "", description: "", parent_roadmap_id: "" });
     const [versionForm, setVersionForm] = useState({ version_number: "", title: "" });
 
     // The editor renders below the fold, so clicking Modules looks
@@ -65,8 +65,11 @@ function AdminRoadmaps({ onChanged }) {
         setBusy(true);
 
         try {
-            await api.post("/roadmaps", form);
-            setForm({ title: "", description: "" });
+            await api.post("/roadmaps", {
+                ...form,
+                parent_roadmap_id: form.parent_roadmap_id || null,
+            });
+            setForm({ title: "", description: "", parent_roadmap_id: "" });
             await loadRoadmaps();
             onChanged?.();
         } catch (err) {
@@ -180,6 +183,37 @@ function AdminRoadmaps({ onChanged }) {
                         className="bg-black border border-white/10 rounded-xl p-3 focus:outline-none focus:border-[#0097a7]" />
                 </div>
 
+                {/* A topic sits under a broader roadmap - Frontend under Web
+                    Development - and is a roadmap in its own right, so the AI
+                    fills it in through the same path as any other. Only
+                    top-level roadmaps are offered: the tree is two deep, and
+                    a grandchild would be unreachable for students. */}
+                <div className="mt-4">
+                    <label className="block text-sm text-gray-300 mb-2">
+                        Part of another roadmap?
+                    </label>
+
+                    <select value={form.parent_roadmap_id}
+                        onChange={(e) => setForm({ ...form, parent_roadmap_id: e.target.value })}
+                        className="w-full md:w-1/2 bg-black border border-white/10 rounded-xl p-3 text-white focus:outline-none focus:border-[#0097a7]">
+                        <option value="">No - this is a roadmap of its own</option>
+
+                        {roadmaps
+                            .filter((r) => !r.parent_roadmap_id)
+                            .map((r) => (
+                                <option key={r.id} value={r.id}>
+                                    Yes - a topic under {r.title}
+                                </option>
+                            ))}
+                    </select>
+
+                    <p className="text-xs text-gray-500 mt-2">
+                        {form.parent_roadmap_id
+                            ? "It will appear as a path students choose from that roadmap. Give it a version, then let the AI fill in its modules."
+                            : "It will appear on its own in the roadmap list."}
+                    </p>
+                </div>
+
                 <button onClick={createRoadmap} disabled={busy || !form.title.trim() || !form.description.trim()}
                     className={`mt-6 font-bold px-8 py-3 rounded-xl transition ${
                         busy || !form.title.trim() || !form.description.trim()
@@ -202,6 +236,18 @@ function AdminRoadmaps({ onChanged }) {
                                         ? "bg-[#0097a7] text-black font-semibold"
                                         : "bg-white/5 border border-white/10 text-gray-300"
                                 }`}>
+                                {/* A topic reads as a peer of its own parent in
+                                    this flat list, so name the parent it
+                                    belongs to. Two roadmaps can reasonably
+                                    both have a "Foundations" topic. */}
+                                {r.parent?.title && (
+                                    <span className={`text-xs ${
+                                        selectedId === r.id ? "text-black/60" : "text-gray-500"
+                                    }`}>
+                                        {r.parent.title} ›
+                                    </span>
+                                )}
+
                                 {r.title}
 
                                 {/* Without this a rejected roadmap looks approved. */}
