@@ -118,9 +118,17 @@ class SubmissionAssessmentTest extends TestCase
         $this->assertStringContainsString('Add error handling', $submission->ai_feedback);
 
         // The criterion detail has nowhere to live in a column, so it has to
-        // survive in ai_metadata or it is lost.
-        $this->assertStringContainsString('Component renders', $submission->ai_metadata);
+        // survive in ai_metadata or it is lost. Cast to array on the model,
+        // so storing an encoded string here would double-encode it.
+        $this->assertIsArray($submission->ai_metadata);
+        $this->assertSame(
+            'Component renders',
+            $submission->ai_metadata['assessment']['criterion_assessments'][0]['criterion']
+        );
         $this->assertSame('Component renders', $response->json('assessment.breakdown.criteria.0.criterion'));
+
+        // Her exact figure survives beside the rounded column.
+        $this->assertSame(87.5, $response->json('assessment.breakdown.total_score'));
     }
 
     /**
@@ -138,6 +146,36 @@ class SubmissionAssessmentTest extends TestCase
             ->assertOk();
 
         $this->assertSame(110, $submission->refresh()->ai_score);
+    }
+
+    /**
+     * When she sends an assessment with no score block, AiGradingService
+     * recomputes it from her STATUS_SCORE_VALUES rather than storing nothing.
+     * Two criteria, one met (1.0) and one partially met (0.5), is 75 base;
+     * plus 3 + 4 bonus is 82.
+     */
+    public function test_a_missing_score_block_is_recomputed_with_her_status_values(): void
+    {
+        $body = $this->readyBody();
+        unset($body['data']['assessment_score']);
+
+        $body['data']['project_assessment_result']['criterion_assessments'][] = [
+            'criterion_id' => 'c2',
+            'criterion'    => 'Handles errors',
+            'status'       => 'partially_met',
+            'evidence'     => 'No try/catch',
+            'feedback'     => 'Partly handled.',
+        ];
+
+        Http::fake([self::URL => Http::response($body, 200)]);
+
+        $submission = $this->makeSubmission();
+
+        $this->actingAs($this->makeProfessor(), 'sanctum')
+            ->postJson("/api/submissions/{$submission->id}/assess")
+            ->assertOk();
+
+        $this->assertSame(82, $submission->refresh()->ai_score);
     }
 
     /** A professor's own grade outranks the AI's and must not be overwritten. */

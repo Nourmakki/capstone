@@ -20,8 +20,10 @@ use Illuminate\Validation\ValidationException;
  */
 class AiSubmissionAssessmentService
 {
-    public function __construct(private AiWorkflowService $ai)
-    {
+    public function __construct(
+        private AiWorkflowService $ai,
+        private AiGradingService $grading
+    ) {
     }
 
     /**
@@ -148,59 +150,37 @@ class AiSubmissionAssessmentService
     /**
      * Write the verdict onto the submission.
      *
-     * total_score can reach 110 - her base is 0-100 with up to 10 bonus - and
-     * ai_score is an unsigned int, so it is rounded but deliberately not
-     * capped. Clamping to 100 here would silently discard the bonus she
-     * calculated; whether 110 is a sensible grade is a question for her and
-     * Fatima, not something to decide by truncation.
+     * The mapping itself belongs to AiGradingService, which mirrors her
+     * assessment_scoring.py - including STATUS_SCORE_VALUES, so a criterion
+     * counts for the same here as it does there. Duplicating that logic would
+     * mean two places to keep in step with her, and only one of them named
+     * after the file it mirrors.
+     *
+     * It also recomputes the score when she sends an assessment without one,
+     * which is the behaviour to keep: her numbers win where she provides them.
+     *
+     * total_score can reach 110 - base 0-100 plus up to 10 bonus - and is
+     * rounded but deliberately not capped. Clamping would silently discard a
+     * bonus she calculated.
      */
     private function record(Submission $submission, array $body): Submission
     {
-        $data   = $body['data'] ?? [];
-        $score  = $data['assessment_score'] ?? [];
-        $result = $data['project_assessment_result'] ?? [];
+        $data = $body['data'] ?? [];
 
-        $submission->update([
-            'ai_score'       => isset($score['total_score']) ? (int) round($score['total_score']) : null,
-            'ai_feedback'    => $this->feedback($result),
-            'ai_reviewed_at' => now(),
-            // Only forward: a professor who has already graded this keeps
-            // their status, since human_reviewed is the later state.
-            'status'         => $submission->status === 'human_reviewed' ? 'human_reviewed' : 'ai_reviewed',
-            // The whole verdict, so the criterion-by-criterion detail survives
-            // even though our columns have nowhere to put it.
-            'ai_metadata'    => json_encode($body),
-        ]);
+        $submission = $this->grading->applyAssessment(
+            $submission,
+            $data['project_assessment_result'] ?? [],
+            $data['assessment_score'] ?? null
+        );
+
+        // applyAssessment writes the grade, not the workflow state - the
+        // status belongs to us, and only moves forward: a professor who has
+        // already marked this keeps human_reviewed, the later state.
+        if ($submission->status !== 'human_reviewed') {
+            $submission->update(['status' => 'ai_reviewed']);
+        }
 
         return $submission->fresh();
-    }
-
-    /**
-     * Her feedback is structured; ai_feedback is one text column. Compose the
-     * parts a student would actually read rather than storing raw JSON - the
-     * full structure is kept in ai_metadata for anyone who needs it.
-     */
-    private function feedback(array $result): string
-    {
-        $parts = [];
-
-        if (filled($result['overall_feedback'] ?? null)) {
-            $parts[] = $result['overall_feedback'];
-        }
-
-        foreach ([
-            'strengths'             => 'Strengths',
-            'improvements'          => 'What to improve',
-            'constraint_violations' => 'Requirements not met',
-        ] as $key => $heading) {
-            $items = array_filter($result[$key] ?? []);
-
-            if ($items !== []) {
-                $parts[] = $heading . ":\n- " . implode("\n- ", $items);
-            }
-        }
-
-        return $parts === [] ? 'The AI returned no written feedback.' : implode("\n\n", $parts);
     }
 
     /** Her 422s carry a detail array; a dead service carries nothing useful. */

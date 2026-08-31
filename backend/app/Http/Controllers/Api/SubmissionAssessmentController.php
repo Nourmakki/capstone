@@ -57,9 +57,11 @@ class SubmissionAssessmentController extends Controller
 
     private function payload(Submission $submission): array
     {
-        $metadata = json_decode($submission->ai_metadata ?? 'null', true);
-        $data     = $metadata['data'] ?? [];
-        $result   = $data['project_assessment_result'] ?? [];
+        // ai_metadata is cast to array on the model, and AiGradingService
+        // stores it as {assessment, score}.
+        $metadata = $submission->ai_metadata ?? [];
+        $score    = $metadata['score'] ?? [];
+        $result   = $metadata['assessment'] ?? [];
 
         return [
             'submission_id'  => $submission->id,
@@ -74,9 +76,11 @@ class SubmissionAssessmentController extends Controller
             // The detail behind the number. Absent on an older assessment that
             // predates ai_metadata, hence the defaults.
             'breakdown'      => [
-                'base_score'  => $data['assessment_score']['base_score'] ?? null,
-                'bonus_score' => $data['assessment_score']['bonus_score'] ?? null,
-                'total_score' => $data['assessment_score']['total_score'] ?? null,
+                'base_score'  => $score['base_score'] ?? null,
+                'bonus_score' => $score['bonus_score'] ?? null,
+                // The exact figure she produced, unrounded - ai_score above is
+                // the integer column, so 87.5 reads as 88 there.
+                'total_score' => $score['total_score'] ?? null,
                 'criteria'    => array_map(fn ($c) => [
                     'criterion' => $c['criterion'] ?? '',
                     'status'    => $c['status'] ?? '',
