@@ -1,6 +1,6 @@
 import React, { useCallback, useEffect, useState } from "react";
 import api from "../../api";
-import { UserRound, CheckCircle2, Inbox, CheckCircle, XCircle, HelpCircle, Download } from "lucide-react";
+import { UserRound, CheckCircle2, Inbox, CheckCircle, XCircle, HelpCircle, Download, Sparkles } from "lucide-react";
 
 function ProfessorReviews({ onChanged }) {
     const [requests, setRequests] = useState([]);
@@ -8,6 +8,10 @@ function ProfessorReviews({ onChanged }) {
     const [loading, setLoading] = useState(true);
     const [form, setForm] = useState({});
     const [busy, setBusy] = useState(null);
+
+    // Separate from busy: assessing takes minutes, and the grade form should
+    // stay usable while the AI works.
+    const [assessing, setAssessing] = useState(null);
 
     /**
      * The download route needs the bearer token, so a plain link will not
@@ -91,6 +95,29 @@ function ProfessorReviews({ onChanged }) {
         }
     };
 
+    /**
+     * Hand the submission to the AI system for a score.
+     *
+     * Slow by nature - it clones repositories and reads notebooks - so the
+     * button says so rather than looking hung. The professor's own score is
+     * untouched either way; this only fills the AI column beside it.
+     */
+    const assess = async (submissionId) => {
+        setAssessing(submissionId);
+
+        try {
+            await api.post(`/submissions/${submissionId}/assess`);
+            await load();
+        } catch (err) {
+            const errors = err.response?.data?.errors;
+            alert(errors
+                ? Object.values(errors).flat().join("\n")
+                : (err.response?.data?.message ?? "Could not assess this submission."));
+        } finally {
+            setAssessing(null);
+        }
+    };
+
     const setField = (id, field, value) =>
         setForm((prev) => ({ ...prev, [id]: { ...(prev[id] ?? {}), [field]: value } }));
 
@@ -140,9 +167,13 @@ function ProfessorReviews({ onChanged }) {
                                             {r.kind}
                                         </span>
 
+                                        {/* Her score is 0-100 base plus up to 10
+                                            bonus, so "/ 100" would misreport a
+                                            submission that earned the bonus. */}
                                         {r.submission.ai_score !== null && (
                                             <span className="text-xs text-gray-400">
-                                                AI estimated {r.submission.ai_score} / 100
+                                                AI estimated {r.submission.ai_score}
+                                                {r.submission.ai_score > 100 ? " (100 + bonus)" : " / 100"}
                                             </span>
                                         )}
 
@@ -172,6 +203,29 @@ function ProfessorReviews({ onChanged }) {
                                         >
                                             <Download size={14} />
                                             Download ZIP
+                                        </button>
+                                    )}
+
+                                    {/* Grading a project with the AI. Asked for
+                                        rather than automatic: it clones the
+                                        repository and reads the files, so it
+                                        takes minutes and spends API quota. */}
+                                    {r.kind !== "quiz" && (
+                                        <button
+                                            onClick={() => assess(r.submission.id)}
+                                            disabled={assessing === r.submission.id}
+                                            className={`mt-3 ml-0 sm:ml-3 inline-flex items-center gap-2 px-4 py-2 rounded-xl border text-sm transition ${
+                                                assessing === r.submission.id
+                                                    ? "border-white/10 text-gray-500 cursor-wait"
+                                                    : "border-purple-400/30 text-purple-300 hover:bg-purple-500/10"
+                                            }`}
+                                        >
+                                            <Sparkles size={14} />
+                                            {assessing === r.submission.id
+                                                ? "Assessing, this takes a minute..."
+                                                : r.submission.ai_score !== null
+                                                ? "Re-run AI assessment"
+                                                : "Assess with AI"}
                                         </button>
                                     )}
 

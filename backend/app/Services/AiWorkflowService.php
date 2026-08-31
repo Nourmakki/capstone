@@ -91,4 +91,49 @@ class AiWorkflowService
             );
     }
 
+    /**
+     * Grade one student submission.
+     *
+     * Unlike the other two workflows this one is multipart, not JSON: her
+     * endpoint takes the submitted file itself rather than a path, which is
+     * what lets the two halves sit on different machines.
+     *
+     * Her validator rejects a contradictory pair outright, so the fields are
+     * omitted rather than sent null - "file" with a repository_url present is
+     * a 422 even when that url is null.
+     *
+     * @param  array{learning_thread_id: string, submission_type: string,
+     *               repository_url?: string, student_note?: string} $fields
+     * @param  string|null $filePath Absolute path to the stored submission.
+     */
+    public function startProjectAssessment(
+        array $fields,
+        ?string $filePath = null,
+        ?string $fileName = null
+    ): Response {
+        $request = Http::acceptJson()
+            ->connectTimeout(5)
+            // Cloning a repository and reading a notebook is slower than the
+            // other two, and a timeout here loses the student's grade.
+            ->timeout(600);
+
+        if ($filePath !== null) {
+            $request = $request->attach(
+                'submission_file',
+                file_get_contents($filePath),
+                $fileName ?? basename($filePath)
+            );
+        }
+
+        return $request->asMultipart()
+            ->post($this->baseUrl . '/project-assessment-workflows', $fields);
+    }
+
+    public function getProjectAssessment(string $threadId): Response
+    {
+        return Http::acceptJson()
+            ->connectTimeout(5)
+            ->timeout(30)
+            ->get($this->baseUrl . '/project-assessment-workflows/' . $threadId);
+    }
 }

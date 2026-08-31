@@ -19,6 +19,7 @@ use App\Http\Controllers\Api\ProfileController;
 use App\Http\Controllers\Api\VersionGraphController;
 use App\Http\Controllers\Api\LearningWorkflowController;
 use App\Http\Controllers\Api\MaterialAuthoringController;
+use App\Http\Controllers\Api\SubmissionAssessmentController;
 use Illuminate\Support\Facades\Route;
 
 /*
@@ -223,5 +224,13 @@ Route::middleware('auth:sanctum')->group(function () {
         Route::post('/review-requests/{reviewRequest}/claim', [ProfessorController::class, 'claim']);
         Route::post('/review-requests/{reviewRequest}/review', [ProfessorController::class, 'review']);
         Route::get('/stats', [ProfessorController::class, 'stats']);
+    });
+
+    // AI grading of a project submission. Open to both roles that mark work:
+    // a professor asks for it while reviewing, and a material manager needs it
+    // to demonstrate the workflow without holding a professor account.
+    Route::middleware('role:Professor,MaterialManager')->group(function () {
+        Route::post('/submissions/{submission}/assess', [SubmissionAssessmentController::class, 'assess']);
+        Route::get('/submissions/{submission}/assessment', [SubmissionAssessmentController::class, 'show']);
     });
 });
