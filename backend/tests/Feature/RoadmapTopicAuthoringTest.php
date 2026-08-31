@@ -150,6 +150,55 @@ class RoadmapTopicAuthoringTest extends TestCase
             ->assertJsonValidationErrors('parent_roadmap_id');
     }
 
+    /**
+     * A roadmap a student cannot start is withheld rather than shown greyed
+     * out: the card was an invitation to click and find nothing there.
+     */
+    public function test_a_roadmap_with_nothing_to_open_is_hidden_from_students(): void
+    {
+        $empty = $this->parent('Cybersecurity');
+
+        // Its only topic has no published version, so there is still nothing
+        // to start - a topic alone does not make a parent openable.
+        Roadmap::create([
+            'title'             => 'Network Security',
+            'description'       => 'Nothing published yet.',
+            'review_status'     => 'approved',
+            'parent_roadmap_id' => $empty->id,
+        ]);
+
+        $student = $this->makeStudent();
+
+        $titles = collect(
+            $this->actingAs($student, 'sanctum')->getJson('/api/roadmaps')->json('data')
+        )->pluck('title');
+
+        $this->assertNotContains('Cybersecurity', $titles);
+
+        // And hidden means hidden - not merely absent from the list.
+        $this->actingAs($student, 'sanctum')
+            ->getJson("/api/roadmaps/{$empty->id}")
+            ->assertStatus(404);
+    }
+
+    /** A manager still needs to reach the roadmap they are halfway through. */
+    public function test_a_manager_still_sees_a_roadmap_with_nothing_to_open(): void
+    {
+        $empty = $this->parent('Cybersecurity');
+
+        $manager = $this->makeManager();
+
+        $titles = collect(
+            $this->actingAs($manager, 'sanctum')->getJson('/api/roadmaps')->json('data')
+        )->pluck('title');
+
+        $this->assertContains('Cybersecurity', $titles);
+
+        $this->actingAs($manager, 'sanctum')
+            ->getJson("/api/roadmaps/{$empty->id}")
+            ->assertOk();
+    }
+
     public function test_only_a_material_manager_may_create_a_topic(): void
     {
         $parent = $this->parent();
@@ -181,17 +230,31 @@ class RoadmapTopicAuthoringTest extends TestCase
             ])
             ->assertCreated();
 
+        // Something to open, or the parent is withheld for a different reason
+        // and this would not be testing approval at all.
+        $topic = Roadmap::where('title', 'Frontend')->first();
+
+        \App\Models\RoadmapVersion::create([
+            'roadmap_id'     => $topic->id,
+            'version_number' => '1',
+            'status'         => 'Published',
+            'review_status'  => 'approved',
+        ]);
+
         $topicsFor = fn () => collect(
             $this->actingAs($student, 'sanctum')->getJson('/api/roadmaps')->json('data')
         )->firstWhere('title', 'Web Development');
 
-        // Pending, like any other new material: written but not yet live.
-        $this->assertSame([], collect($topicsFor()['children'])->pluck('title')->all());
+        // Pending, like any other new material: written but not yet live. The
+        // parent has nothing else to offer, so it is withheld entirely rather
+        // than shown as a chooser with no paths in it.
+        $this->assertNull($topicsFor());
 
-        Roadmap::where('title', 'Frontend')->update(['review_status' => 'approved']);
+        $topic->update(['review_status' => 'approved']);
 
         $listed = $topicsFor();
 
+        $this->assertNotNull($listed);
         $this->assertSame(['Frontend'], collect($listed['children'])->pluck('title')->all());
 
         // And it is a topic, not a peer: the student list stays top-level.

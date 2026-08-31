@@ -47,7 +47,7 @@ class RoadmapController extends Controller
         // author lives on the children, and a picker that hid them would put
         // the material out of reach.
         $query = Roadmap::query()
-            ->when(! $staff, fn ($q) => $q->topLevel()->approved());
+            ->when(! $staff, fn ($q) => $q->topLevel()->approved()->openable());
 
         $published = fn ($q) => $q->where('status', 'Published')
             ->when(! $staff, fn ($inner) => $inner->approved())
@@ -73,7 +73,9 @@ class RoadmapController extends Controller
     {
         $staff = $this->seesUnapproved($request);
 
-        abort_if(! $staff && ! $roadmap->isApproved(), 404);
+        // Hidden means hidden: a roadmap kept off the list because it cannot
+        // be opened should not be reachable by typing its URL either.
+        abort_if(! $staff && (! $roadmap->isApproved() || ! $roadmap->isOpenable()), 404);
 
         $published = fn ($q) => $q->where('status', 'Published')
             ->when(! $staff, fn ($inner) => $inner->approved())
