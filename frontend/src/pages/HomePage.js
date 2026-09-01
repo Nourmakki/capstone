@@ -150,22 +150,29 @@ function HomePage() {
                 </div>
             </section>
 
+            {/* Deliberately not cards. These were bordered, filled and
+                rounded exactly like a roadmap, with the same icon tile - three
+                more of them under a grid of roadmaps read as three more
+                roadmaps, and nothing about them invited a click that would
+                never come. Now they are what they are: a note about how the
+                platform works, set as text under a rule. */}
             <section className="relative z-10 px-8 lg:px-20 pb-28">
-                <div className="grid lg:grid-cols-3 gap-6">
+                <p className="text-xs uppercase tracking-[0.2em] text-gray-500 mb-8">
+                    How it works
+                </p>
+
+                <div className="grid lg:grid-cols-3 gap-10 lg:gap-14">
                     {FEATURES.map((feature) => (
-                        <div
-                            key={feature.title}
-                            className="rounded-3xl border border-white/10 bg-white/[0.03] p-8"
-                        >
-                            <div className="w-12 h-12 rounded-2xl bg-[#0097a7]/15 border border-[#0097a7]/30 flex items-center justify-center text-[#00b0c2]">
+                        <div key={feature.title} className="border-t border-white/10 pt-6">
+                            <div className="flex items-center gap-3 text-[#00b0c2]">
                                 {feature.icon}
+
+                                <h3 className="text-lg font-semibold text-white">
+                                    {feature.title}
+                                </h3>
                             </div>
 
-                            <h3 className="text-2xl font-bold mt-5 mb-3">
-                                {feature.title}
-                            </h3>
-
-                            <p className="text-gray-400 leading-relaxed">
+                            <p className="text-gray-400 leading-relaxed mt-3 text-sm">
                                 {feature.text}
                             </p>
                         </div>
