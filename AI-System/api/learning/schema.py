@@ -816,7 +816,7 @@ class LearningWorkflowDataResponse(BaseModel):
 
 LearningWorkflowResponseStatus = Literal[
     "awaiting_review",
-    "ready",
+    "ready_for_commit",
     "rejected",
     "failed",
 ]

@@ -99,7 +99,7 @@ def validate_project_assessment_input(
         learning_state.get(
             "status"
         )
-        != "ready"
+        != "ready_for_commit"
     ):
         raise ValueError(
             "Learning workflow must be ready "
@@ -339,7 +339,7 @@ def assess_project_submission(
                 "assessment_score"
             ]
         ),
-        "status": "ready",
+        "status": "ready_for_commit",
         "error": None,
     }
 

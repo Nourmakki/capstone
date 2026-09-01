@@ -194,10 +194,10 @@ def get_current_tutorial_resource_id(
 
     if (
         tutorial_result.get("status")
-        != "ready"
+        != "ready_for_commit"
     ):
         raise ValueError(
-            "Tutorial result is not ready."
+            "Tutorial result is not ready_for_commit."
         )
 
     tutorial = tutorial_result.get(
@@ -233,10 +233,10 @@ def get_tutorial_identity(
 
     if (
         tutorial_result.get("status")
-        != "ready"
+        != "ready_for_commit"
     ):
         raise ValueError(
-            "Tutorial result must be ready."
+            "Tutorial result must be ready_for_commit."
         )
 
     tutorial = tutorial_result.get(
@@ -339,7 +339,7 @@ def run_tutorial_once(
             None,
         )
 
-    if status != "ready":
+    if status != "ready_for_commit":
         raise ValueError(
             "Tutorial Agent returned an "
             "invalid status."
@@ -1062,7 +1062,7 @@ def review_all(
     if action == "approve":
         return Command(
             update={
-                "status": "ready",
+                "status": "ready_for_commit",
                 "review_stage": None,
                 "rejection_feedback": None,
                 "error": None,
@@ -1231,7 +1231,7 @@ def complete_workflow(
 ) -> dict[str, Any]:
 
     return {
-        "status": "ready",
+        "status": "ready_for_commit",
         "review_stage": None,
         "rejection_feedback": None,
         "error": None,

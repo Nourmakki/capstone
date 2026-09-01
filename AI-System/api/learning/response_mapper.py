@@ -16,7 +16,7 @@ def build_learning_workflow_response(
 
     if status in {
         "awaiting_review",
-        "ready",
+        "ready_for_commit",
         "rejected",
     }:
         learning_data = {

@@ -212,7 +212,7 @@ class ProjectAssessmentDataResponse(BaseModel):
 # =====================================================================
 
 ProjectAssessmentPublicStatus = Literal[
-    "ready",
+    "ready_for_commit",
     "failed",
 ]
 

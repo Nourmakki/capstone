@@ -10,7 +10,7 @@ def build_project_assessment_workflow_response(
 
     status = result.get("status")
     assessment_data = None
-    if status == "ready":
+    if status == "ready_for_commit":
         assessment_data = {
             "learning_thread_id": (
                 result.get(

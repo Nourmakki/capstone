@@ -220,7 +220,7 @@ WorkflowStatus = Literal[
     "running_tutorial_agent",
     "running_learning_agents",
     "awaiting_review",
-    "ready",
+    "ready_for_commit",
     "rejected",
     "failed",
 ]

@@ -54,7 +54,7 @@ class AssessmentScoreState(TypedDict):
 ProjectAssessmentWorkflowStatus = Literal[
     "starting",
     "running_project_assessment_agent",
-    "ready",
+    "ready_for_commit",
     "failed",
 ]
 
