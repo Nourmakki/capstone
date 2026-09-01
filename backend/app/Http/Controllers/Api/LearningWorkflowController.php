@@ -139,9 +139,11 @@ class LearningWorkflowController extends Controller
 
             $body = $response->json();
 
-            // Her learning workflow ends at "ready" - the roadmap one says
-            // "ready_for_commit". Two words for the same state.
-            if (($body['status'] ?? null) !== 'ready') {
+            // All four workflows now end at "ready_for_commit". The learning
+            // and assessment ones used to say "ready"; she unified the two
+            // words in 042c157. The tutorial_result inside still has a
+            // "ready" of its own - a different status on a different object.
+            if (($body['status'] ?? null) !== 'ready_for_commit') {
                 return response()->json([
                     'message' => 'This material is not approved yet.',
                 ], 409);

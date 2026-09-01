@@ -1,6 +1,6 @@
 {
-  "_comment": "An approved learning-workflow run for one module, in the exact shape api/learning/schema.py LearningWorkflowResponse describes. Note the terminal status is 'ready', not 'ready_for_commit' - her two workflows use different words for the same state.",
-  "status": "ready",
+  "_comment": "An approved learning-workflow run for one module, in the exact shape api/learning/schema.py LearningWorkflowResponse describes. The envelope now ends at 'ready_for_commit', matching the roadmap workflows - she unified the two words in 042c157. The inner tutorial_result keeps its own 'ready', which TutorialResultResponse still defines.",
+  "status": "ready_for_commit",
   "review_stage": null,
   "data": {
     "tutorial_result": {

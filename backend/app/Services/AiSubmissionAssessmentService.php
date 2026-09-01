@@ -51,7 +51,9 @@ class AiSubmissionAssessmentService
 
         // Her workflow reports its own failure with a 200 and status "failed",
         // so a successful HTTP call is not the same as a successful grading.
-        if (($body['status'] ?? null) !== 'ready' || ! isset($body['data'])) {
+        // ProjectAssessmentPublicStatus is ready_for_commit or failed - it
+        // said "ready" until she unified the wording in 042c157.
+        if (($body['status'] ?? null) !== 'ready_for_commit' || ! isset($body['data'])) {
             throw ValidationException::withMessages([
                 'assessment' => 'The AI system could not grade this submission: '
                     . ($body['error'] ?? 'it returned no result.'),

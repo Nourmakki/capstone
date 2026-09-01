@@ -42,7 +42,7 @@ class SubmissionAssessmentTest extends TestCase
             NodeLearningWorkflow::create([
                 'version_node_id' => $nodes[0]->id,
                 'thread_id'       => 'thread-abc-123',
-                'status'          => 'ready',
+                'status'          => 'ready_for_commit',
             ]);
         }
 
@@ -56,12 +56,12 @@ class SubmissionAssessmentTest extends TestCase
         ], $attributes));
     }
 
-    /** A "ready" response shaped like her ProjectAssessmentWorkflowResponse. */
+    /** A finished response shaped like her ProjectAssessmentWorkflowResponse. */
     private function readyBody(float $total = 87.5): array
     {
         return [
             'thread_id' => 'assess-1',
-            'status'    => 'ready',
+            'status'    => 'ready_for_commit',
             'data'      => [
                 'learning_thread_id' => 'thread-abc-123',
                 'submission'         => ['submission_type' => 'github'],

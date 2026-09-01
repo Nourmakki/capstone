@@ -22,12 +22,20 @@ class LearningRunLauncher
     {
     }
 
-    /** A run is already under way for this module. */
+    /**
+     * A run is already under way for this module.
+     *
+     * "ready" and "ready_for_commit" are the same state: her learning
+     * workflow said the first until 042c157 and says the second now. Rows
+     * written before that still hold the old word, and a run left out of
+     * this list would be treated as finished - so a second one would start
+     * beside it. Both are counted rather than migrating live rows.
+     */
     public function hasActiveRun(VersionNode $versionNode): bool
     {
         return NodeLearningWorkflow::where('version_node_id', $versionNode->id)
             ->whereNull('committed_at')
-            ->whereIn('status', ['awaiting_review', 'ready'])
+            ->whereIn('status', ['awaiting_review', 'ready', 'ready_for_commit'])
             ->exists();
     }
 

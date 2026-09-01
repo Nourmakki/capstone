@@ -202,7 +202,10 @@ function MaterialLearningReview({ onChanged }) {
 
     const data = result?.data;
     const awaitingReview = result?.status === "awaiting_review";
-    const ready = result?.status === "ready";
+    // The envelope, which now ends at "ready_for_commit" like the roadmap
+    // workflows do - it said "ready" until she unified the wording. The
+    // tutorial_result inside data still carries a "ready" of its own.
+    const ready = result?.status === "ready_for_commit";
 
     const committed = !!runs.find((r) => r.id === selected?.id)?.committed;
 
