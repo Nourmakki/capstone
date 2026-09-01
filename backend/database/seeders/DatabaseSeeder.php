@@ -33,6 +33,10 @@ class DatabaseSeeder extends Seeder
             LearningContentSeeder::class,
 
             WorkshopSeeder::class,
+
+            // Last: it reshapes what the seeders above produced into the
+            // three-level tree, moving material rather than recreating it.
+            RoadmapHierarchySeeder::class,
         ]);
     }
 }
