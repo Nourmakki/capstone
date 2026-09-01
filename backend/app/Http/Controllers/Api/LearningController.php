@@ -85,17 +85,32 @@ class LearningController extends Controller
     {
         $student = Student::where('user_id', $request->user()->id)->first();
 
-        $progress = $student
-            ? UserRoadmapProgress::with('roadmapVersion.roadmap')
+        // Every roadmap the student has touched, not only the last one. A
+        // student working through two at once could see only whichever they
+        // opened most recently, and the other was reachable solely by
+        // remembering it existed and finding it on the dashboard.
+        $rows = $student
+            ? UserRoadmapProgress::with('roadmapVersion.roadmap.parent')
                 ->where('student_id', $student->id)
                 ->orderByDesc('updated_at')
-                ->first()
-            : null;
+                ->get()
+            : collect();
 
-        if (! $progress) {
-            return response()->json(['has_progress' => false]);
+        if ($rows->isEmpty()) {
+            return response()->json(['has_progress' => false, 'roadmaps' => []]);
         }
 
+        return response()->json([
+            'has_progress' => true,
+            // Most recent first: that one is "carry on where you left off",
+            // and the rest are the others still open.
+            'roadmaps'     => $rows->map(fn ($p) => $this->progressSummary($p))->values(),
+        ]);
+    }
+
+    /** One roadmap a student is partway through. */
+    private function progressSummary(UserRoadmapProgress $progress): array
+    {
         $version   = $progress->roadmapVersion;
         $completed = $progress->completedNodes->pluck('node_id')->toArray();
 
@@ -142,8 +157,7 @@ class LearningController extends Controller
 
         $isLatest = $published === null || $published->id === $version->id;
 
-        return response()->json([
-            'has_progress' => true,
+        return [
             'roadmap'      => [
                 'id'    => $version->roadmap->id,
                 'title' => $version->roadmap->title,
@@ -174,7 +188,11 @@ class LearningController extends Controller
             'percent_complete' => $total > 0
                 ? (int) round((count($completed) / $total) * 100)
                 : 0,
-        ]);
+            // A roadmap with no module left to unlock is finished, which reads
+            // differently from one merely at 100%.
+            'is_finished'      => $current === null,
+            'last_active'      => $progress->updated_at,
+        ];
     }
 
     /**
