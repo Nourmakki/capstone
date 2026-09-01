@@ -112,13 +112,13 @@ function ProfessorDashboard() {
                             <button key={item.id} title={item.label}
                                 onClick={() => go(item.id)}
                                 className={`w-full flex items-center ${
-                                    collapsed ? "justify-center" : "gap-3"
-                                } px-4 py-2.5 rounded-2xl transition ${
+                                    collapsed ? "justify-center px-0" : "gap-3 px-4"
+                                } py-2.5 rounded-2xl transition ${
                                     activePage === item.id
                                         ? "bg-[#0097a7]/10 border border-[#0097a7]/20 text-[#00b0c2]"
                                         : "hover:bg-white/5 text-gray-300"
                                 }`}>
-                                {item.icon}
+                                <span className="shrink-0">{item.icon}</span>
                                 {!collapsed && (
                                     <span className="flex-1 flex items-center justify-between">
                                         {item.label}

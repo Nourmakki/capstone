@@ -133,14 +133,14 @@ function Dashboard() {
                             title="Dashboard"
                             onClick={() => go("dashboard")}
                             className={`w-full flex items-center ${
-                                collapsed ? "justify-center" : "gap-3"
-                            } px-4 py-2.5 rounded-2xl transition ${
+                                collapsed ? "justify-center px-0" : "gap-3 px-4"
+                            } py-2.5 rounded-2xl transition ${
                                 activePage === "dashboard"
                                     ? "bg-[#0097a7]/10 border border-[#0097a7]/20 text-[#00b0c2]"
                                     : "hover:bg-white/5 text-gray-300"
                             }`}
                         >
-                            <LayoutDashboard size={20} />
+                            <LayoutDashboard size={20} className="shrink-0" />
                             {!collapsed && "Dashboard"}
                         </button>
 
@@ -148,14 +148,14 @@ function Dashboard() {
                             title="My Learning"
                             onClick={() => go("learning")}
                             className={`w-full flex items-center ${
-                                collapsed ? "justify-center" : "gap-3"
-                            } px-4 py-2.5 rounded-2xl transition ${
+                                collapsed ? "justify-center px-0" : "gap-3 px-4"
+                            } py-2.5 rounded-2xl transition ${
                                 activePage === "learning"
                                     ? "bg-[#0097a7]/10 border border-[#0097a7]/20 text-[#00b0c2]"
                                     : "hover:bg-white/5 text-gray-300"
                             }`}
                         >
-                            <BookOpen size={20} />
+                            <BookOpen size={20} className="shrink-0" />
                             {!collapsed && "My Learning"}
                         </button>
 
@@ -163,14 +163,14 @@ function Dashboard() {
                             title="To-Do List"
                             onClick={() => go("todo")}
                             className={`w-full flex items-center ${
-                                collapsed ? "justify-center" : "gap-3"
-                            } px-4 py-2.5 rounded-2xl transition ${
+                                collapsed ? "justify-center px-0" : "gap-3 px-4"
+                            } py-2.5 rounded-2xl transition ${
                                 activePage === "todo"
                                     ? "bg-[#0097a7]/10 border border-[#0097a7]/20 text-[#00b0c2]"
                                     : "hover:bg-white/5 text-gray-300"
                             }`}
                         >
-                            <CheckSquare size={20} />
+                            <CheckSquare size={20} className="shrink-0" />
                             {!collapsed && "To-Do List"}
                         </button>
 
@@ -178,14 +178,14 @@ function Dashboard() {
                             title="Teams"
                             onClick={() => go("teams")}
                             className={`w-full flex items-center ${
-                                collapsed ? "justify-center" : "gap-3"
-                            } px-4 py-2.5 rounded-2xl transition ${
+                                collapsed ? "justify-center px-0" : "gap-3 px-4"
+                            } py-2.5 rounded-2xl transition ${
                                 activePage === "teams"
                                     ? "bg-[#0097a7]/10 border border-[#0097a7]/20 text-[#00b0c2]"
                                     : "hover:bg-white/5 text-gray-300"
                             }`}
                         >
-                            <Users size={20} />
+                            <Users size={20} className="shrink-0" />
                             {!collapsed && "Teams"}
                         </button>
 
@@ -193,14 +193,14 @@ function Dashboard() {
                             title="Workshops"
                             onClick={() => go("workshops")}
                             className={`w-full flex items-center ${
-                                collapsed ? "justify-center" : "gap-3"
-                            } px-4 py-2.5 rounded-2xl transition ${
+                                collapsed ? "justify-center px-0" : "gap-3 px-4"
+                            } py-2.5 rounded-2xl transition ${
                                 activePage === "workshops"
                                     ? "bg-[#0097a7]/10 border border-[#0097a7]/20 text-[#00b0c2]"
                                     : "hover:bg-white/5 text-gray-300"
                             }`}
                         >
-                            <CalendarDays size={20} />
+                            <CalendarDays size={20} className="shrink-0" />
                             {!collapsed && "Workshops"}
                         </button>
 
@@ -208,14 +208,14 @@ function Dashboard() {
                             title="My Profile"
                             onClick={() => go("profile")}
                             className={`w-full flex items-center ${
-                                collapsed ? "justify-center" : "gap-3"
-                            } px-4 py-2.5 rounded-2xl transition ${
+                                collapsed ? "justify-center px-0" : "gap-3 px-4"
+                            } py-2.5 rounded-2xl transition ${
                                 activePage === "profile"
                                     ? "bg-[#0097a7]/10 border border-[#0097a7]/20 text-[#00b0c2]"
                                     : "hover:bg-white/5 text-gray-300"
                             }`}
                         >
-                            <UserRound size={20} />
+                            <UserRound size={20} className="shrink-0" />
                             {!collapsed && "My Profile"}
                         </button>
 
