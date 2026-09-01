@@ -173,13 +173,11 @@ function HomePage() {
                 </div>
             </section>
 
-            <footer className="relative z-10 border-t border-white/10 px-8 lg:px-20 py-8 flex flex-col sm:flex-row items-center justify-between gap-4 text-sm text-gray-500">
+            <footer className="relative z-10 border-t border-white/10 px-8 lg:px-20 py-8 flex items-center text-sm text-gray-500">
                 <div className="flex items-center gap-2">
                     <img src="/logo-mark.png" alt="" className="w-6 h-6 object-contain" />
                     CS Mastery
                 </div>
-
-                <p>Final year capstone project.</p>
             </footer>
         </div>
     );
