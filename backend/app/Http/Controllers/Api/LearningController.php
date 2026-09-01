@@ -3,6 +3,7 @@
 namespace App\Http\Controllers\Api;
 
 use App\Http\Controllers\Controller;
+use App\Models\RoadmapVersion;
 use App\Models\Student;
 use App\Models\UserRoadmapProgress;
 use App\Models\VersionEdge;
@@ -129,11 +130,38 @@ class LearningController extends Controller
 
         $total = $nodes->count();
 
+        // Progress pins a student to the version they started, which is right -
+        // their completions belong to that graph. But nothing here ever said so,
+        // and once a newer version was published this page went on serving the
+        // old one with no sign that it had. A module renamed or removed since
+        // simply looked like the roadmap.
+        $published = RoadmapVersion::where('roadmap_id', $version->roadmap_id)
+            ->where('status', 'Published')
+            ->orderByDesc('id')
+            ->first();
+
+        $isLatest = $published === null || $published->id === $version->id;
+
         return response()->json([
             'has_progress' => true,
             'roadmap'      => [
                 'id'    => $version->roadmap->id,
                 'title' => $version->roadmap->title,
+                // Where this sits, so "React" does not arrive without saying
+                // which roadmap it came out of.
+                'parent' => $version->roadmap->parent
+                    ? ['id' => $version->roadmap->parent->id, 'title' => $version->roadmap->parent->title]
+                    : null,
+            ],
+            'version' => [
+                'id'             => $version->id,
+                'version_number' => $version->version_number,
+                'status'         => $version->status,
+            ],
+            'is_latest'      => $isLatest,
+            'newer_version'  => $isLatest ? null : [
+                'id'             => $published->id,
+                'version_number' => $published->version_number,
             ],
             'current_node' => $current ? [
                 'version_node_id' => $current->id,

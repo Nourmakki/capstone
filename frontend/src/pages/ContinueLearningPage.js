@@ -68,10 +68,36 @@ function ContinueLearningPage() {
                     </div>
                 ) : (
                     <div className="max-w-3xl rounded-3xl border border-[#0097a7]/20 bg-white/[0.03] p-8">
-                        <div className="flex items-center gap-3 mb-6">
+                        <div className="flex items-center gap-3 mb-2">
                             <BookOpen className="text-[#0097a7]" />
-                            <h2 className="text-3xl font-bold">{data.roadmap.title}</h2>
+
+                            <h2 className="text-3xl font-bold">
+                                {/* Where it sits. "React" on its own does not say
+                                    which roadmap it came out of, and roadmaps now
+                                    run three deep. */}
+                                {data.roadmap.parent && (
+                                    <span className="text-gray-500 font-normal text-xl">
+                                        {data.roadmap.parent.title}{" "}
+                                        <span className="text-gray-600">›</span>{" "}
+                                    </span>
+                                )}
+                                {data.roadmap.title}
+                            </h2>
                         </div>
+
+                        {/* Progress belongs to the version it was made on, so a
+                            student stays on theirs - but until now nothing said
+                            so, and a roadmap that had moved on since looked
+                            simply out of date. */}
+                        {data.is_latest === false && (
+                            <p className="mb-6 text-sm text-yellow-200 border-l-2 border-yellow-400/40 pl-3">
+                                You are following v{data.version.version_number} of this roadmap.
+                                v{data.newer_version.version_number} has since been published -
+                                your progress here is kept as it is.
+                            </p>
+                        )}
+
+                        {data.is_latest !== false && <div className="mb-6" />}
 
                         <p className="text-xl font-semibold">{data.current_node.title}</p>
 

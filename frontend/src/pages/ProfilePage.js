@@ -7,7 +7,7 @@ import {
 function ProfilePage() {
     const [profile, setProfile] = useState(null);
     const [editing, setEditing] = useState(false);
-    const [form, setForm] = useState({ name: "", email: "", location: "", level: "" });
+    const [form, setForm] = useState({ name: "", email: "", location: "" });
     const [loading, setLoading] = useState(true);
     const [saving, setSaving] = useState(false);
 
@@ -18,8 +18,7 @@ function ProfilePage() {
             setForm({
                 name: response.data.user.name ?? "",
                 email: response.data.user.email ?? "",
-                location: response.data.user.location ?? "",
-                level: response.data.user.level ?? "Beginner",
+                location: response.data.user.location ?? "",
             });
         } catch (err) {
             console.error(err);
@@ -119,16 +118,23 @@ function ProfilePage() {
                                             onChange={(e) => setForm({ ...form, email: e.target.value })}
                                             className="w-full p-3 rounded-xl bg-black/30 border border-white/10 text-white" />
                                     </div>
-                                    <div>
-                                        <label className="block text-sm text-gray-300 mb-2">Level</label>
-                                        <select value={form.level}
-                                            onChange={(e) => setForm({ ...form, level: e.target.value })}
-                                            className="w-full p-3 rounded-xl bg-black/30 border border-white/10 text-white">
-                                            <option value="Beginner">Beginner</option>
-                                            <option value="Intermediate">Intermediate</option>
-                                            <option value="Advanced">Advanced</option>
-                                        </select>
-                                    </div>
+                                    {/* Level is shown, not chosen. It describes how far
+                                        the student has actually got, and it is what
+                                        workshop recommendations and module difficulty
+                                        are matched against - a level someone sets for
+                                        themselves would be matched against a claim
+                                        rather than against their work. */}
+                                    {u.level && (
+                                        <div>
+                                            <label className="block text-sm text-gray-300 mb-2">Level</label>
+                                            <div className="w-full p-3 rounded-xl bg-black/20 border border-white/5 text-gray-400">
+                                                {u.level}
+                                                <span className="block text-xs text-gray-500 mt-1">
+                                                    Set by your progress, not by you.
+                                                </span>
+                                            </div>
+                                        </div>
+                                    )}
                                 </div>
                             ) : (
                                 <div className="space-y-5">
