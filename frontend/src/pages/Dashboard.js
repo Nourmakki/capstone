@@ -220,30 +220,7 @@ function Dashboard() {
                         </button>
 
                     </nav>
-
                     <div className="shrink-0 mt-6 space-y-4">
-                        {!collapsed && (
-                            <div className="hidden [@media(min-height:720px)]:block rounded-3xl border border-white/10 bg-white/[0.03] p-5">
-                                <div className="flex items-center gap-2 mb-3">
-                                    <Trophy
-                                        size={18}
-                                        className="text-[#0097a7]"
-                                    />
-                                    <h3 className="font-semibold">
-                                        Overall Progress
-                                    </h3>
-                                </div>
-
-                                <div className="w-full h-3 bg-gray-800 rounded-full overflow-hidden">
-                                    <div className="w-[48%] h-full bg-gradient-to-r from-blue-400 to-[#0097a7] rounded-full" />
-                                </div>
-
-                                <p className="mt-3 text-gray-400">
-                                    48% Completed
-                                </p>
-                            </div>
-                        )}
-
                         <button
                             title="Logout"
                             onClick={handleLogout}
