@@ -2,7 +2,7 @@ import React, { useCallback, useEffect, useState } from "react";
 import api from "../../api";
 import RoadmapPicker from "../../components/RoadmapPicker";
 import flattenModules from "../../components/flattenModules";
-import { Network, BookOpen, FileText, Brain, Code2 } from "lucide-react";
+import { Network, BookOpen, FileText, Brain, Code2, ExternalLink } from "lucide-react";
 
 function ProfessorRoadmaps() {
     const [roadmaps, setRoadmaps] = useState([]);
@@ -128,11 +128,17 @@ function ProfessorRoadmaps() {
                                         <h2 className="text-2xl font-bold">{node.node.title}</h2>
                                         <p className="text-gray-400 mt-2 mb-6">{node.node.description}</p>
 
+                                        {/* Tutorials and resources are somewhere else -
+                                            a video, a page of documentation - so they
+                                            carry a url. Listing them as plain titles
+                                            made a professor copy a name into a search
+                                            engine to see what they were marking
+                                            against. */}
                                         {[
-                                            { icon: <BookOpen size={16} className="text-[#0097a7]" />, label: "Tutorials", items: node.tutorials.map((t) => t.title) },
-                                            { icon: <Brain size={16} className="text-purple-400" />, label: "Quizzes", items: node.quizzes.map((q) => q.title) },
-                                            { icon: <Code2 size={16} className="text-yellow-400" />, label: "Projects", items: node.projects.map((p) => p.title) },
-                                            { icon: <FileText size={16} className="text-blue-400" />, label: "Resources", items: node.external_resources.map((r) => r.title) },
+                                            { icon: <BookOpen size={16} className="text-[#0097a7]" />, label: "Tutorials", items: node.tutorials.map((t) => ({ title: t.title, url: t.url })) },
+                                            { icon: <Brain size={16} className="text-purple-400" />, label: "Quizzes", items: node.quizzes.map((q) => ({ title: q.title })) },
+                                            { icon: <Code2 size={16} className="text-yellow-400" />, label: "Projects", items: node.projects.map((p) => ({ title: p.title, url: p.github_url })) },
+                                            { icon: <FileText size={16} className="text-blue-400" />, label: "Resources", items: node.external_resources.map((r) => ({ title: r.title, url: r.url })) },
                                         ].map((group) => (
                                             <div key={group.label} className="mb-5">
                                                 <div className="flex items-center gap-2 mb-2">
@@ -147,7 +153,18 @@ function ProfessorRoadmaps() {
                                                 ) : (
                                                     <ul className="ml-6 space-y-1">
                                                         {group.items.map((item, i) => (
-                                                            <li key={i} className="text-sm text-gray-300">· {item}</li>
+                                                            <li key={i} className="text-sm text-gray-300">
+                                                                ·{" "}
+                                                                {item.url ? (
+                                                                    <a href={item.url} target="_blank" rel="noreferrer"
+                                                                        className="text-[#00b0c2] hover:underline inline-flex items-center gap-1.5">
+                                                                        {item.title}
+                                                                        <ExternalLink size={12} className="shrink-0" />
+                                                                    </a>
+                                                                ) : (
+                                                                    item.title
+                                                                )}
+                                                            </li>
                                                         ))}
                                                     </ul>
                                                 )}

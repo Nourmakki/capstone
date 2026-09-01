@@ -162,6 +162,10 @@ class MaterialController extends Controller
                     'notes'       => $item->review_notes,
                     'reviewer'    => $item->reviewer->name ?? 'Unknown',
                     'reviewed_at' => $item->reviewed_at,
+                    // A tutorial is a video and a resource is a page, so the
+                    // thing that was approved lives somewhere and can be
+                    // reopened. Null for a quiz or a roadmap, which do not.
+                    'url'         => $item->url ?? $item->github_url ?? null,
                 ]);
 
             $items = $items->concat($reviewed);

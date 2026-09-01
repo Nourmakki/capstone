@@ -1,6 +1,6 @@
 import React, { useCallback, useEffect, useState } from "react";
 import api from "../../api";
-import { Check, X, History } from "lucide-react";
+import { Check, X, History, ExternalLink } from "lucide-react";
 
 const TYPE_LABEL = {
     "roadmaps": "Roadmap",
@@ -62,7 +62,21 @@ function MaterialHistory() {
                                         </span>
                                     </div>
 
-                                    <h3 className="text-lg font-bold">{h.title}</h3>
+                                    {/* What was reviewed, reopenable where it lives
+                                        somewhere - a tutorial's video, a resource's
+                                        page. Checking an old decision meant finding
+                                        the thing again by hand. */}
+                                    <h3 className="text-lg font-bold">
+                                        {h.url ? (
+                                            <a href={h.url} target="_blank" rel="noreferrer"
+                                                className="hover:text-[#00b0c2] hover:underline inline-flex items-center gap-2">
+                                                {h.title}
+                                                <ExternalLink size={14} className="shrink-0 opacity-60" />
+                                            </a>
+                                        ) : (
+                                            h.title
+                                        )}
+                                    </h3>
 
                                     {h.notes && (
                                         <p className="text-sm text-gray-400 mt-2 leading-relaxed">{h.notes}</p>
