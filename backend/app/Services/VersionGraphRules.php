@@ -23,7 +23,11 @@ class VersionGraphRules
      */
     public function assertValid(RoadmapVersion $version): void
     {
+        // Rail modules only. Choices hang off a module rather than sitting in
+        // the sequence, so they have no prerequisites by design - counting them
+        // here would report every choice as a second place to start.
         $nodeIds = VersionNode::where('roadmap_version_id', $version->id)
+            ->inRail()
             ->pluck('node_id');
 
         if ($nodeIds->isEmpty()) {
@@ -109,6 +113,7 @@ class VersionGraphRules
 
         $titles = VersionNode::with('node')
             ->where('roadmap_version_id', $version->id)
+            ->inRail()
             ->whereIn('node_id', $roots)
             ->get()
             ->map(fn ($vn) => $vn->node->title)

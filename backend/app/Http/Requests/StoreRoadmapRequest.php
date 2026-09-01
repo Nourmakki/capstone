@@ -3,6 +3,7 @@
 namespace App\Http\Requests;
 
 use App\Models\Roadmap;
+use App\Services\NodeChoiceRules;
 use Illuminate\Foundation\Http\FormRequest;
 use Illuminate\Validation\Validator;
 
@@ -41,12 +42,16 @@ class StoreRoadmapRequest extends FormRequest
     }
 
     /**
-     * The tree is exactly two levels deep, and that is enforced here rather
+     * The tree is three levels deep at most, and that is enforced here rather
      * than left to good intentions.
      *
-     * Students are shown top-level roadmaps and one level of children; a
-     * grandchild appears in neither list, so it would be content nobody can
-     * reach - the worst kind of bug, because everything looks like it worked.
+     *   Web Development        a subject, holding paths
+     *     Frontend             a path, with modules of its own
+     *       React              a module too big to be one module
+     *
+     * Three is the AI system's limit too: GeneratedChildRoadmap refuses a
+     * child roadmap that itself contains a separate_roadmap choice. A fourth
+     * level would have nowhere to be shown and nothing to generate it.
      */
     public function after(): array
     {
@@ -71,26 +76,51 @@ class StoreRoadmapRequest extends FormRequest
 
                 $parent = Roadmap::find($parentId);
 
-                if ($parent && $parent->parent_roadmap_id !== null) {
+                if (! $parent) {
+                    return;
+                }
+
+                $rules = new NodeChoiceRules;
+
+                // The parent's depth plus this one. A parent already at the
+                // limit has no room beneath it.
+                if ($rules->depthOf($parent) >= NodeChoiceRules::MAX_ROADMAP_DEPTH) {
                     $validator->errors()->add(
                         'parent_roadmap_id',
-                        "\"{$parent->title}\" is itself a topic, so it cannot hold topics of its own. "
-                            . 'Pick the roadmap above it instead.'
+                        "\"{$parent->title}\" is already three levels down, which is as deep as "
+                            . 'roadmaps go. Put this material on a module there instead.'
                     );
 
                     return;
                 }
 
-                // Demoting a roadmap that already has topics would push those
-                // topics to a third level without anyone asking for it.
-                if ($roadmap && $roadmap->children()->exists()) {
-                    $validator->errors()->add(
-                        'parent_roadmap_id',
-                        "\"{$roadmap->title}\" already has topics of its own, so it cannot become a topic. "
-                            . 'Move or delete its topics first.'
-                    );
+                // Moving a roadmap carries its own topics with it, so the
+                // deepest of them has to still fit underneath the new parent.
+                if ($roadmap) {
+                    $ownDepth = $this->subtreeDepth($roadmap);
+
+                    if ($rules->depthOf($parent) + $ownDepth > NodeChoiceRules::MAX_ROADMAP_DEPTH) {
+                        $validator->errors()->add(
+                            'parent_roadmap_id',
+                            "\"{$roadmap->title}\" has topics of its own, and moving it under "
+                                . "\"{$parent->title}\" would push them past three levels. "
+                                . 'Move or delete its topics first.'
+                        );
+                    }
                 }
             },
         ];
+    }
+
+    /** How many levels a roadmap carries beneath it, itself counted as one. */
+    private function subtreeDepth(Roadmap $roadmap): int
+    {
+        $deepest = 1;
+
+        foreach ($roadmap->children as $child) {
+            $deepest = max($deepest, 1 + $this->subtreeDepth($child));
+        }
+
+        return $deepest;
     }
 }

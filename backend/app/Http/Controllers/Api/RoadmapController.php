@@ -188,21 +188,47 @@ class RoadmapController extends Controller
 
     private function nodesFor(RoadmapVersion $version)
     {
-        return VersionNode::with('node')
+        // Rail modules only. A choice belongs to the module offering it, and
+        // travels nested inside it rather than as a step of its own.
+        return VersionNode::with(['node', 'choices.node', 'choices.linksToRoadmap', 'linksToRoadmap'])
             ->where('roadmap_version_id', $version->id)
+            ->inRail()
             ->get()
-            ->map(fn ($vn) => [
-                'version_node_id' => $vn->id,
-                'node_id'         => $vn->node_id,
-                'title'           => $vn->node->title,
-                'description'     => $vn->node->description,
-                'difficulty'      => $vn->node->difficulty,
-                // Null on every module until someone groups them, so an
-                // ungrouped roadmap still renders as a flat list.
-                'stage'           => $vn->stage,
-                'stage_title'     => $vn->stage_title,
-                'is_recommended'  => $vn->is_recommended,
-            ]);
+            ->map(fn ($vn) => $this->nodePayload($vn));
+    }
+
+    /** One module as a student sees it, with its choices. */
+    private function nodePayload(VersionNode $vn, bool $withChoices = true): array
+    {
+        $payload = [
+            'version_node_id' => $vn->id,
+            'node_id'         => $vn->node_id,
+            'title'           => $vn->node->title,
+            'description'     => $vn->node->description,
+            'difficulty'      => $vn->node->difficulty,
+            // Null on every module until someone groups them, so an
+            // ungrouped roadmap still renders as a flat list.
+            'stage'           => $vn->stage,
+            'stage_title'     => $vn->stage_title,
+            'is_recommended'  => $vn->is_recommended,
+            'recommendation_reason' => $vn->recommendation_reason,
+
+            // standard: its own page. choice: buttons, each with a page.
+            // roadmap: hands off to a roadmap of its own.
+            'kind'            => $vn->kind(),
+            'links_to_roadmap' => $vn->linksToRoadmap
+                ? ['id' => $vn->linksToRoadmap->id, 'title' => $vn->linksToRoadmap->title]
+                : null,
+        ];
+
+        if ($withChoices) {
+            $payload['choices'] = $vn->choices
+                ->sortByDesc('is_recommended')
+                ->map(fn ($choice) => $this->nodePayload($choice, withChoices: false))
+                ->values();
+        }
+
+        return $payload;
     }
 
     private function edgesFor(RoadmapVersion $version)

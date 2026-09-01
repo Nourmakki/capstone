@@ -100,6 +100,7 @@ class LearningController extends Controller
 
         $nodes = VersionNode::with('node')
             ->where('roadmap_version_id', $version->id)
+            ->inRail()
             ->get();
 
         $edges = VersionEdge::with('edge')

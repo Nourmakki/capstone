@@ -55,7 +55,12 @@ class ProgressController extends Controller
 
         $completed = $progress->completedNodes()->pluck('node_id')->toArray();
 
-        $total = VersionNode::where('roadmap_version_id', $versionNode->roadmap_version_id)->count();
+        // Rail modules only. Counting choices too would mean a student who
+        // picks React out of React/Vue/Angular can never reach 100%, because
+        // the two they correctly skipped stay in the denominator forever.
+        $total = VersionNode::where('roadmap_version_id', $versionNode->roadmap_version_id)
+            ->inRail()
+            ->count();
 
         $progress->update([
             'current_node_id' => $versionNode->node_id,
@@ -212,6 +217,7 @@ class ProgressController extends Controller
 
         return VersionNode::with('node')
             ->where('roadmap_version_id', $versionNode->roadmap_version_id)
+            ->inRail()
             ->whereIn('node_id', $prerequisiteIds)
             ->get()
             ->map(fn ($vn) => [
@@ -319,8 +325,9 @@ class ProgressController extends Controller
         // An unknown or unreadable id falls back rather than 404ing.
         $version ??= $availableVersions->first();
 
-        $nodes = VersionNode::with(['node', 'quizzes', 'projects'])
+        $nodes = VersionNode::with(['node', 'quizzes', 'projects', 'choices.node', 'choices.linksToRoadmap', 'linksToRoadmap'])
             ->where('roadmap_version_id', $version->id)
+            ->inRail()
             ->get();
 
         // version_edges only stores edge_id, so load the edge for from/to.

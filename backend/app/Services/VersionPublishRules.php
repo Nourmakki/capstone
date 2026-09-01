@@ -42,6 +42,7 @@ class VersionPublishRules
     public function assertReadyToPublish(RoadmapVersion $version): void
     {
         $nodes = VersionNode::with('node')
+            ->inRail()
             ->withCount([
                 'tutorials as approved_tutorials' => fn ($q) => $q->approved(),
                 'quizzes as approved_quizzes'     => fn ($q) => $q->approved(),
@@ -59,8 +60,20 @@ class VersionPublishRules
         }
 
         $incomplete = [];
+        $choiceRules = new NodeChoiceRules;
 
         foreach ($nodes as $versionNode) {
+            // A half-built choice node - one button, or none marked
+            // recommended - is refused with its own message rather than
+            // folded into the missing-material list.
+            $choiceRules->assertReadyToPublish($versionNode);
+
+            // A module that hands off to a roadmap, or offers choices, holds
+            // no material of its own: the material is on what it opens.
+            if ($versionNode->kind() !== 'standard') {
+                continue;
+            }
+
             $missing = [];
 
             foreach (self::REQUIRED as $relation => $label) {

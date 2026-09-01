@@ -82,10 +82,10 @@ class RoadmapTopicAuthoringTest extends TestCase
     // -----------------------------------------------------------------
 
     /**
-     * Students see top-level roadmaps and one level of children, so a
-     * grandchild would be content nobody could reach.
+     * Three levels are allowed: a subject, its paths, and a path's own
+     * roadmap. React under Frontend under Web Development.
      */
-    public function test_a_topic_cannot_hold_topics_of_its_own(): void
+    public function test_a_topic_may_hold_topics_of_its_own(): void
     {
         $parent = $this->parent();
 
@@ -98,32 +98,73 @@ class RoadmapTopicAuthoringTest extends TestCase
         $this->actingAs($this->makeManager(), 'sanctum')
             ->postJson('/api/roadmaps', [
                 'title'             => 'React',
-                'description'       => 'A framework.',
+                'description'       => 'A framework big enough for its own roadmap.',
                 'parent_roadmap_id' => $topic->id,
+            ])
+            ->assertCreated();
+
+        $this->assertSame($topic->id, Roadmap::where('title', 'React')->value('parent_roadmap_id'));
+    }
+
+    /**
+     * But three is the limit, and it is the AI system's limit too - her
+     * GeneratedChildRoadmap refuses a separate_roadmap choice inside a child
+     * roadmap. A fourth level has nowhere to be shown.
+     */
+    public function test_a_fourth_level_is_refused(): void
+    {
+        $subject = $this->parent();
+
+        $path = Roadmap::create([
+            'title'             => 'Frontend',
+            'description'       => 'Interfaces.',
+            'parent_roadmap_id' => $subject->id,
+        ]);
+
+        $deepest = Roadmap::create([
+            'title'             => 'React',
+            'description'       => 'A framework.',
+            'parent_roadmap_id' => $path->id,
+        ]);
+
+        $this->actingAs($this->makeManager(), 'sanctum')
+            ->postJson('/api/roadmaps', [
+                'title'             => 'React Router',
+                'description'       => 'One level too deep.',
+                'parent_roadmap_id' => $deepest->id,
             ])
             ->assertStatus(422)
             ->assertJsonValidationErrors('parent_roadmap_id');
 
-        $this->assertDatabaseMissing('roadmaps', ['title' => 'React']);
+        $this->assertDatabaseMissing('roadmaps', ['title' => 'React Router']);
     }
 
-    public function test_a_roadmap_that_already_has_topics_cannot_become_one(): void
+    /** Moving a roadmap carries its topics, so the whole subtree has to fit. */
+    public function test_a_move_that_would_push_topics_past_the_limit_is_refused(): void
     {
-        $parent = $this->parent();
-        $other  = $this->parent('AI / ML');
+        $subject = $this->parent();
+        $other   = $this->parent('AI / ML');
 
-        Roadmap::create([
+        $path = Roadmap::create([
             'title'             => 'Frontend',
             'description'       => 'Interfaces.',
-            'parent_roadmap_id' => $parent->id,
+            'parent_roadmap_id' => $subject->id,
+        ]);
+
+        // Web Development already runs three deep, so it cannot become a
+        // topic of anything without taking React to a fourth level.
+        Roadmap::create([
+            'title'             => 'React',
+            'description'       => 'A framework.',
+            'parent_roadmap_id' => $path->id,
         ]);
 
         $this->actingAs($this->makeManager(), 'sanctum')
-            ->putJson("/api/roadmaps/{$parent->id}", ['parent_roadmap_id' => $other->id])
+            ->putJson("/api/roadmaps/{$subject->id}", ['parent_roadmap_id' => $other->id])
             ->assertStatus(422)
             ->assertJsonValidationErrors('parent_roadmap_id');
 
-        $this->assertNull($parent->fresh()->parent_roadmap_id);
+        $this->assertNull($subject->fresh()->parent_roadmap_id);
     }
 
     public function test_a_roadmap_cannot_be_its_own_parent(): void

@@ -5,9 +5,11 @@ namespace App\Http\Controllers\Api;
 use App\Http\Controllers\Controller;
 use App\Models\Edge;
 use App\Models\Node;
+use App\Models\Roadmap;
 use App\Models\RoadmapVersion;
 use App\Models\VersionEdge;
 use App\Models\VersionNode;
+use App\Services\NodeChoiceRules;
 use App\Services\VersionGraphRules;
 use Illuminate\Http\Request;
 use Illuminate\Support\Facades\DB;
@@ -31,7 +33,10 @@ class VersionGraphController extends Controller
 {
     private const DIFFICULTIES = ['beginner', 'intermediate', 'advanced'];
 
-    public function __construct(private VersionGraphRules $rules)
+    public function __construct(
+        private VersionGraphRules $rules,
+        private NodeChoiceRules $choiceRules
+    )
     {
     }
 
@@ -77,6 +82,19 @@ class VersionGraphController extends Controller
             'stage'                   => ['nullable', 'integer', 'min:1', 'max:99'],
             'stage_title'             => ['nullable', 'string', 'max:255'],
             'is_recommended'          => ['sometimes', 'boolean'],
+
+            // A choice on an existing module - "HTML" under "Fundamentals" -
+            // rather than a step in the rail. Scoped to this version so a
+            // payload cannot attach a choice to another roadmap's module.
+            'parent_version_node_id'  => [
+                'sometimes', 'nullable', 'integer',
+                Rule::exists('version_nodes', 'id')->where(
+                    fn ($q) => $q->where('roadmap_version_id', $version->id)
+                ),
+            ],
+            // Her separate_roadmap: this opens a roadmap instead of a page.
+            'links_to_roadmap_id'     => ['sometimes', 'nullable', 'integer', 'exists:roadmaps,id'],
+            'recommendation_reason'   => ['nullable', 'string', 'max:2000'],
         ]);
 
         return DB::transaction(function () use ($data, $version) {
@@ -87,19 +105,40 @@ class VersionGraphController extends Controller
                 'status'      => 'approved',
             ]);
 
+            $parentId = $data['parent_version_node_id'] ?? null;
+
             $versionNode = VersionNode::create([
-                'roadmap_version_id' => $version->id,
-                'node_id'            => $node->id,
-                'stage'              => $data['stage'] ?? null,
-                'stage_title'        => $data['stage_title'] ?? null,
-                'is_recommended'     => $data['is_recommended'] ?? false,
+                'roadmap_version_id'     => $version->id,
+                'node_id'                => $node->id,
+                'parent_version_node_id' => $parentId,
+                'links_to_roadmap_id'    => $data['links_to_roadmap_id'] ?? null,
+                'stage'                  => $data['stage'] ?? null,
+                'stage_title'            => $data['stage_title'] ?? null,
+                'is_recommended'         => $data['is_recommended'] ?? false,
+                'recommendation_reason'  => $data['recommendation_reason'] ?? null,
             ]);
 
-            $this->syncPrerequisites(
-                $version,
-                $node->id,
-                $data['prerequisite_node_ids'] ?? []
-            );
+            if (! empty($data['links_to_roadmap_id'])) {
+                $this->choiceRules->assertCanLinkToRoadmap(
+                    $versionNode->load('roadmapVersion.roadmap'),
+                    Roadmap::find($data['links_to_roadmap_id'])
+                );
+            }
+
+            // A choice is not a step in the sequence, so it takes no edges -
+            // its place is decided by the module offering it.
+            if ($parentId === null) {
+                $this->syncPrerequisites(
+                    $version,
+                    $node->id,
+                    $data['prerequisite_node_ids'] ?? []
+                );
+            } else {
+                $parentNode = VersionNode::with('node')->findOrFail($parentId);
+
+                $this->choiceRules->assertCanHoldChoices($parentNode);
+                $this->choiceRules->assertValid($parentNode);
+            }
 
             $this->rules->assertValid($version);
 
@@ -229,26 +268,55 @@ class VersionGraphController extends Controller
             $prerequisites[$edge->to_node_id][] = $edge->from_node_id;
         }
 
-        return VersionNode::with('node')
+        // Rail modules only, each carrying its own choices. A choice is not a
+        // step in the sequence, so listing it alongside one would put "HTML"
+        // beside "Fundamentals" as though they were the same kind of thing.
+        return VersionNode::with(['node', 'choices.node', 'choices.linksToRoadmap', 'linksToRoadmap'])
             ->where('roadmap_version_id', $version->id)
+            ->inRail()
             ->get()
-            ->map(fn ($vn) => [
-                'version_node_id'       => $vn->id,
-                'node_id'               => $vn->node_id,
-                'title'                 => $vn->node->title,
-                'description'           => $vn->node->description,
-                'difficulty'            => $vn->node->difficulty,
-                'stage'                 => $vn->stage,
-                'stage_title'           => $vn->stage_title,
-                'is_recommended'        => $vn->is_recommended,
-                'prerequisite_node_ids' => $prerequisites[$vn->node_id] ?? [],
-                'material_counts'       => [
-                    'tutorials' => $vn->tutorials()->count(),
-                    'quizzes'   => $vn->quizzes()->count(),
-                    'projects'  => $vn->projects()->count(),
-                ],
-            ])
+            ->map(fn ($vn) => $this->modulePayload($vn, $prerequisites))
             ->values();
+    }
+
+    /** One module, with whatever hangs off it. */
+    private function modulePayload(VersionNode $vn, array $prerequisites, bool $withChoices = true): array
+    {
+        $payload = [
+            'version_node_id'       => $vn->id,
+            'node_id'               => $vn->node_id,
+            'title'                 => $vn->node->title,
+            'description'           => $vn->node->description,
+            'difficulty'            => $vn->node->difficulty,
+            'stage'                 => $vn->stage,
+            'stage_title'           => $vn->stage_title,
+            'is_recommended'        => $vn->is_recommended,
+            'recommendation_reason' => $vn->recommendation_reason,
+            'prerequisite_node_ids' => $prerequisites[$vn->node_id] ?? [],
+            'material_counts'       => [
+                'tutorials' => $vn->tutorials()->count(),
+                'quizzes'   => $vn->quizzes()->count(),
+                'projects'  => $vn->projects()->count(),
+            ],
+
+            // What clicking it does: open a roadmap, offer choices, or show a
+            // page of its own.
+            'kind'                  => $vn->kind(),
+            'links_to_roadmap'      => $vn->linksToRoadmap
+                ? ['id' => $vn->linksToRoadmap->id, 'title' => $vn->linksToRoadmap->title]
+                : null,
+        ];
+
+        if ($withChoices) {
+            // Recommended first: it is the answer for a student who does not
+            // know which to pick, so it should not need hunting for.
+            $payload['choices'] = $vn->choices
+                ->sortByDesc('is_recommended')
+                ->map(fn ($choice) => $this->modulePayload($choice, $prerequisites, withChoices: false))
+                ->values();
+        }
+
+        return $payload;
     }
 
     /** The Edge rows this version actually uses. */
