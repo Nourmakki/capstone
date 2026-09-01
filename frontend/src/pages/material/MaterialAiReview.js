@@ -1,5 +1,6 @@
 import React, { useCallback, useEffect, useState } from "react";
 import api from "../../api";
+import ModuleMaterial from "../../components/ModuleMaterial";
 import {
     Bot, TrendingUp, Plus, Network, Trash2, Check, X, RefreshCw,
     AlertTriangle, Inbox, ChevronRight, GitBranch, ExternalLink, Clock,
@@ -25,6 +26,15 @@ function MaterialAiReview({ onChanged }) {
     // where the runs it produces arrive.
     const [schedule, setSchedule] = useState(null);
     const [savingSchedule, setSavingSchedule] = useState(false);
+
+    // Unsaved edits to the proposed modules. Null while not editing, so the
+    // list falls back to what the AI actually sent.
+    const [editingNodes, setEditingNodes] = useState(false);
+    const [nodeEdits, setNodeEdits] = useState(null);
+
+    // Which existing module has its material open, in the roadmap-as-it-stands
+    // section above the proposal.
+    const [openExisting, setOpenExisting] = useState(null);
 
     // The proposal refers to existing modules by id, which means nothing to
     // a reviewer. The version's own graph is what turns them into titles.
@@ -70,6 +80,31 @@ function MaterialAiReview({ onChanged }) {
         } finally {
             setSavingSchedule(false);
         }
+    };
+
+    /** One field of one proposed module, while the edits are unsaved. */
+    const updateNodeEdit = (index, field, value) => {
+        setNodeEdits((prev) => prev.map((n, i) => (i === index ? { ...n, [field]: value } : n)));
+    };
+
+    /**
+     * Send the edited modules back.
+     *
+     * Her validator is strict about this: an edit carries a stage and a data
+     * object holding exactly that stage's key, and no feedback. Editing the
+     * modules also invalidates where they were going to sit, so the placement
+     * is regenerated rather than left describing the old titles.
+     */
+    const saveNodeEdits = async () => {
+        await decide({
+            action: "edit",
+            stage: "nodes",
+            data: { node_suggestions: nodeEdits },
+            regenerate_after_edit: true,
+        });
+
+        setEditingNodes(false);
+        setNodeEdits(null);
     };
 
     const openWorkflow = async (workflow) => {
@@ -366,6 +401,57 @@ function MaterialAiReview({ onChanged }) {
 
                             {data && (
                                 <>
+                                    {/* The roadmap as it stands. A proposal is a
+                                        change to something, and judging it without
+                                        seeing what it changes meant opening the
+                                        Roadmaps page in another tab. */}
+                                    <Section icon={<GitBranch size={18} className="text-gray-400" />}
+                                             title="This roadmap now" count={existingNodes.length}>
+                                        {existingNodes.length === 0 ? (
+                                            <p className="text-sm text-gray-500">
+                                                No modules yet - everything below would be new.
+                                            </p>
+                                        ) : (
+                                            <div className="space-y-2">
+                                                {existingNodes.map((n) => (
+                                                    <div key={n.version_node_id}
+                                                         className="rounded-xl border border-white/10 bg-black/20 p-3">
+                                                        <div className="flex items-center justify-between gap-3">
+                                                            <span className="text-sm font-medium">{n.title}</span>
+                                                            <span className="text-xs text-gray-500 capitalize shrink-0">
+                                                                {n.difficulty}
+                                                            </span>
+                                                        </div>
+
+                                                        {/* Its material, so a reviewer can
+                                                            see what the roadmap already
+                                                            teaches before adding to it. */}
+                                                        <button
+                                                            onClick={() => setOpenExisting(
+                                                                openExisting === n.version_node_id ? null : n.version_node_id
+                                                            )}
+                                                            className="text-xs text-gray-500 mt-2 flex items-center gap-1.5 hover:text-[#00b0c2] transition"
+                                                        >
+                                                            <ChevronRight size={11} className={`transition-transform ${
+                                                                openExisting === n.version_node_id ? "rotate-90" : ""
+                                                            }`} />
+                                                            what is on it
+                                                        </button>
+
+                                                        {openExisting === n.version_node_id && (
+                                                            <div className="mt-3 pt-3 border-t border-white/10">
+                                                                <ModuleMaterial
+                                                                    versionNodeId={n.version_node_id}
+                                                                    editable={false}
+                                                                />
+                                                            </div>
+                                                        )}
+                                                    </div>
+                                                ))}
+                                            </div>
+                                        )}
+                                    </Section>
+
                                     <Section icon={<TrendingUp size={18} className="text-[#0097a7]" />}
                                              title="Detected trends" count={data.trends?.length}>
                                         {data.trends?.map((t, i) => (
@@ -421,22 +507,91 @@ function MaterialAiReview({ onChanged }) {
 
                                     <Section icon={<Plus size={18} className="text-green-400" />}
                                              title="Proposed new modules" count={data.node_suggestions?.length}>
-                                        {data.node_suggestions?.map((n, i) => (
+                                        {/* Editable in place. A manager reading a
+                                            proposal usually wants to change a word
+                                            in a title or soften a description, and
+                                            sending it back to be regenerated for
+                                            that is a poor trade. Her workflow takes
+                                            an "edit" for exactly this. */}
+                                        {(nodeEdits ?? data.node_suggestions ?? []).map((n, i) => (
                                             <div key={i} className="rounded-2xl border border-white/10 bg-black/30 p-4">
-                                                <div className="flex items-start justify-between gap-3">
-                                                    <h4 className="font-semibold">{n.title}</h4>
-                                                    <span className="text-xs text-gray-500 capitalize shrink-0">
-                                                        {n.difficulty}
-                                                    </span>
-                                                </div>
-                                                <p className="text-sm text-gray-400 mt-2">{n.description}</p>
-                                                {n.based_on_trend && (
-                                                    <p className="text-xs text-gray-600 mt-2">
-                                                        From trend: {n.based_on_trend}
-                                                    </p>
+                                                {editingNodes ? (
+                                                    <div className="space-y-3">
+                                                        <div className="flex gap-3">
+                                                            <input
+                                                                value={n.title}
+                                                                onChange={(e) => updateNodeEdit(i, "title", e.target.value)}
+                                                                className="flex-1 p-2 rounded-lg bg-black/40 border border-white/10 text-white font-semibold"
+                                                            />
+
+                                                            <select
+                                                                value={n.difficulty}
+                                                                onChange={(e) => updateNodeEdit(i, "difficulty", e.target.value)}
+                                                                className="p-2 rounded-lg bg-black/40 border border-white/10 text-white text-sm"
+                                                            >
+                                                                <option value="beginner">beginner</option>
+                                                                <option value="intermediate">intermediate</option>
+                                                                <option value="advanced">advanced</option>
+                                                            </select>
+                                                        </div>
+
+                                                        <textarea
+                                                            value={n.description}
+                                                            rows={3}
+                                                            onChange={(e) => updateNodeEdit(i, "description", e.target.value)}
+                                                            className="w-full p-2 rounded-lg bg-black/40 border border-white/10 text-white text-sm"
+                                                        />
+                                                    </div>
+                                                ) : (
+                                                    <>
+                                                        <div className="flex items-start justify-between gap-3">
+                                                            <h4 className="font-semibold">{n.title}</h4>
+                                                            <span className="text-xs text-gray-500 capitalize shrink-0">
+                                                                {n.difficulty}
+                                                            </span>
+                                                        </div>
+                                                        <p className="text-sm text-gray-400 mt-2">{n.description}</p>
+                                                        {n.based_on_trend && (
+                                                            <p className="text-xs text-gray-600 mt-2">
+                                                                From trend: {n.based_on_trend}
+                                                            </p>
+                                                        )}
+                                                    </>
                                                 )}
                                             </div>
                                         ))}
+
+                                        {awaitingReview && data.node_suggestions?.length > 0 && (
+                                            <div className="flex flex-wrap gap-3 pt-2">
+                                                {editingNodes ? (
+                                                    <>
+                                                        <button onClick={saveNodeEdits} disabled={busy}
+                                                            className="px-5 py-2.5 rounded-xl bg-[#0097a7] text-black font-semibold text-sm hover:scale-[1.02] transition">
+                                                            Save changes
+                                                        </button>
+
+                                                        <button onClick={() => { setEditingNodes(false); setNodeEdits(null); }}
+                                                            className="px-5 py-2.5 rounded-xl border border-white/10 text-gray-300 text-sm">
+                                                            Cancel
+                                                        </button>
+
+                                                        <p className="text-xs text-gray-500 self-center">
+                                                            Saved edits go back to the AI, which re-places the modules.
+                                                        </p>
+                                                    </>
+                                                ) : (
+                                                    <button
+                                                        onClick={() => {
+                                                            setNodeEdits(data.node_suggestions.map((n) => ({ ...n })));
+                                                            setEditingNodes(true);
+                                                        }}
+                                                        className="px-5 py-2.5 rounded-xl border border-[#0097a7]/30 text-[#0097a7] text-sm hover:bg-[#0097a7]/10 transition"
+                                                    >
+                                                        Edit these modules
+                                                    </button>
+                                                )}
+                                            </div>
+                                        )}
                                     </Section>
 
                                     <Section icon={<Network size={18} className="text-purple-400" />}

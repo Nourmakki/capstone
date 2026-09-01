@@ -1,6 +1,7 @@
 import React, { useCallback, useEffect, useRef, useState } from "react";
 import api from "../../api";
-import { Plus, Pencil, Trash2, X, Lock, Layers } from "lucide-react";
+import { Pencil, Trash2, X, Lock, Layers, ChevronRight } from "lucide-react";
+import ModuleMaterial from "../../components/ModuleMaterial";
 
 const EMPTY = {
     title: "",
@@ -85,6 +86,10 @@ function VersionModulesEditor({ versionId, onChanged }) {
     const [data, setData] = useState(null);
     const [form, setForm] = useState(EMPTY);
     const [editingId, setEditingId] = useState(null);
+
+    // Which module has its material open. One at a time: the point is to look
+    // at a module, not to scroll past every module's material at once.
+    const [openMaterial, setOpenMaterial] = useState(null);
     const [busy, setBusy] = useState(false);
 
     // The form sits above a list that can be several screens tall, so clicking
@@ -222,7 +227,7 @@ function VersionModulesEditor({ versionId, onChanged }) {
                      className="scroll-mt-6 rounded-2xl border border-white/10 bg-black/30 p-6 mb-8">
                     <div className="flex items-center justify-between mb-6">
                         <h3 className="text-xl font-bold flex items-center gap-2">
-                            {editingId ? <Pencil size={18} /> : <Plus size={18} />}
+                            <Pencil size={18} />
                             {editingId ? "Edit Module" : "Pick a module to edit"}
                         </h3>
 
@@ -456,11 +461,37 @@ function VersionModulesEditor({ versionId, onChanged }) {
                                             )}
                                         </div>
 
-                                        <p className="text-xs text-gray-500 mt-3">
+                                        {/* The counts are the handle; the material
+                                            itself opens underneath. Tutorials and
+                                            resources had pages of their own, so
+                                            answering "what is on this module"
+                                            meant three screens and a good memory. */}
+                                        <button
+                                            onClick={() => setOpenMaterial(
+                                                openMaterial === m.version_node_id ? null : m.version_node_id
+                                            )}
+                                            className="text-xs text-gray-500 mt-3 flex items-center gap-1.5 hover:text-[#00b0c2] transition"
+                                        >
+                                            <ChevronRight
+                                                size={12}
+                                                className={`transition-transform ${
+                                                    openMaterial === m.version_node_id ? "rotate-90" : ""
+                                                }`}
+                                            />
                                             {m.material_counts.tutorials} tutorials ·{" "}
                                             {m.material_counts.quizzes} quizzes ·{" "}
                                             {m.material_counts.projects} projects
-                                        </p>
+                                        </button>
+
+                                        {openMaterial === m.version_node_id && (
+                                            <div className="mt-4 pt-4 border-t border-white/10">
+                                                <ModuleMaterial
+                                                    versionNodeId={m.version_node_id}
+                                                    editable={editable}
+                                                    onChanged={load}
+                                                />
+                                            </div>
+                                        )}
                                     </div>
                                 </div>
 

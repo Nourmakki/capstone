@@ -78,6 +78,31 @@ class MaterialAuthoringController extends Controller
                 'review_notes'  => $project->review_notes,
                 'from_ai'       => $project->ai_metadata !== null,
             ]),
+
+            // All four kinds, so a manager looking at a module sees everything
+            // on it in one place. Tutorials and resources used to have pages of
+            // their own, which meant three screens to answer "what is on this
+            // module" and no screen that answered it at all.
+            'tutorials' => $versionNode->tutorials()->get()->map(fn ($tutorial) => [
+                'id'            => $tutorial->id,
+                'title'         => $tutorial->title,
+                'url'           => $tutorial->url,
+                'description'   => $tutorial->description,
+                'source_name'   => $tutorial->source_name,
+                'review_status' => $tutorial->review_status,
+                'review_notes'  => $tutorial->review_notes,
+                'from_ai'       => $tutorial->ai_metadata !== null,
+            ]),
+
+            'external_resources' => $versionNode->externalResources()->get()->map(fn ($resource) => [
+                'id'            => $resource->id,
+                'title'         => $resource->title,
+                'url'           => $resource->url,
+                'type'          => $resource->type,
+                'review_status' => $resource->review_status,
+                'review_notes'  => $resource->review_notes,
+                'from_ai'       => $resource->ai_metadata !== null,
+            ]),
         ]);
     }
 
