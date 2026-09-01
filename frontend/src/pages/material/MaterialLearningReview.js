@@ -1,5 +1,6 @@
 import React, { useCallback, useEffect, useState } from "react";
 import api from "../../api";
+import { firstRoadmapIn } from "../../components/RoadmapPicker";
 import {
     Sparkles, Video, Brain, Code2, BookOpen, Check, X,
     RefreshCw, AlertTriangle, Inbox, ChevronRight, Play, ExternalLink,
@@ -48,10 +49,9 @@ function MaterialLearningReview({ onChanged }) {
             .then((r) => {
                 const list = r.data.data ?? [];
                 setRoadmaps(list);
-                // Open on a roadmap proper, not whichever topic sorts first.
-                setRoadmapId((prev) =>
-                    prev ?? list.find((r) => !r.parent_roadmap_id)?.id ?? list[0]?.id ?? null
-                );
+                // A roadmap, never a subject: a subject holds no modules, so
+                // opening here offered nothing to generate material for.
+                setRoadmapId((prev) => prev ?? firstRoadmapIn(list));
             })
             .catch((err) => console.error(err));
     }, []);
@@ -231,36 +231,38 @@ function MaterialLearningReview({ onChanged }) {
                         onChange={(e) => setRoadmapId(Number(e.target.value))}
                         className="p-3 rounded-xl bg-black/30 border border-white/10 text-white">
                         {/* A dropdown nests with optgroup rather than a second
-                            row, so a topic reads as belonging to its roadmap
-                            instead of sitting beside it as a peer. */}
+                            row, so a roadmap reads as belonging to its subject
+                            instead of sitting beside it as a peer.
+
+                            The subject is the group label and nothing more: it
+                            is a heading over Frontend and Backend with no
+                            modules of its own, so offering it here asked the
+                            AI to write material for a title. optgroup cannot
+                            nest, so the third level is indented instead. */}
                         {roadmaps
                             .filter((r) => !r.parent_roadmap_id)
-                            .map((parent) => {
-                                const topics = roadmaps.filter(
-                                    (r) => r.parent_roadmap_id === parent.id
+                            .map((subject) => {
+                                const paths = roadmaps.filter(
+                                    (r) => r.parent_roadmap_id === subject.id
                                 );
 
-                                if (topics.length === 0) {
-                                    return (
-                                        <option key={parent.id} value={parent.id}>
-                                            {parent.title}
-                                        </option>
-                                    );
-                                }
+                                if (paths.length === 0) return null;
 
                                 return (
-                                    <optgroup key={parent.id} label={parent.title}>
-                                        {/* The parent can hold content of its
-                                            own, so it stays selectable. */}
-                                        <option value={parent.id}>
-                                            {parent.title} itself
-                                        </option>
+                                    <optgroup key={subject.id} label={subject.title}>
+                                        {paths.flatMap((path) => [
+                                            <option key={path.id} value={path.id}>
+                                                {path.title}
+                                            </option>,
 
-                                        {topics.map((r) => (
-                                            <option key={r.id} value={r.id}>
-                                                {r.title}
-                                            </option>
-                                        ))}
+                                            ...roadmaps
+                                                .filter((r) => r.parent_roadmap_id === path.id)
+                                                .map((child) => (
+                                                    <option key={child.id} value={child.id}>
+                                                        {"  — "}{child.title}
+                                                    </option>
+                                                )),
+                                        ])}
                                     </optgroup>
                                 );
                             })}

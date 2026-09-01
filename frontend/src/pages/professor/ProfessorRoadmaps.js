@@ -1,6 +1,6 @@
 import React, { useCallback, useEffect, useState } from "react";
 import api from "../../api";
-import RoadmapPicker from "../../components/RoadmapPicker";
+import RoadmapPicker, { firstRoadmapIn } from "../../components/RoadmapPicker";
 import flattenModules from "../../components/flattenModules";
 import { Network, BookOpen, FileText, Brain, Code2, ExternalLink } from "lucide-react";
 
@@ -16,9 +16,8 @@ function ProfessorRoadmaps() {
             const response = await api.get("/roadmaps");
             const list = response.data.data ?? [];
             setRoadmaps(list);
-            setSelectedId((prev) =>
-                prev ?? list.find((r) => !r.parent_roadmap_id)?.id ?? list[0]?.id ?? null
-            );
+            // A roadmap, never a subject - a subject has no modules to teach.
+            setSelectedId((prev) => prev ?? firstRoadmapIn(list));
         } catch (err) {
             console.error(err);
         } finally {

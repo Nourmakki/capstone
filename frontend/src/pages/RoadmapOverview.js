@@ -2,7 +2,7 @@ import React, { useEffect, useState } from "react";
 import { useNavigate, useParams } from "react-router-dom";
 import api from "../api";
 import { useAuth } from "../context/AuthContext";
-import RoadmapCard from "../components/RoadmapCard";
+import RoadmapCard, { isChooser } from "../components/RoadmapCard";
 import {
     ArrowLeft,
     Map,
@@ -49,13 +49,16 @@ function RoadmapOverview() {
 
                 setRoadmap(detail);
 
-                // A chooser is a roadmap with paths and nothing of its own -
-                // Web Development. Frontend also has a child now (React), but
-                // it has its own modules too, and React is reached from the
-                // module that links to it rather than from a list of paths.
-                // Testing children alone hid Frontend's whole rail behind a
-                // single card.
-                if ((detail.children ?? []).length > 0 && ! detail.latest_version) {
+                // A subject is always a chooser: Web Development is a title
+                // over Frontend and Backend, so it lists them and never has a
+                // rail of its own to show.
+                //
+                // A path can be a chooser too, when it has children and
+                // nothing of its own. Frontend has both - its own modules and
+                // React beneath them - and React is reached from the module
+                // that links to it, not from a list of paths. Testing children
+                // alone hid Frontend's whole rail behind a single card.
+                if (isChooser(detail)) {
                     return;
                 }
 
@@ -235,10 +238,9 @@ function RoadmapOverview() {
     // specializations. Rendering the rail here would draw an empty one.
     const paths = roadmap?.children ?? [];
 
-    // Same rule as the fetch above: paths and nothing of its own. Frontend has
-    // React beneath it and a rail besides, and React is reached from the
-    // module that links to it.
-    if (paths.length > 0 && ! roadmap?.latest_version) {
+    // The same rule the fetch used, asked of the same helper so the two
+    // cannot drift apart.
+    if (roadmap && isChooser(roadmap)) {
         return (
             <div className="min-h-screen bg-[#050B0D] text-white">
                 <div className="absolute top-0 left-0 w-full h-full bg-[radial-gradient(circle_at_center,rgba(0,255,200,0.15),transparent_55%)] pointer-events-none" />
@@ -255,8 +257,8 @@ function RoadmapOverview() {
                     <h1 className="text-4xl lg:text-5xl font-black">{roadmap.title}</h1>
 
                     <p className="text-gray-400 mt-3 max-w-2xl">
-                        {roadmap.description} Choose a path to follow — each one is a
-                        roadmap of its own, and you can come back for the others.
+                        {roadmap.description} Choose a roadmap to follow — and you
+                        can come back for the others.
                     </p>
 
                     <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6 mt-10">

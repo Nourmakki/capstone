@@ -1,11 +1,11 @@
-import React from "react";
+import React, { useState } from "react";
 
 /**
- * Choose a roadmap, at any of the three levels the tree now has.
+ * Choose a roadmap, at either of the two levels that hold one.
  *
- *   Web Development          a subject
- *     Frontend               a path
- *       React                a module too big to be one module
+ *   Web Development          a subject - a title, not a roadmap
+ *     Frontend               a roadmap
+ *       React                a roadmap too big to be one module
  *
  * Every manager panel needs this and each had grown its own flat row, so
  * thirteen roadmaps appeared side by side with Frontend next to the Web
@@ -13,14 +13,32 @@ import React from "react";
  * hierarchy is a property of the data, so every picker should show it the
  * same way.
  *
- * A row appears only when the level above it has been chosen, and choosing
- * something keeps its siblings on screen - moving between Vue and Angular
- * does not mean going back up first.
+ * The top row names subjects, and a subject is a heading: "Web Development"
+ * is the shelf that Frontend, Backend and Full Stack sit on, not a fourth
+ * thing sitting beside them. So clicking one opens it and nothing more -
+ * it can never become the roadmap being worked on. Offering it as one put a
+ * title among the roadmaps and invited content onto something with nowhere
+ * to put it.
  *
- * The level-3 row matters more than it looks: eleven roadmaps live down there
- * now, and a picker that stopped at two levels put all of their content out
- * of reach - the same fault as scoping this list to top-level roadmaps did.
+ * A path keeps that offer, because a path is a roadmap: Frontend has a rail
+ * of its own as well as React and Vue beneath it, and a row listing only its
+ * children would put that rail out of reach.
  */
+/**
+ * What a panel should open on: the first roadmap under the first subject.
+ *
+ * Never a subject. Panels used to start on whichever roadmap had no parent,
+ * which is exactly the one that holds nothing - an empty version list, and a
+ * form offering to add a draft to a heading.
+ */
+export function firstRoadmapIn(roadmaps) {
+    const subject = roadmaps.find((r) => !r.parent_roadmap_id);
+
+    return roadmaps.find((r) => r.parent_roadmap_id === subject?.id)?.id
+        ?? roadmaps.find((r) => r.parent_roadmap_id)?.id
+        ?? null;
+}
+
 function RoadmapPicker({ roadmaps, selectedId, onSelect }) {
     const byId = (id) => roadmaps.find((r) => r.id === id);
 
@@ -30,29 +48,33 @@ function RoadmapPicker({ roadmaps, selectedId, onSelect }) {
     const parentOf = (roadmap) =>
         roadmap?.parent_roadmap_id ? byId(roadmap.parent_roadmap_id) : null;
 
-    const depth = (roadmap) => {
-        let level = 1;
-        let cursor = parentOf(roadmap);
+    const subjectOf = (roadmap) => {
+        let cursor = roadmap;
+        let guard = 0;
 
-        while (cursor && level < 5) {
-            level += 1;
+        while (cursor?.parent_roadmap_id && guard++ < 5) {
             cursor = parentOf(cursor);
         }
 
-        return level;
+        return cursor ?? null;
     };
 
-    const selectedDepth = selected ? depth(selected) : 1;
+    // Which subject is open is the picker's own business now: a subject is
+    // not selectable, so the selection cannot answer it on its own.
+    const [openSubjectId, setOpenSubjectId] = useState(null);
 
-    const activeL1 =
-        selectedDepth === 3 ? parentOf(parentOf(selected))
-        : selectedDepth === 2 ? parentOf(selected)
-        : selected;
+    const activeL1 = byId(openSubjectId) ?? subjectOf(selected);
 
+    // The path level: either what is selected, or the parent of it - but only
+    // while the selection sits inside the subject that is open. Opening Web
+    // Development with a roadmap under AI / ML still selected used to leave
+    // that roadmap's siblings on screen beneath a heading no longer holding
+    // them, and offered "AI / ML itself" beside them - a subject back among
+    // the roadmaps by another door.
     const activeL2 =
-        selectedDepth === 3 ? parentOf(selected)
-        : selectedDepth === 2 ? selected
-        : null;
+        selected && subjectOf(selected) === activeL1 && selected !== activeL1
+            ? (parentOf(selected) === activeL1 ? selected : parentOf(selected))
+            : null;
 
     const childrenOf = (roadmap) =>
         roadmap ? roadmaps.filter((r) => r.parent_roadmap_id === roadmap.id) : [];
@@ -75,15 +97,20 @@ function RoadmapPicker({ roadmaps, selectedId, onSelect }) {
         );
 
     /** One row of buttons. `activeId` is what counts as chosen at this level. */
-    const row = (items, activeId, { large = false, label = null, itself = null } = {}) => (
+    const row = (items, activeId, {
+        large = false, label = null, itself = null, onPick = onSelect,
+    } = {}) => (
         <div className={`flex flex-wrap items-center gap-3 ${
             large ? "mb-4" : "mb-4 pl-4 border-l-2 border-[#0097a7]/30"
         }`}>
             {label && <span className="text-xs text-gray-500">{label}</span>}
 
-            {/* The level above stays selectable: it can hold content of its
-                own, and a row offering only its children would hide that. */}
-            {itself && (
+            {/* A path stays selectable beside its children: it holds a rail of
+                its own, and a row offering only React and Vue would hide it.
+                Guarded on having a parent rather than trusting the caller,
+                because this is the one slot that could put a subject back
+                among the roadmaps. */}
+            {itself?.parent_roadmap_id && (
                 <button onClick={() => onSelect(itself.id)}
                     className={`px-4 py-2 rounded-xl text-sm transition ${
                         selectedId === itself.id
@@ -99,7 +126,7 @@ function RoadmapPicker({ roadmaps, selectedId, onSelect }) {
                 const count  = roadmaps.filter((c) => c.parent_roadmap_id === r.id).length;
 
                 return (
-                    <button key={r.id} onClick={() => onSelect(r.id)}
+                    <button key={r.id} onClick={() => onPick(r.id)}
                         className={`rounded-2xl transition flex items-center gap-2 ${
                             large ? "px-6 py-3" : "px-4 py-2 text-sm rounded-xl"
                         } ${
@@ -127,11 +154,14 @@ function RoadmapPicker({ roadmaps, selectedId, onSelect }) {
 
     return (
         <>
-            {row(subjects, activeL1?.id, { large: true })}
+            {/* Opening a subject, not choosing one. */}
+            {row(subjects, activeL1?.id, {
+                large: true,
+                onPick: setOpenSubjectId,
+            })}
 
             {paths.length > 0 && row(paths, activeL2?.id ?? selectedId, {
-                label: `In ${activeL1?.title}:`,
-                itself: activeL1,
+                label: `${activeL1?.title} roadmaps:`,
             })}
 
             {deeper.length > 0 && row(deeper, selectedId, {

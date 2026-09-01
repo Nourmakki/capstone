@@ -2,7 +2,7 @@ import React, { useCallback, useEffect, useRef, useState } from "react";
 import api from "../../api";
 import { GitBranch, Upload, Plus, Network, AlertTriangle, Trash2 } from "lucide-react";
 import VersionModulesEditor from "./VersionModulesEditor";
-import RoadmapPicker from "../../components/RoadmapPicker";
+import RoadmapPicker, { firstRoadmapIn } from "../../components/RoadmapPicker";
 
 function AdminRoadmaps({ onChanged }) {
     const [roadmaps, setRoadmaps] = useState([]);
@@ -37,11 +37,11 @@ function AdminRoadmaps({ onChanged }) {
             const list = response.data.data ?? [];
             setRoadmaps(list);
 
-            // Open on a roadmap proper, not whichever topic happens to sort
-            // first - the top row is where the panel starts.
-            setSelectedId((prev) =>
-                prev ?? list.find((r) => !r.parent_roadmap_id)?.id ?? list[0]?.id ?? null
-            );
+            // Open on a roadmap, never on a subject. "Web Development" is a
+            // heading over Frontend and Backend, so landing there showed an
+            // empty version list and a form offering to draft one onto a
+            // title. The first roadmap under the first subject is a real one.
+            setSelectedId((prev) => prev ?? firstRoadmapIn(list));
         } catch (err) {
             console.error(err);
         } finally {

@@ -116,8 +116,10 @@ class AdminController extends Controller
             // Split, because one number stopped meaning anything once roadmaps
             // could nest: 25 counts Web Development, Frontend and React alike,
             // and an admin reading it would think there were 25 subjects.
+            // The subjects are then excluded from the roadmap count rather
+            // than counted twice - they are the headings, not the shelf.
             'subjects'            => Roadmap::topLevel()->count(),
-            'roadmaps'            => Roadmap::count(),
+            'roadmaps'            => Roadmap::roadmapsOnly()->count(),
             'publishedVersions'   => RoadmapVersion::where('status', 'Published')->count(),
             'materialPending'     => Roadmap::pendingReview()->count()
                 + RoadmapVersion::pendingReview()->count()

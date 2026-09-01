@@ -32,10 +32,29 @@ class Roadmap extends Model
         return $this->hasMany(Roadmap::class, 'parent_roadmap_id');
     }
 
-    /** A chooser: it has children instead of modules of its own. */
+    /** A subject: a title with roadmaps under it, never a roadmap itself. */
     public function scopeTopLevel($query)
     {
         return $query->whereNull('parent_roadmap_id');
+    }
+
+    /**
+     * Everything that is a roadmap in its own right.
+     *
+     * "Web Development", "AI / ML" and "DevOps / Cloud" name a field of
+     * study; they are headings over a shelf, and the roadmaps are what sits
+     * on it. Counting them alongside Frontend and React overstates what
+     * exists and offers a title where a roadmap is meant to be chosen.
+     */
+    public function scopeRoadmapsOnly($query)
+    {
+        return $query->whereNotNull('parent_roadmap_id');
+    }
+
+    /** A title rather than a roadmap - see {@see scopeRoadmapsOnly}. */
+    public function isSubject(): bool
+    {
+        return $this->parent_roadmap_id === null;
     }
 
     public function versions()

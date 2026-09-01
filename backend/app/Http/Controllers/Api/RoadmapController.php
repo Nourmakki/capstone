@@ -279,6 +279,15 @@ class RoadmapController extends Controller
             'title'          => ['nullable', 'string', 'max:255'],
         ]);
 
+        // A subject is a heading, and a heading has no modules. Give one a
+        // version and it starts behaving like a roadmap: it offers itself
+        // beside the paths it contains, and a student picking "Web
+        // Development" gets a rail where a choice of path was meant.
+        abort_if($roadmap->isSubject(), 422, sprintf(
+            '"%s" is a subject, not a roadmap. Add the version to one of the roadmaps under it.',
+            $roadmap->title
+        ));
+
         $latest = $roadmap->versions()->orderByDesc('id')->first();
 
         // All of it or none of it: a half-cloned version would look complete

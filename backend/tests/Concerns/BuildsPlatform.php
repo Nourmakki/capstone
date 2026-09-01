@@ -64,10 +64,21 @@ trait BuildsPlatform
         string $status = 'Published',
         string $reviewStatus = 'approved'
     ): array {
-        $roadmap = Roadmap::create([
-            'title'         => 'Test Roadmap',
-            'description'   => 'Built by a test.',
+        // Under a subject, because that is where a roadmap lives. A subject
+        // is a heading - "Web Development" over Frontend and Backend - and it
+        // holds no modules of its own, so a parentless roadmap with a version
+        // is a shape the platform will not build.
+        $subject = Roadmap::create([
+            'title'         => 'Test Subject',
+            'description'   => 'A heading built by a test.',
             'review_status' => $reviewStatus,
+        ]);
+
+        $roadmap = Roadmap::create([
+            'title'             => 'Test Roadmap',
+            'description'       => 'Built by a test.',
+            'review_status'     => $reviewStatus,
+            'parent_roadmap_id' => $subject->id,
         ]);
 
         $version = RoadmapVersion::create([

@@ -69,6 +69,26 @@ const styleFor = (roadmap) =>
     };
 
 /**
+ * Does this open onto a list of roadmaps rather than a rail of modules?
+ *
+ * A subject always does. "Web Development" is a title over Frontend, Backend
+ * and Full Stack - it holds roadmaps, it is not one, and it has no modules of
+ * its own to show. That is true by what it is, not by what happens to be
+ * attached to it.
+ *
+ * A path can too, when it has children and nothing of its own. Having
+ * children is not enough on its own: Frontend has React beneath it and a full
+ * rail besides, and React is reached from the module linking to it rather
+ * than from a list of paths.
+ *
+ * Shared so the card and the page behind it cannot disagree about which one
+ * a roadmap is.
+ */
+export const isChooser = (roadmap) =>
+    ! roadmap?.parent_roadmap_id
+    || ((roadmap.children ?? []).length > 0 && ! roadmap.latest_version);
+
+/**
  * One roadmap, as it appears on both the public landing page and the student
  * home page.
  *
@@ -80,12 +100,8 @@ const styleFor = (roadmap) =>
 function RoadmapCard({ roadmap, onOpen, ctaLabel = "View Roadmap" }) {
     const style = styleFor(roadmap);
 
-    // A chooser is a roadmap with paths and nothing of its own - Web
-    // Development. Having children is not enough on its own: Frontend has
-    // React beneath it and a full rail besides, and React is reached from the
-    // module linking to it, not from a list of paths.
     const children = roadmap.children ?? [];
-    const isChooser = children.length > 0 && ! roadmap.latest_version;
+    const chooser  = isChooser(roadmap);
 
     // But only as available as its paths actually are. Having children is not
     // the same as having somewhere to go: a parent whose topics are all
@@ -94,7 +110,7 @@ function RoadmapCard({ roadmap, onOpen, ctaLabel = "View Roadmap" }) {
     // to find out there is nothing there.
     const openablePaths = children.filter((child) => child.latest_version);
 
-    const available = isChooser
+    const available = chooser
         ? openablePaths.length > 0
         : Boolean(roadmap.latest_version);
 
@@ -134,13 +150,17 @@ function RoadmapCard({ roadmap, onOpen, ctaLabel = "View Roadmap" }) {
             </p>
 
             <p className="mt-4 text-xs text-gray-500">
-                {isChooser
+                {chooser
                     ? available
-                        // Every path is named, including the ones not open yet:
+                        // Every one is named, including those not open yet:
                         // this line describes the page behind the card, and that
                         // page shows them all, greying out what is not ready.
-                        ? `${children.length} paths · ${children.map((c) => c.title).join(", ")}`
-                        : "No published paths yet"
+                        // "Roadmaps", because that is what a subject holds -
+                        // it is the heading, and these are the things.
+                        ? `${children.length} roadmap${children.length === 1 ? "" : "s"} · ${
+                              children.map((c) => c.title).join(", ")
+                          }`
+                        : "No published roadmaps yet"
                     : available
                     ? `${roadmap.node_count} modules · v${roadmap.latest_version.version_number}`
                     : "No published version yet"}
@@ -152,7 +172,7 @@ function RoadmapCard({ roadmap, onOpen, ctaLabel = "View Roadmap" }) {
                     available ? "text-[#0097a7] group-hover:gap-3" : "text-gray-600"
                 }`}
             >
-                {isChooser ? "Choose a path" : available ? ctaLabel : "Unavailable"}
+                {chooser ? "Choose a roadmap" : available ? ctaLabel : "Unavailable"}
                 <ArrowRight size={16} />
             </span>
         </div>

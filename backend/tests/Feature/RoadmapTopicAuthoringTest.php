@@ -286,4 +286,70 @@ class RoadmapTopicAuthoringTest extends TestCase
 
         $this->assertSame(['Frontend'], collect($listed()['children'])->pluck('title')->all());
     }
+
+    // -----------------------------------------------------------------
+    // A subject is a title, not a roadmap
+    // -----------------------------------------------------------------
+
+    /**
+     * "Web Development" is the heading over Frontend and Backend. Give it a
+     * version of its own and it starts behaving like a fourth roadmap beside
+     * the three it contains - offered in pickers, counted in totals, and
+     * opening onto a rail where a choice of roadmap was meant.
+     */
+    public function test_a_subject_cannot_be_given_a_version(): void
+    {
+        $subject = $this->parent();
+
+        $this->actingAs($this->makeManager(), 'sanctum')
+            ->postJson("/api/roadmaps/{$subject->id}/versions", ['title' => 'v1'])
+            ->assertStatus(422);
+
+        $this->assertSame(0, RoadmapVersion::where('roadmap_id', $subject->id)->count());
+    }
+
+    /** The roadmaps under it take versions exactly as before. */
+    public function test_a_roadmap_under_a_subject_still_takes_a_version(): void
+    {
+        $subject = $this->parent();
+
+        $topic = Roadmap::create([
+            'title'             => 'Frontend',
+            'description'       => 'Interfaces.',
+            'review_status'     => 'approved',
+            'parent_roadmap_id' => $subject->id,
+        ]);
+
+        $this->actingAs($this->makeManager(), 'sanctum')
+            ->postJson("/api/roadmaps/{$topic->id}/versions", ['title' => 'v1'])
+            ->assertCreated();
+
+        $this->assertSame(1, RoadmapVersion::where('roadmap_id', $topic->id)->count());
+    }
+
+    /**
+     * The admin's totals count the shelf, not the heading over it: four
+     * subjects holding twenty-one roadmaps is not twenty-five roadmaps.
+     */
+    public function test_subjects_are_not_counted_among_the_roadmaps(): void
+    {
+        $subject = $this->parent();
+
+        foreach (['Frontend', 'Backend'] as $title) {
+            Roadmap::create([
+                'title'             => $title,
+                'description'       => 'A roadmap.',
+                'review_status'     => 'approved',
+                'parent_roadmap_id' => $subject->id,
+            ]);
+        }
+
+        $stats = $this->actingAs($this->makeAdmin(), 'sanctum')
+            ->getJson('/api/admin/dashboard-stats')
+            ->assertOk()
+            ->json();
+
+        $this->assertSame(1, $stats['subjects']);
+        $this->assertSame(2, $stats['roadmaps']);
+    }
 }
