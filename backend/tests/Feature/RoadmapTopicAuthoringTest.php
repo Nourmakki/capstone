@@ -177,6 +177,82 @@ class RoadmapTopicAuthoringTest extends TestCase
     // What students see
     // -----------------------------------------------------------------
 
+    /**
+     * A professor marks work against modules three levels down, so a list
+     * that stopped at the subject left them nothing to open at all.
+     */
+    public function test_a_professor_sees_every_level_of_the_tree(): void
+    {
+        $subject = $this->parent();
+
+        $path = Roadmap::create([
+            'title' => 'Frontend', 'description' => 'x',
+            'review_status' => 'approved', 'parent_roadmap_id' => $subject->id,
+        ]);
+
+        RoadmapVersion::create([
+            'roadmap_id' => $path->id, 'version_number' => '1',
+            'status' => 'Published', 'review_status' => 'approved',
+        ]);
+
+        $deeper = Roadmap::create([
+            'title' => 'React', 'description' => 'x',
+            'review_status' => 'approved', 'parent_roadmap_id' => $path->id,
+        ]);
+
+        RoadmapVersion::create([
+            'roadmap_id' => $deeper->id, 'version_number' => '1',
+            'status' => 'Published', 'review_status' => 'approved',
+        ]);
+
+        $titles = fn ($user) => collect(
+            $this->actingAs($user, 'sanctum')->getJson('/api/roadmaps')->json('data')
+        )->pluck('title');
+
+        $professor = $titles($this->makeProfessor());
+
+        $this->assertContains('Web Development', $professor);
+        $this->assertContains('Frontend', $professor);
+        $this->assertContains('React', $professor);
+
+        // A student is still walked down through the tree rather than shown
+        // all of it at once.
+        $student = $titles($this->makeStudent());
+
+        $this->assertContains('Web Development', $student);
+        $this->assertNotContains('Frontend', $student);
+        $this->assertNotContains('React', $student);
+    }
+
+    /** Widening what is listed must not widen what may be seen. */
+    public function test_a_professor_still_does_not_see_unapproved_roadmaps(): void
+    {
+        $subject = $this->parent();
+
+        $pending = Roadmap::create([
+            'title' => 'Frontend', 'description' => 'x',
+            'review_status' => 'pending', 'parent_roadmap_id' => $subject->id,
+        ]);
+
+        RoadmapVersion::create([
+            'roadmap_id' => $pending->id, 'version_number' => '1',
+            'status' => 'Published', 'review_status' => 'approved',
+        ]);
+
+        $titles = collect(
+            $this->actingAs($this->makeProfessor(), 'sanctum')->getJson('/api/roadmaps')->json('data')
+        )->pluck('title');
+
+        $this->assertNotContains('Frontend', $titles);
+
+        // The manager, who has to approve it, does see it.
+        $managerTitles = collect(
+            $this->actingAs($this->makeManager(), 'sanctum')->getJson('/api/roadmaps')->json('data')
+        )->pluck('title');
+
+        $this->assertContains('Frontend', $managerTitles);
+    }
+
     /** A topic reaches students only once approved, like all material. */
     public function test_a_topic_reaches_students_only_after_it_is_approved(): void
     {

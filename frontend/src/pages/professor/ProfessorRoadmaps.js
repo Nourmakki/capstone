@@ -1,5 +1,7 @@
 import React, { useCallback, useEffect, useState } from "react";
 import api from "../../api";
+import RoadmapPicker from "../../components/RoadmapPicker";
+import flattenModules from "../../components/flattenModules";
 import { Network, BookOpen, FileText, Brain, Code2 } from "lucide-react";
 
 function ProfessorRoadmaps() {
@@ -14,7 +16,9 @@ function ProfessorRoadmaps() {
             const response = await api.get("/roadmaps");
             const list = response.data.data ?? [];
             setRoadmaps(list);
-            setSelectedId((prev) => prev ?? list[0]?.id ?? null);
+            setSelectedId((prev) =>
+                prev ?? list.find((r) => !r.parent_roadmap_id)?.id ?? list[0]?.id ?? null
+            );
         } catch (err) {
             console.error(err);
         } finally {
@@ -67,20 +71,16 @@ function ProfessorRoadmaps() {
             ) : (
                 <>
                     <div className="flex flex-wrap gap-3 mb-8">
-                        {roadmaps.map((r) => (
-                            <button key={r.id} onClick={() => setSelectedId(r.id)}
-                                className={`px-6 py-3 rounded-2xl transition ${
-                                    selectedId === r.id
-                                        ? "bg-[#0097a7] text-black font-semibold"
-                                        : "bg-white/5 border border-white/10 text-gray-300"
-                                }`}>
-                                {r.title}
-                            </button>
-                        ))}
+                        <RoadmapPicker roadmaps={roadmaps} selectedId={selectedId}
+                            onSelect={setSelectedId} />
                     </div>
 
                     {!graph ? (
-                        <p className="text-gray-500">This roadmap has no published version.</p>
+                        <p className="text-gray-500">
+                            {roadmaps.find((r) => r.id === selectedId)?.children?.length
+                                ? "Pick one of its paths above to see the modules."
+                                : "This roadmap has no published version."}
+                        </p>
                     ) : (
                         <div className="grid lg:grid-cols-2 gap-8">
                             <div className="rounded-3xl border border-white/10 bg-white/[0.03] p-6">
@@ -92,7 +92,7 @@ function ProfessorRoadmaps() {
                                 </div>
 
                                 <div className="space-y-2">
-                                    {graph.nodes.map((n) => (
+                                    {flattenModules(graph.nodes).map((n) => (
                                         <button key={n.version_node_id}
                                             onClick={() => openNode(n.version_node_id)}
                                             className={`w-full text-left flex items-center justify-between rounded-xl border px-4 py-3 transition ${
@@ -100,8 +100,21 @@ function ProfessorRoadmaps() {
                                                     ? "border-[#0097a7]/40 bg-[#0097a7]/10"
                                                     : "border-white/10 bg-black/20 hover:border-[#0097a7]/30"
                                             }`}>
-                                            <span>{n.title}</span>
-                                            <span className="text-xs text-gray-500 capitalize">{n.difficulty}</span>
+                                            <span className={n.depth ? "pl-5 text-gray-300" : ""}>
+                                                {n.depth ? "⤷ " : ""}{n.title}
+                                            </span>
+
+                                            <span className="flex items-center gap-2 shrink-0">
+                                                {/* A module that hands off has no material
+                                                    of its own, and saying so stops it
+                                                    reading as an empty one. */}
+                                                {n.kind === "roadmap" && (
+                                                    <span className="text-xs px-2 py-0.5 rounded-full border border-purple-400/30 text-purple-300">
+                                                        opens a roadmap
+                                                    </span>
+                                                )}
+                                                <span className="text-xs text-gray-500 capitalize">{n.difficulty}</span>
+                                            </span>
                                         </button>
                                     ))}
                                 </div>

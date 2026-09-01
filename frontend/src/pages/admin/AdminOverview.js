@@ -18,7 +18,15 @@ function AdminOverview({ stats, onGo }) {
     // Visibility only - none of these are clickable, because acting on
     // material is the material manager's job, not the admin's.
     const platformCards = [
-        { label: "Roadmaps", value: stats.roadmaps, icon: <Map className="text-[#0097a7]" /> },
+        // The headline number is subjects. Counting every roadmap alike puts
+        // Web Development, Frontend and React on the same footing, which reads
+        // as far more of the platform than actually exists.
+        {
+            label: "Subjects",
+            value: stats.subjects,
+            hint: stats.roadmaps ? `${stats.roadmaps} roadmaps in total` : null,
+            icon: <Map className="text-[#0097a7]" />,
+        },
         { label: "Published versions", value: stats.publishedVersions, icon: <Upload className="text-green-400" /> },
         { label: "Material awaiting approval", value: stats.materialPending, icon: <ClipboardCheck className="text-yellow-400" /> },
         { label: "Rejected material", value: stats.materialRejected, icon: <XCircle className="text-red-400" /> },
@@ -66,6 +74,12 @@ function AdminOverview({ stats, onGo }) {
                             <span className="text-gray-400 text-sm">{c.label}</span>
                         </div>
                         <h2 className="text-4xl font-black">{c.value ?? 0}</h2>
+
+                        {/* The fuller figure, where a single number would
+                            otherwise overstate what is there. */}
+                        {c.hint && (
+                            <p className="text-xs text-gray-500 mt-1">{c.hint}</p>
+                        )}
                     </div>
                 ))}
             </div>

@@ -113,6 +113,10 @@ class AdminController extends Controller
             // Read-only oversight. The admin cannot act on any of this -
             // material belongs to the material manager - but seeing the
             // backlog is how they know whether the role needs more people.
+            // Split, because one number stopped meaning anything once roadmaps
+            // could nest: 25 counts Web Development, Frontend and React alike,
+            // and an admin reading it would think there were 25 subjects.
+            'subjects'            => Roadmap::topLevel()->count(),
             'roadmaps'            => Roadmap::count(),
             'publishedVersions'   => RoadmapVersion::where('status', 'Published')->count(),
             'materialPending'     => Roadmap::pendingReview()->count()

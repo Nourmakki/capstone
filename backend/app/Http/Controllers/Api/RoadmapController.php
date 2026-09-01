@@ -37,6 +37,23 @@ class RoadmapController extends Controller
         return $request->user()?->role === 'MaterialManager';
     }
 
+    /**
+     * Who sees the tree rather than just the top of it.
+     *
+     * A student picks a subject and is walked down through it, so the list
+     * they get is deliberately the top level only. A professor marks work
+     * against modules that live three levels down - React's, say - so a list
+     * stopping at "Web Development" leaves them nothing to open. Same for a
+     * manager, who authors the material down there.
+     *
+     * It widens what is listed, not what may be seen: a professor still gets
+     * only approved, openable roadmaps.
+     */
+    private function seesWholeTree(Request $request): bool
+    {
+        return in_array($request->user()?->role, ['MaterialManager', 'Professor'], true);
+    }
+
     public function index(Request $request)
     {
         $staff = $this->seesUnapproved($request);
@@ -47,7 +64,10 @@ class RoadmapController extends Controller
         // author lives on the children, and a picker that hid them would put
         // the material out of reach.
         $query = Roadmap::query()
-            ->when(! $staff, fn ($q) => $q->topLevel()->approved()->openable());
+            // What may be seen at all.
+            ->when(! $staff, fn ($q) => $q->approved()->openable())
+            // How much of the tree is listed.
+            ->when(! $this->seesWholeTree($request), fn ($q) => $q->topLevel());
 
         $published = fn ($q) => $q->where('status', 'Published')
             ->when(! $staff, fn ($inner) => $inner->approved())
