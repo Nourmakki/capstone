@@ -1,14 +1,8 @@
 import React, { useCallback, useEffect, useState } from "react";
 import api from "../../api";
+import flattenModules from "../../components/flattenModules";
 import RoadmapPicker from "../../components/RoadmapPicker";
-import { Video, Plus, Trash2, ExternalLink, RefreshCw } from "lucide-react";
-
-const EMPTY = {
-    title: "",
-    url: "",
-    description: "",
-    source_name: "",
-};
+import { Video, Trash2, ExternalLink, RefreshCw } from "lucide-react";
 
 function AdminTutorials({ onChanged }) {
     const [roadmaps, setRoadmaps] = useState([]);
@@ -19,7 +13,7 @@ function AdminTutorials({ onChanged }) {
     const [nodeId, setNodeId] = useState(null);
 
     const [tutorials, setTutorials] = useState([]);
-    const [form, setForm] = useState(EMPTY);
+    
     const [loading, setLoading] = useState(true);
     const [busy, setBusy] = useState(false);
 
@@ -69,7 +63,7 @@ function AdminTutorials({ onChanged }) {
         const run = async () => {
             try {
                 const response = await api.get(`/roadmap-versions/${versionId}/graph`);
-                const list = response.data.nodes ?? [];
+                const list = flattenModules(response.data.nodes ?? []);
                 setNodes(list);
                 setNodeId(list[0]?.version_node_id ?? null);
             } catch (err) {
@@ -95,41 +89,6 @@ function AdminTutorials({ onChanged }) {
     }, [nodeId]);
 
     useEffect(() => { loadTutorials(); }, [loadTutorials]);
-
-    // Laravel's url rule needs a scheme. Rejecting "youtube.com/watch?v=x"
-    // over a missing "https://" is a pointless thing to make someone retype.
-    const withScheme = (url) => {
-        const trimmed = url.trim();
-        return /^https?:\/\//i.test(trimmed) ? trimmed : `https://${trimmed}`;
-    };
-
-    const save = async () => {
-        if (!nodeId) return;
-
-        setBusy(true);
-
-        try {
-            const payload = {
-                ...form,
-                url: withScheme(form.url),
-                version_node_id: nodeId,
-            };
-
-            // Create only - a tutorial cannot be edited once it exists.
-            await api.post("/tutorials", payload);
-
-            setForm(EMPTY);
-            await loadTutorials();
-            onChanged?.();
-        } catch (err) {
-            const errors = err.response?.data?.errors;
-            alert(errors
-                ? Object.values(errors).flat().join("\n")
-                : (err.response?.data?.message ?? "Could not save the tutorial."));
-        } finally {
-            setBusy(false);
-        }
-    };
 
     /**
      * A tutorial is somebody else's video - there is nothing in it worth
@@ -177,8 +136,6 @@ function AdminTutorials({ onChanged }) {
         : "border-yellow-400/30 bg-yellow-400/10 text-yellow-300";
 
     const selectedNode = nodes.find((n) => n.version_node_id === nodeId);
-    const canSave = form.title.trim() && form.url.trim()
-        && form.description.trim() && form.source_name.trim() && nodeId;
 
     return (
         <div className="p-8">
@@ -223,7 +180,7 @@ function AdminTutorials({ onChanged }) {
                                 {nodes.length === 0 && <option value="">No modules in this version</option>}
                                 {nodes.map((n) => (
                                     <option key={n.version_node_id} value={n.version_node_id}>
-                                        {n.title}
+                                        {n.depth ? "  ⤷ " : ""}{n.label ?? n.title}
                                     </option>
                                 ))}
                             </select>
@@ -232,49 +189,6 @@ function AdminTutorials({ onChanged }) {
 
                     {/* Add only. An existing tutorial is regenerated or deleted,
                         never edited. */}
-                    <div className="rounded-3xl border border-white/10 bg-white/[0.03] p-6 mb-10">
-                        <div className="flex items-center justify-between mb-6">
-                            <h2 className="text-2xl font-bold flex items-center gap-2">
-                                <Plus size={20} />
-                                New Tutorial
-                            </h2>
-                        </div>
-
-                        <div className="grid md:grid-cols-2 gap-4">
-                            <input type="text" placeholder="Title" value={form.title}
-                                onChange={(e) => setForm({ ...form, title: e.target.value })}
-                                className="p-3 rounded-xl bg-black/30 border border-white/10 text-white" />
-
-                            <input type="url" placeholder="https://youtube.com/watch?v=..." value={form.url}
-                                onChange={(e) => setForm({ ...form, url: e.target.value })}
-                                className="p-3 rounded-xl bg-black/30 border border-white/10 text-white" />
-
-                            <input type="text" placeholder="Source (e.g. Traversy Media)" value={form.source_name}
-                                onChange={(e) => setForm({ ...form, source_name: e.target.value })}
-                                className="p-3 rounded-xl bg-black/30 border border-white/10 text-white" />
-
-                        </div>
-
-                        <textarea rows="3" placeholder="Description" value={form.description}
-                            onChange={(e) => setForm({ ...form, description: e.target.value })}
-                            className="w-full mt-4 p-3 rounded-xl bg-black/30 border border-white/10 text-white" />
-
-                        <p className="text-xs text-gray-500 mt-3">
-                            {selectedNode
-                                ? `Will be attached to: ${selectedNode.title}`
-                                : "Select a module first."}
-                        </p>
-
-                        <button onClick={save} disabled={busy || !canSave}
-                            className={`mt-5 font-bold px-8 py-3 rounded-xl transition ${
-                                busy || !canSave
-                                    ? "bg-gray-700 text-gray-400 cursor-not-allowed"
-                                    : "bg-[#0097a7] text-black hover:scale-105"
-                            }`}>
-                            {busy ? "Saving..." : "Add Tutorial"}
-                        </button>
-                    </div>
-
                     {/* List */}
                     <div className="flex items-center gap-3 mb-6">
                         <Video className="text-[#0097a7]" />

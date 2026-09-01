@@ -1,5 +1,6 @@
 import React, { useCallback, useEffect, useState } from "react";
 import api from "../../api";
+import flattenModules from "../../components/flattenModules";
 import RoadmapPicker from "../../components/RoadmapPicker";
 import {
     Brain, Code2, Plus, Pencil, Trash2, X, Save, Sparkles, AlertTriangle,
@@ -104,7 +105,7 @@ function MaterialEditor({ onChanged }) {
 
         api.get(`/roadmap-versions/${versionId}/graph`)
             .then((r) => {
-                const list = r.data.nodes ?? [];
+                const list = flattenModules(r.data.nodes ?? []);
                 setModules(list);
                 setModuleId(list[0]?.version_node_id ?? null);
             })
@@ -204,11 +205,9 @@ function MaterialEditor({ onChanged }) {
                 })),
             };
 
-            if (quizDraft.id) {
-                await api.put(`/quizzes/${quizDraft.id}`, payload);
-            } else {
-                await api.post(`/version-nodes/${moduleId}/quizzes`, payload);
-            }
+            // Edit only - the learning workflow writes quizzes, and a
+            // manager fixes what it wrote.
+            await api.put(`/quizzes/${quizDraft.id}`, payload);
 
             setQuizDraft(null);
             await loadMaterial();
@@ -263,11 +262,7 @@ function MaterialEditor({ onChanged }) {
                 github_url: projectDraft.github_url.trim() || null,
             };
 
-            if (projectDraft.id) {
-                await api.put(`/projects/${projectDraft.id}`, payload);
-            } else {
-                await api.post(`/version-nodes/${moduleId}/projects`, payload);
-            }
+            await api.put(`/projects/${projectDraft.id}`, payload);
 
             setProjectDraft(null);
             await loadMaterial();
@@ -402,7 +397,7 @@ function MaterialEditor({ onChanged }) {
                                 {modules.length === 0 && <option value="">No modules in this version</option>}
                                 {modules.map((m) => (
                                     <option key={m.version_node_id} value={m.version_node_id}>
-                                        {m.title}
+                                        {m.depth ? "  ⤷ " : ""}{m.label ?? m.title}
                                     </option>
                                 ))}
                             </select>

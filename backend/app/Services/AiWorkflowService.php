@@ -136,4 +136,49 @@ class AiWorkflowService
             ->timeout(30)
             ->get($this->baseUrl . '/project-assessment-workflows/' . $threadId);
     }
+
+    /**
+     * Build a roadmap from nothing but a topic.
+     *
+     * The fourth workflow, and the one that fills the gap the others leave:
+     * startWorkflow() extends a graph and refuses an empty one, so a brand new
+     * roadmap had to be seeded by hand before the AI could touch it. This
+     * takes "web development" and returns paths, modules and choices.
+     *
+     * The longest timeout of the four: it researches a whole subject, splits
+     * it into paths, and generates a roadmap for each.
+     */
+    public function startRoadmapBuilder(string $topic): Response
+    {
+        return Http::acceptJson()
+            ->connectTimeout(5)
+            ->timeout(900)
+            ->post($this->baseUrl . '/roadmap-builder-workflows', [
+                'roadmap_topic' => $topic,
+            ]);
+    }
+
+    public function getRoadmapBuilder(string $threadId): Response
+    {
+        return Http::acceptJson()
+            ->connectTimeout(5)
+            ->timeout(30)
+            ->get($this->baseUrl . '/roadmap-builder-workflows/' . $threadId);
+    }
+
+    /**
+     * Answer one of her two review stages - scope, then roadmap.
+     *
+     * @param array{action: string, stage?: string, data?: array, feedback?: string} $decision
+     */
+    public function resumeRoadmapBuilder(string $threadId, array $decision): Response
+    {
+        return Http::acceptJson()
+            ->connectTimeout(5)
+            ->timeout(900)
+            ->post(
+                $this->baseUrl . '/roadmap-builder-workflows/' . $threadId . '/resume',
+                $decision
+            );
+    }
 }

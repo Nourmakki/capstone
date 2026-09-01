@@ -9,7 +9,6 @@ function AdminRoadmaps({ onChanged }) {
     const [selectedId, setSelectedId] = useState(null);
     const [versions, setVersions] = useState([]);
     const [graph, setGraph] = useState(null);
-    const [form, setForm] = useState({ title: "", description: "", parent_roadmap_id: "" });
     const [versionForm, setVersionForm] = useState({ version_number: "", title: "" });
 
     // The editor renders below the fold, so clicking Modules looks
@@ -64,27 +63,6 @@ function AdminRoadmaps({ onChanged }) {
     }, [selectedId]);
 
     useEffect(() => { loadVersions(); }, [loadVersions]);
-
-    const createRoadmap = async () => {
-        if (!form.title.trim() || !form.description.trim()) return;
-
-        setBusy(true);
-
-        try {
-            await api.post("/roadmaps", {
-                ...form,
-                parent_roadmap_id: form.parent_roadmap_id || null,
-            });
-            setForm({ title: "", description: "", parent_roadmap_id: "" });
-            await loadRoadmaps();
-            onChanged?.();
-        } catch (err) {
-            const errors = err.response?.data?.errors;
-            alert(errors ? Object.values(errors).flat().join("\n") : "Could not create the roadmap.");
-        } finally {
-            setBusy(false);
-        }
-    };
 
     const createDraft = async () => {
         setBusy(true);
@@ -172,63 +150,9 @@ function AdminRoadmaps({ onChanged }) {
         <div className="p-8">
             <h1 className="text-3xl lg:text-5xl font-black text-[#0097a7]">Roadmaps</h1>
             <p className="text-gray-400 mt-2 mb-10">
-                Create roadmaps and manage their versions.
+                Review what the AI proposed, and manage each roadmap's versions.
+                Roadmaps themselves are created by the AI builder.
             </p>
-
-            <div className="rounded-3xl border border-white/10 bg-white/[0.03] p-6 mb-10">
-                <h2 className="text-2xl font-bold mb-6 flex items-center gap-2">
-                    <Plus /> New Roadmap
-                </h2>
-
-                <div className="grid md:grid-cols-2 gap-4">
-                    <input type="text" placeholder="Title" value={form.title}
-                        onChange={(e) => setForm({ ...form, title: e.target.value })}
-                        className="bg-black border border-white/10 rounded-xl p-3 focus:outline-none focus:border-[#0097a7]" />
-                    <input type="text" placeholder="Description" value={form.description}
-                        onChange={(e) => setForm({ ...form, description: e.target.value })}
-                        className="bg-black border border-white/10 rounded-xl p-3 focus:outline-none focus:border-[#0097a7]" />
-                </div>
-
-                {/* A topic sits under a broader roadmap - Frontend under Web
-                    Development - and is a roadmap in its own right, so the AI
-                    fills it in through the same path as any other. Only
-                    top-level roadmaps are offered: the tree is two deep, and
-                    a grandchild would be unreachable for students. */}
-                <div className="mt-4">
-                    <label className="block text-sm text-gray-300 mb-2">
-                        Part of another roadmap?
-                    </label>
-
-                    <select value={form.parent_roadmap_id}
-                        onChange={(e) => setForm({ ...form, parent_roadmap_id: e.target.value })}
-                        className="w-full md:w-1/2 bg-black border border-white/10 rounded-xl p-3 text-white focus:outline-none focus:border-[#0097a7]">
-                        <option value="">No - this is a roadmap of its own</option>
-
-                        {roadmaps
-                            .filter((r) => !r.parent_roadmap_id)
-                            .map((r) => (
-                                <option key={r.id} value={r.id}>
-                                    Yes - a topic under {r.title}
-                                </option>
-                            ))}
-                    </select>
-
-                    <p className="text-xs text-gray-500 mt-2">
-                        {form.parent_roadmap_id
-                            ? "It will appear as a path students choose from that roadmap. Give it a version, then let the AI fill in its modules."
-                            : "It will appear on its own in the roadmap list."}
-                    </p>
-                </div>
-
-                <button onClick={createRoadmap} disabled={busy || !form.title.trim() || !form.description.trim()}
-                    className={`mt-6 font-bold px-8 py-3 rounded-xl transition ${
-                        busy || !form.title.trim() || !form.description.trim()
-                            ? "bg-gray-700 text-gray-400 cursor-not-allowed"
-                            : "bg-[#0097a7] text-black hover:scale-105"
-                    }`}>
-                    Create Roadmap
-                </button>
-            </div>
 
             {loading ? (
                 <p className="text-gray-400">Loading...</p>

@@ -131,52 +131,35 @@ class VersionAuthoringTest extends TestCase
     // Adding and editing modules
     // -----------------------------------------------------------------
 
-    public function test_a_module_is_added_to_the_end_of_a_draft(): void
-    {
-        ['version' => $version, 'nodes' => $nodes] = $this->makeRoadmap(['Basics', 'Components'], 'Draft');
-
-        $response = $this->actingAs($this->makeManager(), 'sanctum')
-            ->postJson("/api/roadmap-versions/{$version->id}/modules", [
-                'title'                 => 'React State',
-                'description'           => 'Managing state.',
-                'difficulty'            => 'intermediate',
-                'prerequisite_node_ids' => [$nodes[1]->id],
-            ]);
-
-        $response->assertCreated()->assertJsonPath('message', 'Module added.');
-
-        $this->assertCount(3, $response->json('modules'));
-
-        $added = collect($response->json('modules'))->firstWhere('title', 'React State');
-
-        $this->assertSame([$nodes[1]->id], $added['prerequisite_node_ids']);
-    }
-
     public function test_a_published_version_cannot_be_edited(): void
     {
-        ['version' => $version] = $this->makeRoadmap(['Basics'], 'Published');
+        ['version' => $version, 'nodes' => $nodes] = $this->makeRoadmap(['Basics'], 'Published');
+
+        $module = VersionNode::where('roadmap_version_id', $version->id)->firstOrFail();
 
         // Students are following this one; editing it rewrites history.
         $this->actingAs($this->makeManager(), 'sanctum')
-            ->postJson("/api/roadmap-versions/{$version->id}/modules", [
+            ->putJson("/api/version-nodes/{$module->id}", [
                 'title'       => 'Sneaky',
                 'description' => 'Should not land.',
                 'difficulty'  => 'beginner',
             ])
             ->assertStatus(422);
 
-        $this->assertCount(1, VersionNode::where('roadmap_version_id', $version->id)->get());
+        $this->assertSame('Basics', $module->fresh()->node->title);
     }
 
-    public function test_only_a_material_manager_may_author_modules(): void
+    public function test_only_a_material_manager_may_edit_modules(): void
     {
         ['version' => $version] = $this->makeRoadmap(['Basics'], 'Draft');
+
+        $module = VersionNode::where('roadmap_version_id', $version->id)->firstOrFail();
 
         $payload = ['title' => 'X', 'description' => 'Y', 'difficulty' => 'beginner'];
 
         foreach (['makeStudent', 'makeProfessor', 'makeAdmin'] as $maker) {
             $this->actingAs($this->{$maker}(), 'sanctum')
-                ->postJson("/api/roadmap-versions/{$version->id}/modules", $payload)
+                ->putJson("/api/version-nodes/{$module->id}", $payload)
                 ->assertForbidden();
         }
     }
@@ -248,27 +231,36 @@ class VersionAuthoringTest extends TestCase
         $this->assertSame([], $this->prerequisites($version)[$nodes[0]->id] ?? []);
     }
 
+    /**
+     * The single-root rule, asked of the rules class directly.
+     *
+     * It used to be reached by adding a module; managers no longer add
+     * modules, so it is now enforced where the AI commit path calls it.
+     */
     public function test_a_second_starting_module_is_refused(): void
     {
         ['version' => $version] = $this->makeRoadmap(['Basics', 'Components'], 'Draft');
 
-        // The map redesign needs a single origin to draw from.
-        $response = $this->actingAs($this->makeManager(), 'sanctum')
-            ->postJson("/api/roadmap-versions/{$version->id}/modules", [
-                'title'       => 'Unattached',
-                'description' => 'No prerequisites.',
-                'difficulty'  => 'beginner',
-            ]);
+        // A module with no prerequisites, beside one that already has none.
+        $orphan = Node::create([
+            'title' => 'Unattached', 'description' => 'No prerequisites.',
+            'difficulty' => 'beginner', 'status' => 'approved',
+        ]);
 
-        $response->assertStatus(422);
+        VersionNode::create([
+            'roadmap_version_id' => $version->id,
+            'node_id'            => $orphan->id,
+        ]);
 
-        $this->assertStringContainsString(
-            'exactly one starting module',
-            implode(' ', $response->json('errors.prerequisite_node_ids'))
-        );
-
-        $this->assertNull(Node::where('title', 'Unattached')->first());
-        $this->assertCount(2, VersionNode::where('roadmap_version_id', $version->id)->get());
+        try {
+            (new \App\Services\VersionGraphRules)->assertValid($version);
+            $this->fail('Two starting modules were allowed.');
+        } catch (\Illuminate\Validation\ValidationException $e) {
+            $this->assertStringContainsString(
+                'exactly one starting module',
+                implode(' ', $e->errors()['prerequisite_node_ids'])
+            );
+        }
     }
 
     public function test_a_module_cannot_be_its_own_prerequisite(): void

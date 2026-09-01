@@ -3,17 +3,19 @@
 namespace Tests\Feature;
 
 use App\Models\Roadmap;
+use App\Models\RoadmapVersion;
+use App\Services\NodeChoiceRules;
 use Illuminate\Foundation\Testing\RefreshDatabase;
 use Tests\Concerns\BuildsPlatform;
 use Tests\TestCase;
 
 /**
- * A manager creating a topic under a roadmap - Frontend under Web Development.
+ * The roadmap tree: who may shape it, and how deep it goes.
  *
- * The nine topics on the live site were seeded straight into the database, so
- * until now the hierarchy was only reachable by someone with a SQL client.
- * These cover the guards, because the tree being exactly two levels deep is an
- * assumption the student-facing pages rely on.
+ * Managers no longer create roadmaps. The AI builder proposes a subject and
+ * its paths, and a manager approves, edits or rejects what it produced - so
+ * the depth rules are enforced where that commit path and the edit route
+ * reach them, not on a create route that no longer exists.
  */
 class RoadmapTopicAuthoringTest extends TestCase
 {
@@ -28,36 +30,37 @@ class RoadmapTopicAuthoringTest extends TestCase
         ]);
     }
 
-    public function test_a_manager_can_create_a_topic_under_a_roadmap(): void
+    // -----------------------------------------------------------------
+    // Creation belongs to the AI
+    // -----------------------------------------------------------------
+
+    /**
+     * The route is gone, not merely guarded: content originates with the AI
+     * and a manager curates it.
+     */
+    public function test_no_one_can_create_a_roadmap_by_hand(): void
     {
-        $parent = $this->parent();
+        $payload = ['title' => 'Frontend', 'description' => 'Interfaces.'];
 
-        $response = $this->actingAs($this->makeManager(), 'sanctum')
-            ->postJson('/api/roadmaps', [
-                'title'             => 'Frontend',
-                'description'       => 'Interfaces people actually use.',
-                'parent_roadmap_id' => $parent->id,
-            ])
-            ->assertCreated();
+        foreach (['makeManager', 'makeAdmin', 'makeProfessor', 'makeStudent'] as $maker) {
+            $response = $this->actingAs($this->{$maker}(), 'sanctum')
+                ->postJson('/api/roadmaps', $payload);
 
-        $this->assertSame($parent->id, $response->json('data.parent_roadmap_id'));
-        $this->assertSame($parent->id, Roadmap::where('title', 'Frontend')->value('parent_roadmap_id'));
+            $this->assertContains(
+                $response->status(),
+                [404, 405, 403],
+                "{$maker} reached a roadmap create route"
+            );
+        }
+
+        $this->assertSame(0, Roadmap::count());
     }
 
-    public function test_a_roadmap_created_without_a_parent_stays_top_level(): void
-    {
-        $this->actingAs($this->makeManager(), 'sanctum')
-            ->postJson('/api/roadmaps', [
-                'title'       => 'Cybersecurity',
-                'description' => 'Offensive and defensive security.',
-            ])
-            ->assertCreated();
+    // -----------------------------------------------------------------
+    // Editing the tree, which a manager may still do
+    // -----------------------------------------------------------------
 
-        $this->assertNull(Roadmap::where('title', 'Cybersecurity')->value('parent_roadmap_id'));
-    }
-
-    /** An existing roadmap can be moved under a parent, and back out again. */
-    public function test_an_existing_roadmap_can_be_moved_under_a_parent_and_back(): void
+    public function test_a_manager_can_move_a_roadmap_under_another(): void
     {
         $parent = $this->parent();
         $child  = Roadmap::create(['title' => 'Backend', 'description' => 'The engine behind it.']);
@@ -77,94 +80,18 @@ class RoadmapTopicAuthoringTest extends TestCase
         $this->assertNull($child->fresh()->parent_roadmap_id);
     }
 
-    // -----------------------------------------------------------------
-    // The two-level guard
-    // -----------------------------------------------------------------
-
-    /**
-     * Three levels are allowed: a subject, its paths, and a path's own
-     * roadmap. React under Frontend under Web Development.
-     */
-    public function test_a_topic_may_hold_topics_of_its_own(): void
+    public function test_only_a_material_manager_may_move_a_roadmap(): void
     {
         $parent = $this->parent();
+        $child  = Roadmap::create(['title' => 'Backend', 'description' => 'x']);
 
-        $topic = Roadmap::create([
-            'title'             => 'Frontend',
-            'description'       => 'Interfaces.',
-            'parent_roadmap_id' => $parent->id,
-        ]);
+        foreach (['makeStudent', 'makeProfessor', 'makeAdmin'] as $maker) {
+            $this->actingAs($this->{$maker}(), 'sanctum')
+                ->putJson("/api/roadmaps/{$child->id}", ['parent_roadmap_id' => $parent->id])
+                ->assertForbidden();
+        }
 
-        $this->actingAs($this->makeManager(), 'sanctum')
-            ->postJson('/api/roadmaps', [
-                'title'             => 'React',
-                'description'       => 'A framework big enough for its own roadmap.',
-                'parent_roadmap_id' => $topic->id,
-            ])
-            ->assertCreated();
-
-        $this->assertSame($topic->id, Roadmap::where('title', 'React')->value('parent_roadmap_id'));
-    }
-
-    /**
-     * But three is the limit, and it is the AI system's limit too - her
-     * GeneratedChildRoadmap refuses a separate_roadmap choice inside a child
-     * roadmap. A fourth level has nowhere to be shown.
-     */
-    public function test_a_fourth_level_is_refused(): void
-    {
-        $subject = $this->parent();
-
-        $path = Roadmap::create([
-            'title'             => 'Frontend',
-            'description'       => 'Interfaces.',
-            'parent_roadmap_id' => $subject->id,
-        ]);
-
-        $deepest = Roadmap::create([
-            'title'             => 'React',
-            'description'       => 'A framework.',
-            'parent_roadmap_id' => $path->id,
-        ]);
-
-        $this->actingAs($this->makeManager(), 'sanctum')
-            ->postJson('/api/roadmaps', [
-                'title'             => 'React Router',
-                'description'       => 'One level too deep.',
-                'parent_roadmap_id' => $deepest->id,
-            ])
-            ->assertStatus(422)
-            ->assertJsonValidationErrors('parent_roadmap_id');
-
-        $this->assertDatabaseMissing('roadmaps', ['title' => 'React Router']);
-    }
-
-    /** Moving a roadmap carries its topics, so the whole subtree has to fit. */
-    public function test_a_move_that_would_push_topics_past_the_limit_is_refused(): void
-    {
-        $subject = $this->parent();
-        $other   = $this->parent('AI / ML');
-
-        $path = Roadmap::create([
-            'title'             => 'Frontend',
-            'description'       => 'Interfaces.',
-            'parent_roadmap_id' => $subject->id,
-        ]);
-
-        // Web Development already runs three deep, so it cannot become a
-        // topic of anything without taking React to a fourth level.
-        Roadmap::create([
-            'title'             => 'React',
-            'description'       => 'A framework.',
-            'parent_roadmap_id' => $path->id,
-        ]);
-
-        $this->actingAs($this->makeManager(), 'sanctum')
-            ->putJson("/api/roadmaps/{$subject->id}", ['parent_roadmap_id' => $other->id])
-            ->assertStatus(422)
-            ->assertJsonValidationErrors('parent_roadmap_id');
-
-        $this->assertNull($subject->fresh()->parent_roadmap_id);
+        $this->assertNull($child->fresh()->parent_roadmap_id);
     }
 
     public function test_a_roadmap_cannot_be_its_own_parent(): void
@@ -181,129 +108,106 @@ class RoadmapTopicAuthoringTest extends TestCase
 
     public function test_an_unknown_parent_is_refused(): void
     {
+        $child = Roadmap::create(['title' => 'Orphan', 'description' => 'x']);
+
         $this->actingAs($this->makeManager(), 'sanctum')
-            ->postJson('/api/roadmaps', [
-                'title'             => 'Orphan',
-                'description'       => 'Nowhere to live.',
-                'parent_roadmap_id' => 999999,
-            ])
+            ->putJson("/api/roadmaps/{$child->id}", ['parent_roadmap_id' => 999999])
             ->assertStatus(422)
             ->assertJsonValidationErrors('parent_roadmap_id');
     }
 
-    /**
-     * A roadmap a student cannot start is withheld rather than shown greyed
-     * out: the card was an invitation to click and find nothing there.
-     */
-    public function test_a_roadmap_with_nothing_to_open_is_hidden_from_students(): void
+    // -----------------------------------------------------------------
+    // Three levels, and no more
+    // -----------------------------------------------------------------
+
+    /** A subject, its paths, and a path's own roadmap. React under Frontend. */
+    public function test_three_levels_are_allowed(): void
     {
-        $empty = $this->parent('Cybersecurity');
-
-        // Its only topic has no published version, so there is still nothing
-        // to start - a topic alone does not make a parent openable.
-        Roadmap::create([
-            'title'             => 'Network Security',
-            'description'       => 'Nothing published yet.',
-            'review_status'     => 'approved',
-            'parent_roadmap_id' => $empty->id,
-        ]);
-
-        $student = $this->makeStudent();
-
-        $titles = collect(
-            $this->actingAs($student, 'sanctum')->getJson('/api/roadmaps')->json('data')
-        )->pluck('title');
-
-        $this->assertNotContains('Cybersecurity', $titles);
-
-        // And hidden means hidden - not merely absent from the list.
-        $this->actingAs($student, 'sanctum')
-            ->getJson("/api/roadmaps/{$empty->id}")
-            ->assertStatus(404);
-    }
-
-    /** A manager still needs to reach the roadmap they are halfway through. */
-    public function test_a_manager_still_sees_a_roadmap_with_nothing_to_open(): void
-    {
-        $empty = $this->parent('Cybersecurity');
-
-        $manager = $this->makeManager();
-
-        $titles = collect(
-            $this->actingAs($manager, 'sanctum')->getJson('/api/roadmaps')->json('data')
-        )->pluck('title');
-
-        $this->assertContains('Cybersecurity', $titles);
-
-        $this->actingAs($manager, 'sanctum')
-            ->getJson("/api/roadmaps/{$empty->id}")
-            ->assertOk();
-    }
-
-    public function test_only_a_material_manager_may_create_a_topic(): void
-    {
-        $parent = $this->parent();
-
-        $this->actingAs($this->makeStudent(), 'sanctum')
-            ->postJson('/api/roadmaps', [
-                'title'             => 'Frontend',
-                'description'       => 'Interfaces.',
-                'parent_roadmap_id' => $parent->id,
-            ])
-            ->assertStatus(403);
-    }
-
-    /**
-     * The point of the whole feature: a topic behaves like any other roadmap,
-     * so the AI can fill it in through the same path - and it reaches students
-     * on the same terms as everything else, which is to say only once approved.
-     */
-    public function test_a_new_topic_reaches_students_only_after_it_is_approved(): void
-    {
-        $parent  = $this->parent();
-        $student = $this->makeStudent();
+        $subject = $this->parent();
+        $path    = Roadmap::create(['title' => 'Frontend', 'description' => 'x', 'parent_roadmap_id' => $subject->id]);
+        $deepest = Roadmap::create(['title' => 'React', 'description' => 'x']);
 
         $this->actingAs($this->makeManager(), 'sanctum')
-            ->postJson('/api/roadmaps', [
-                'title'             => 'Frontend',
-                'description'       => 'Interfaces.',
-                'parent_roadmap_id' => $parent->id,
-            ])
-            ->assertCreated();
+            ->putJson("/api/roadmaps/{$deepest->id}", ['parent_roadmap_id' => $path->id])
+            ->assertOk();
 
-        // Something to open, or the parent is withheld for a different reason
-        // and this would not be testing approval at all.
-        $topic = Roadmap::where('title', 'Frontend')->first();
+        $rules = new NodeChoiceRules;
 
-        \App\Models\RoadmapVersion::create([
+        $this->assertSame(3, $rules->depthOf($deepest->fresh()));
+    }
+
+    /**
+     * Three is the AI system's limit too - GeneratedChildRoadmap refuses a
+     * separate_roadmap choice inside a child roadmap. A fourth level has
+     * nowhere to be shown.
+     */
+    public function test_a_fourth_level_is_refused(): void
+    {
+        $subject = $this->parent();
+        $path    = Roadmap::create(['title' => 'Frontend', 'description' => 'x', 'parent_roadmap_id' => $subject->id]);
+        $deepest = Roadmap::create(['title' => 'React', 'description' => 'x', 'parent_roadmap_id' => $path->id]);
+        $extra   = Roadmap::create(['title' => 'React Router', 'description' => 'x']);
+
+        $this->actingAs($this->makeManager(), 'sanctum')
+            ->putJson("/api/roadmaps/{$extra->id}", ['parent_roadmap_id' => $deepest->id])
+            ->assertStatus(422)
+            ->assertJsonValidationErrors('parent_roadmap_id');
+
+        $this->assertNull($extra->fresh()->parent_roadmap_id);
+    }
+
+    /** Moving a roadmap carries its topics, so the whole subtree has to fit. */
+    public function test_a_move_that_would_push_topics_past_the_limit_is_refused(): void
+    {
+        $subject = $this->parent();
+        $other   = $this->parent('AI / ML');
+
+        $path = Roadmap::create(['title' => 'Frontend', 'description' => 'x', 'parent_roadmap_id' => $subject->id]);
+        Roadmap::create(['title' => 'React', 'description' => 'x', 'parent_roadmap_id' => $path->id]);
+
+        $this->actingAs($this->makeManager(), 'sanctum')
+            ->putJson("/api/roadmaps/{$subject->id}", ['parent_roadmap_id' => $other->id])
+            ->assertStatus(422)
+            ->assertJsonValidationErrors('parent_roadmap_id');
+
+        $this->assertNull($subject->fresh()->parent_roadmap_id);
+    }
+
+    // -----------------------------------------------------------------
+    // What students see
+    // -----------------------------------------------------------------
+
+    /** A topic reaches students only once approved, like all material. */
+    public function test_a_topic_reaches_students_only_after_it_is_approved(): void
+    {
+        $subject = $this->parent();
+
+        $topic = Roadmap::create([
+            'title'             => 'Frontend',
+            'description'       => 'Interfaces.',
+            'review_status'     => 'pending',
+            'parent_roadmap_id' => $subject->id,
+        ]);
+
+        RoadmapVersion::create([
             'roadmap_id'     => $topic->id,
             'version_number' => '1',
             'status'         => 'Published',
             'review_status'  => 'approved',
         ]);
 
-        $topicsFor = fn () => collect(
+        $student = $this->makeStudent();
+
+        $listed = fn () => collect(
             $this->actingAs($student, 'sanctum')->getJson('/api/roadmaps')->json('data')
         )->firstWhere('title', 'Web Development');
 
-        // Pending, like any other new material: written but not yet live. The
-        // parent has nothing else to offer, so it is withheld entirely rather
-        // than shown as a chooser with no paths in it.
-        $this->assertNull($topicsFor());
+        // Pending, and the subject has nothing else to offer, so it is
+        // withheld rather than shown as a chooser with no paths in it.
+        $this->assertNull($listed());
 
         $topic->update(['review_status' => 'approved']);
 
-        $listed = $topicsFor();
-
-        $this->assertNotNull($listed);
-        $this->assertSame(['Frontend'], collect($listed['children'])->pluck('title')->all());
-
-        // And it is a topic, not a peer: the student list stays top-level.
-        $titles = collect(
-            $this->actingAs($student, 'sanctum')->getJson('/api/roadmaps')->json('data')
-        )->pluck('title');
-
-        $this->assertContains('Web Development', $titles);
-        $this->assertNotContains('Frontend', $titles);
+        $this->assertSame(['Frontend'], collect($listed()['children'])->pluck('title')->all());
     }
 }

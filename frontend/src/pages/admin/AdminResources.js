@@ -1,5 +1,6 @@
 import React, { useCallback, useEffect, useState } from "react";
 import api from "../../api";
+import flattenModules from "../../components/flattenModules";
 import RoadmapPicker from "../../components/RoadmapPicker";
 import {
     BookOpen, Plus, Pencil, Trash2, ExternalLink, X, FileText, GraduationCap, AtSign,
@@ -80,7 +81,7 @@ function AdminResources({ onChanged }) {
 
         api.get(`/roadmap-versions/${versionId}/graph`)
             .then((r) => {
-                const list = r.data.nodes ?? [];
+                const list = flattenModules(r.data.nodes ?? []);
                 setNodes(list);
                 setNodeId(list[0]?.version_node_id ?? null);
             })
@@ -126,11 +127,9 @@ function AdminResources({ onChanged }) {
                 version_node_id: nodeId,
             };
 
-            if (editingId) {
-                await api.put(`/external-resources/${editingId}`, payload);
-            } else {
-                await api.post("/external-resources", payload);
-            }
+            // Edit only. Resources arrive from the learning workflow; a
+            // manager corrects a link or a title, and nothing more.
+            await api.put(`/external-resources/${editingId}`, payload);
 
             setForm(EMPTY);
             setEditingId(null);
@@ -172,14 +171,14 @@ function AdminResources({ onChanged }) {
         : "border-yellow-400/30 bg-yellow-400/10 text-yellow-300";
 
     const selectedNode = nodes.find((n) => n.version_node_id === nodeId);
-    const canSave = form.title.trim() && form.url.trim() && nodeId;
+    const canSave = editingId && form.title.trim() && form.url.trim() && nodeId;
 
     return (
         <div className="p-8">
             <h1 className="text-3xl lg:text-5xl font-black text-[#0097a7]">Resources</h1>
             <p className="text-gray-400 mt-2 mb-10">
-                The documentation, articles and courses attached to each module.
-                Nothing reaches students until you approve it in the Content Queue.
+                The documentation, articles and courses the AI attached to each module.
+                Correct a link or a title; nothing reaches students until you approve it.
             </p>
 
             {loading ? (
@@ -213,7 +212,7 @@ function AdminResources({ onChanged }) {
                                 {nodes.length === 0 && <option value="">No modules in this version</option>}
                                 {nodes.map((n) => (
                                     <option key={n.version_node_id} value={n.version_node_id}>
-                                        {n.title}
+                                        {n.depth ? "  ⤷ " : ""}{n.label ?? n.title}
                                     </option>
                                 ))}
                             </select>
@@ -224,7 +223,7 @@ function AdminResources({ onChanged }) {
                         <div className="flex items-center justify-between mb-6">
                             <h2 className="text-2xl font-bold flex items-center gap-2">
                                 {editingId ? <Pencil size={20} /> : <Plus size={20} />}
-                                {editingId ? "Edit Resource" : "New Resource"}
+                                {editingId ? "Edit Resource" : "Pick a resource to edit"}
                             </h2>
 
                             {editingId && (
@@ -271,7 +270,7 @@ function AdminResources({ onChanged }) {
                                     ? "bg-gray-700 text-gray-400 cursor-not-allowed"
                                     : "bg-[#0097a7] text-black hover:scale-105"
                             }`}>
-                            {busy ? "Saving..." : editingId ? "Save Changes" : "Add Resource"}
+                            {busy ? "Saving..." : "Save Changes"}
                         </button>
                     </div>
 

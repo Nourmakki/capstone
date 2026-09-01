@@ -49,10 +49,32 @@ class MaterialAuthoringTest extends TestCase
         ];
     }
 
+    /**
+     * Put a quiz payload through the validator a manager can actually reach.
+     *
+     * Managers no longer create material - the AI does, and they curate it -
+     * so these rules are exercised on the edit path. The quiz being edited is
+     * seeded directly, standing in for one the learning workflow committed.
+     */
     private function createQuiz(array $payload)
     {
+        $quiz = Quiz::create([
+            'version_node_id' => $this->module->id,
+            'title'           => 'Seeded by the AI',
+            'score'           => 0,
+            'review_status'   => 'approved',
+        ]);
+
+        QuizQuestion::create([
+            'quiz_id'  => $quiz->id,
+            'question' => 'Placeholder committed by the learning workflow.',
+            'type'     => 'multiple_choice',
+            'options'  => ['A', 'B', 'C', 'D'],
+            'answer'   => 'A',
+        ]);
+
         return $this->actingAs($this->manager, 'sanctum')
-            ->postJson("/api/version-nodes/{$this->module->id}/quizzes", $payload);
+            ->putJson("/api/quizzes/{$quiz->id}", $payload);
     }
 
     public function test_four_options_are_accepted(): void
@@ -60,7 +82,7 @@ class MaterialAuthoringTest extends TestCase
         $this->createQuiz($this->question(
             ['Databases', 'User interfaces', 'Networking', 'Operating systems'],
             'User interfaces'
-        ))->assertStatus(201);
+        ))->assertOk();
 
         $this->assertCount(4, QuizQuestion::sole()->options);
     }
@@ -72,7 +94,8 @@ class MaterialAuthoringTest extends TestCase
             'User interfaces'
         ))->assertStatus(422);
 
-        $this->assertSame(0, Quiz::count());
+        // Refused, so the question the AI committed is untouched.
+        $this->assertSame('Placeholder committed by the learning workflow.', QuizQuestion::sole()->question);
     }
 
     public function test_more_than_four_options_are_refused(): void
@@ -82,7 +105,8 @@ class MaterialAuthoringTest extends TestCase
             'User interfaces'
         ))->assertStatus(422);
 
-        $this->assertSame(0, Quiz::count());
+        // Refused, so the question the AI committed is untouched.
+        $this->assertSame('Placeholder committed by the learning workflow.', QuizQuestion::sole()->question);
     }
 
     /**
@@ -98,7 +122,8 @@ class MaterialAuthoringTest extends TestCase
             'User interfaces'
         ))->assertStatus(422);
 
-        $this->assertSame(0, Quiz::count());
+        // Refused, so the question the AI committed is untouched.
+        $this->assertSame('Placeholder committed by the learning workflow.', QuizQuestion::sole()->question);
     }
 
     /**
@@ -114,7 +139,8 @@ class MaterialAuthoringTest extends TestCase
             'User interfaces'
         ))->assertStatus(422);
 
-        $this->assertSame(0, Quiz::count());
+        // Refused, so the question the AI committed is untouched.
+        $this->assertSame('Placeholder committed by the learning workflow.', QuizQuestion::sole()->question);
     }
 
     /** Same text, different case and spacing, is still the same option. */
@@ -125,13 +151,14 @@ class MaterialAuthoringTest extends TestCase
             'User interfaces'
         ))->assertStatus(422);
 
-        $this->assertSame(0, Quiz::count());
+        // Refused, so the question the AI committed is untouched.
+        $this->assertSame('Placeholder committed by the learning workflow.', QuizQuestion::sole()->question);
     }
 
     public function test_true_false_still_takes_exactly_two(): void
     {
         $this->createQuiz($this->question(['True', 'False'], 'True', 'true_false'))
-            ->assertStatus(201);
+            ->assertOk();
 
         $this->assertCount(2, QuizQuestion::sole()->options);
     }
@@ -139,7 +166,7 @@ class MaterialAuthoringTest extends TestCase
     public function test_short_answer_needs_no_options(): void
     {
         $this->createQuiz($this->question([], 'A JavaScript library', 'short_answer'))
-            ->assertStatus(201);
+            ->assertOk();
 
         $this->assertNull(QuizQuestion::sole()->options);
     }
@@ -155,7 +182,8 @@ class MaterialAuthoringTest extends TestCase
             'Something else'
         ))->assertStatus(422);
 
-        $this->assertSame(0, Quiz::count());
+        // Refused, so the question the AI committed is untouched.
+        $this->assertSame('Placeholder committed by the learning workflow.', QuizQuestion::sole()->question);
     }
 
     public function test_the_rule_applies_to_edits_as_well_as_creation(): void
@@ -163,7 +191,7 @@ class MaterialAuthoringTest extends TestCase
         $this->createQuiz($this->question(
             ['Databases', 'User interfaces', 'Networking', 'Operating systems'],
             'User interfaces'
-        ))->assertStatus(201);
+        ))->assertOk();
 
         $quiz = Quiz::sole();
 
@@ -188,10 +216,10 @@ class MaterialAuthoringTest extends TestCase
         $this->createQuiz($this->question(
             ['Databases', 'User interfaces', 'Networking', 'Operating systems'],
             'User interfaces'
-        ))->assertStatus(201);
+        ))->assertOk();
 
         $quiz = Quiz::sole();
-        $quiz->update(['review_status' => 'approved']);
+        $quiz->update(['review_status' => 'approved', 'change_note' => null]);
 
         return $quiz->fresh();
     }
@@ -285,15 +313,13 @@ class MaterialAuthoringTest extends TestCase
 
     public function test_a_project_edit_names_the_fields_it_touched(): void
     {
-        $response = $this->actingAs($this->manager, 'sanctum')
-            ->postJson("/api/version-nodes/{$this->module->id}/projects", [
-                'title'       => 'Build a To-Do App',
-                'description' => 'Components, state, events.',
-                'difficulty'  => 'beginner',
-            ]);
-
-        $project = Project::findOrFail($response->json('project_id'));
-        $project->update(['review_status' => 'approved']);
+        $project = Project::create([
+            'version_node_id' => $this->module->id,
+            'title'           => 'Build a To-Do App',
+            'description'     => 'Components, state, events.',
+            'difficulty'      => 'beginner',
+            'review_status'   => 'approved',
+        ]);
 
         $this->actingAs($this->manager, 'sanctum')
             ->putJson("/api/projects/{$project->id}", [
@@ -485,7 +511,7 @@ class MaterialAuthoringTest extends TestCase
                     'Because it builds and updates user interfaces.'
                 ),
             ],
-        ])->assertStatus(201);
+        ])->assertOk();
 
         $this->assertSame(
             'Because it builds and updates user interfaces.',

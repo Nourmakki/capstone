@@ -124,11 +124,9 @@ function VersionModulesEditor({ versionId, onChanged }) {
         setBusy(true);
 
         try {
-            if (editingId) {
-                await api.put(`/version-nodes/${editingId}`, form);
-            } else {
-                await api.post(`/roadmap-versions/${versionId}/modules`, form);
-            }
+            // Edit only. Modules come from the roadmap workflows; a manager
+            // corrects what they generated rather than adding to it.
+            await api.put(`/version-nodes/${editingId}`, form);
 
             setForm(EMPTY);
             setEditingId(null);
@@ -190,7 +188,8 @@ function VersionModulesEditor({ versionId, onChanged }) {
 
     // The module being edited cannot be its own prerequisite.
     const candidates = modules.filter((m) => m.version_node_id !== editingId);
-    const canSave = form.title.trim() && form.description.trim();
+    // Nothing to save until a module has been chosen to edit.
+    const canSave = editingId && form.title.trim() && form.description.trim();
 
     return (
         <div className="rounded-3xl border border-white/10 bg-white/[0.03] p-8">
@@ -224,7 +223,7 @@ function VersionModulesEditor({ versionId, onChanged }) {
                     <div className="flex items-center justify-between mb-6">
                         <h3 className="text-xl font-bold flex items-center gap-2">
                             {editingId ? <Pencil size={18} /> : <Plus size={18} />}
-                            {editingId ? "Edit Module" : "New Module"}
+                            {editingId ? "Edit Module" : "Pick a module to edit"}
                         </h3>
 
                         {editingId && (
@@ -333,7 +332,7 @@ function VersionModulesEditor({ versionId, onChanged }) {
                                 ? "bg-gray-700 text-gray-400 cursor-not-allowed"
                                 : "bg-[#0097a7] text-black hover:scale-105"
                         }`}>
-                        {busy ? "Saving..." : editingId ? "Save Changes" : "Add Module"}
+                        {busy ? "Saving..." : "Save Changes"}
                     </button>
                 </div>
             )}
@@ -390,9 +389,54 @@ function VersionModulesEditor({ versionId, onChanged }) {
                                                     RECOMMENDED
                                                 </span>
                                             )}
+
+                                            {/* What this module does when a student
+                                                clicks it. Without this the three kinds
+                                                are indistinguishable here, and a module
+                                                that opens a roadmap looks like one that
+                                                simply has no material yet. */}
+                                            {m.kind === "roadmap" && (
+                                                <span className="text-xs px-3 py-1 rounded-full border border-purple-400/30 bg-purple-500/10 text-purple-300">
+                                                    opens {m.links_to_roadmap?.title ?? "a roadmap"}
+                                                </span>
+                                            )}
+
+                                            {m.kind === "choice" && (
+                                                <span className="text-xs px-3 py-1 rounded-full border border-yellow-400/30 bg-yellow-400/10 text-yellow-200">
+                                                    {m.choices.length} choices
+                                                </span>
+                                            )}
                                         </div>
 
                                         <p className="text-sm text-gray-400 mt-1">{m.description}</p>
+
+                                        {/* The buttons this module offers. They are not
+                                            steps in the rail, so they are shown here
+                                            rather than as modules of their own. */}
+                                        {m.kind === "choice" && (
+                                            <div className="flex flex-wrap items-center gap-2 mt-3">
+                                                {m.choices.map((c) => (
+                                                    <span key={c.version_node_id}
+                                                        className={`text-xs px-3 py-1 rounded-full border ${
+                                                            c.is_recommended
+                                                                ? "border-[#0097a7]/40 bg-[#0097a7]/10 text-[#00b0c2]"
+                                                                : "border-white/10 bg-white/5 text-gray-300"
+                                                        }`}
+                                                        title={c.recommendation_reason ?? c.description}>
+                                                        {c.title}
+                                                        {/* A choice usually shares its
+                                                            roadmap's name, so name it
+                                                            only when it differs. */}
+                                                        {c.links_to_roadmap
+                                                            ? c.links_to_roadmap.title === c.title
+                                                                ? " →"
+                                                                : ` → ${c.links_to_roadmap.title}`
+                                                            : ""}
+                                                        {c.is_recommended ? " ★" : ""}
+                                                    </span>
+                                                ))}
+                                            </div>
+                                        )}
 
                                         <div className="flex flex-wrap items-center gap-2 mt-3">
                                             {m.prerequisite_node_ids.length === 0 ? (

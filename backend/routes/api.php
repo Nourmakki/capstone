@@ -19,6 +19,7 @@ use App\Http\Controllers\Api\ProfileController;
 use App\Http\Controllers\Api\VersionGraphController;
 use App\Http\Controllers\Api\LearningWorkflowController;
 use App\Http\Controllers\Api\MaterialAuthoringController;
+use App\Http\Controllers\Api\RoadmapBuilderController;
 use App\Http\Controllers\Api\SubmissionAssessmentController;
 use Illuminate\Support\Facades\Route;
 
@@ -134,7 +135,6 @@ Route::middleware('auth:sanctum')->group(function () {
     */
     Route::middleware('role:MaterialManager')->group(function () {
 
-        Route::post('/roadmaps', [RoadmapController::class, 'store']);
         Route::put('/roadmaps/{roadmap}', [RoadmapController::class, 'update']);
         Route::delete('/roadmaps/{roadmap}', [RoadmapController::class, 'destroy']);
 
@@ -144,18 +144,15 @@ Route::middleware('auth:sanctum')->group(function () {
 
         // Manual graph authoring: the modules in a draft and what comes before what.
         Route::get('/roadmap-versions/{version}/modules', [VersionGraphController::class, 'index']);
-        Route::post('/roadmap-versions/{version}/modules', [VersionGraphController::class, 'store']);
         Route::put('/version-nodes/{versionNode}', [VersionGraphController::class, 'update']);
         Route::delete('/version-nodes/{versionNode}', [VersionGraphController::class, 'destroy']);
 
         // Correcting the quizzes and projects on a module.
         Route::get('/version-nodes/{versionNode}/material', [MaterialAuthoringController::class, 'index']);
 
-        Route::post('/version-nodes/{versionNode}/quizzes', [MaterialAuthoringController::class, 'storeQuiz']);
         Route::put('/quizzes/{quiz}', [MaterialAuthoringController::class, 'updateQuiz']);
         Route::delete('/quizzes/{quiz}', [MaterialAuthoringController::class, 'destroyQuiz']);
 
-        Route::post('/version-nodes/{versionNode}/projects', [MaterialAuthoringController::class, 'storeProject']);
         Route::put('/projects/{project}', [MaterialAuthoringController::class, 'updateProject']);
         Route::delete('/projects/{project}', [MaterialAuthoringController::class, 'destroyProject']);
         
@@ -166,13 +163,12 @@ Route::middleware('auth:sanctum')->group(function () {
         // allows an edit of quiz, project and external_resources, and raises
         // "Tutorial cannot be edited. Use regenerate instead."
         Route::apiResource('tutorials', TutorialController::class)
-            ->except(['index', 'update']);
+            ->except(['index', 'store', 'update']);
 
         Route::post('/tutorials/{tutorial}/regenerate', [TutorialController::class, 'regenerate']);
 
         // The reading list on a module. Editable, unlike a tutorial - a link
         // and a title are things a human can sensibly correct.
-        Route::post('/external-resources', [ExternalResourceController::class, 'store']);
         Route::put('/external-resources/{id}', [ExternalResourceController::class, 'update']);
         Route::delete('/external-resources/{id}', [ExternalResourceController::class, 'destroy']);
 
@@ -208,6 +204,14 @@ Route::middleware('auth:sanctum')->group(function () {
         Route::post('/learning-runs/{run}/resume', [LearningWorkflowController::class, 'resume']);
         Route::post('/learning-runs/{run}/commit', [LearningWorkflowController::class, 'commit']);
         Route::post('/version-nodes/{versionNode}/learning-runs', [LearningWorkflowController::class, 'store']);
+
+        // The roadmap builder: a whole subject from a topic name. Unlike the
+        // other roadmap workflow, it needs no existing graph to extend.
+        Route::get('/roadmap-builder-runs', [RoadmapBuilderController::class, 'index']);
+        Route::post('/roadmap-builder-runs', [RoadmapBuilderController::class, 'store']);
+        Route::get('/roadmap-builder-runs/{run}', [RoadmapBuilderController::class, 'show']);
+        Route::post('/roadmap-builder-runs/{run}/resume', [RoadmapBuilderController::class, 'resume']);
+        Route::post('/roadmap-builder-runs/{run}/commit', [RoadmapBuilderController::class, 'commit']);
 
         // Material that reached the database and still needs a decision.
         Route::prefix('material')->group(function () {
