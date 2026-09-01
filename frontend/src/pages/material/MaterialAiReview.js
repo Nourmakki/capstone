@@ -2,7 +2,7 @@ import React, { useCallback, useEffect, useState } from "react";
 import api from "../../api";
 import {
     Bot, TrendingUp, Plus, Network, Trash2, Check, X, RefreshCw,
-    AlertTriangle, Inbox, ChevronRight, GitBranch, ExternalLink,
+    AlertTriangle, Inbox, ChevronRight, GitBranch, ExternalLink, Clock,
 } from "lucide-react";
 
 // Stage slugs the AI service accepts for regenerate/edit.
@@ -21,6 +21,11 @@ function MaterialAiReview({ onChanged }) {
     const [busy, setBusy] = useState(false);
     const [serviceDown, setServiceDown] = useState(false);
 
+    // The daily scan's switch, which lives on this screen because this is
+    // where the runs it produces arrive.
+    const [schedule, setSchedule] = useState(null);
+    const [savingSchedule, setSavingSchedule] = useState(false);
+
     // The proposal refers to existing modules by id, which means nothing to
     // a reviewer. The version's own graph is what turns them into titles.
     const [existingNodes, setExistingNodes] = useState([]);
@@ -37,6 +42,35 @@ function MaterialAiReview({ onChanged }) {
     }, []);
 
     useEffect(() => { loadList(); }, [loadList]);
+
+    useEffect(() => {
+        api.get("/ai-schedule")
+            .then((r) => setSchedule(r.data))
+            .catch((err) => console.error(err));
+    }, []);
+
+    /**
+     * Turn the daily scan on or off, or move when it runs.
+     *
+     * Saved immediately rather than behind a Save button: there is one switch
+     * and one time, and someone reaching for this before a demo wants it off
+     * now, not after confirming a form.
+     */
+    const saveSchedule = async (change) => {
+        setSavingSchedule(true);
+
+        try {
+            const response = await api.put("/ai-schedule", change);
+            setSchedule(response.data.schedule);
+        } catch (err) {
+            const errors = err.response?.data?.errors;
+            alert(errors
+                ? Object.values(errors).flat().join("\n")
+                : (err.response?.data?.message ?? "Could not change the schedule."));
+        } finally {
+            setSavingSchedule(false);
+        }
+    };
 
     const openWorkflow = async (workflow) => {
         setSelected(workflow);
@@ -169,9 +203,63 @@ function MaterialAiReview({ onChanged }) {
                 <Bot size={32} className="text-[#0097a7]" />
                 <h1 className="text-3xl lg:text-5xl font-black text-[#0097a7]">AI Proposals</h1>
             </div>
-            <p className="text-gray-400 mt-2 mb-10">
+            <p className="text-gray-400 mt-2 mb-6">
                 The AI suggests roadmap changes. Nothing reaches students until you approve it.
             </p>
+
+            {/* The daily scan's switch. It spends API quota and takes minutes,
+                so it lives where its results land rather than buried in a
+                settings page - the person who reviews the proposals is the one
+                who wants it off during a demo. */}
+            {schedule && (
+                <div className="mb-10 rounded-3xl border border-white/10 bg-white/[0.03] p-5 flex flex-col lg:flex-row lg:items-center gap-5">
+                    <div className="flex items-center gap-3 flex-1 min-w-0">
+                        <Clock size={20} className={schedule.enabled ? "text-[#0097a7]" : "text-gray-600"} />
+
+                        <div className="min-w-0">
+                            <p className="font-semibold">
+                                Daily scan{" "}
+                                <span className={schedule.enabled ? "text-[#00b0c2]" : "text-gray-500"}>
+                                    {schedule.enabled ? `on · ${schedule.run_at}` : "off"}
+                                </span>
+                            </p>
+
+                            <p className="text-xs text-gray-500 mt-1">
+                                {schedule.enabled
+                                    ? `Every day at ${schedule.run_at}, all ${schedule.roadmaps_in_scope} published roadmaps go to the AI.`
+                                    : `Off. Turning it on sends all ${schedule.roadmaps_in_scope} published roadmaps to the AI each day.`}
+                                {schedule.last_run_at && (
+                                    <> Last run {new Date(schedule.last_run_at).toLocaleString()} — {schedule.last_run_summary}</>
+                                )}
+                            </p>
+                        </div>
+                    </div>
+
+                    <div className="flex items-center gap-3 shrink-0">
+                        <input
+                            type="time"
+                            value={schedule.run_at}
+                            disabled={savingSchedule}
+                            onChange={(e) => saveSchedule({ run_at: e.target.value })}
+                            className="p-2 rounded-xl bg-black/30 border border-white/10 text-white text-sm"
+                        />
+
+                        <button
+                            onClick={() => saveSchedule({ enabled: !schedule.enabled })}
+                            disabled={savingSchedule}
+                            className={`px-5 py-2.5 rounded-2xl font-semibold text-sm transition ${
+                                savingSchedule
+                                    ? "bg-gray-700 text-gray-400 cursor-wait"
+                                    : schedule.enabled
+                                    ? "bg-white/5 border border-white/10 text-gray-200 hover:border-red-400/40"
+                                    : "bg-[#0097a7] text-black hover:scale-[1.02]"
+                            }`}
+                        >
+                            {savingSchedule ? "Saving..." : schedule.enabled ? "Turn off" : "Turn on"}
+                        </button>
+                    </div>
+                </div>
+            )}
 
             <div className="grid lg:grid-cols-[360px_1fr] gap-8">
 

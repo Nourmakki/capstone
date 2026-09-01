@@ -19,6 +19,7 @@ use App\Http\Controllers\Api\ProfileController;
 use App\Http\Controllers\Api\VersionGraphController;
 use App\Http\Controllers\Api\LearningWorkflowController;
 use App\Http\Controllers\Api\MaterialAuthoringController;
+use App\Http\Controllers\Api\AiScheduleController;
 use App\Http\Controllers\Api\RoadmapBuilderController;
 use App\Http\Controllers\Api\SubmissionAssessmentController;
 use Illuminate\Support\Facades\Route;
@@ -212,6 +213,10 @@ Route::middleware('auth:sanctum')->group(function () {
         Route::get('/roadmap-builder-runs/{run}', [RoadmapBuilderController::class, 'show']);
         Route::post('/roadmap-builder-runs/{run}/resume', [RoadmapBuilderController::class, 'resume']);
         Route::post('/roadmap-builder-runs/{run}/commit', [RoadmapBuilderController::class, 'commit']);
+
+        // The daily trend scan's switch. Off until somebody turns it on.
+        Route::get('/ai-schedule', [AiScheduleController::class, 'show']);
+        Route::put('/ai-schedule', [AiScheduleController::class, 'update']);
 
         // Material that reached the database and still needs a decision.
         Route::prefix('material')->group(function () {
