@@ -2,7 +2,7 @@ import React, { useCallback, useEffect, useState } from "react";
 import api from "../../api";
 import {
     Sparkles, Video, Brain, Code2, BookOpen, Check, X,
-    RefreshCw, AlertTriangle, Inbox, ChevronRight, Play,
+    RefreshCw, AlertTriangle, Inbox, ChevronRight, Play, ExternalLink,
 } from "lucide-react";
 
 // Stages her service accepts for regenerate.
@@ -430,9 +430,24 @@ function MaterialLearningReview({ onChanged }) {
                                             {data.project_result.overview}
                                         </p>
 
+                                        {/* What the project is for. A reviewer is
+                                            judging whether it teaches the module,
+                                            and this is the AI saying what it thinks
+                                            the module teaches. */}
+                                        {data.project_result.learning_objective && (
+                                            <p className="mt-3 text-xs text-gray-400 border-l-2 border-[#0097a7]/30 pl-3">
+                                                {data.project_result.learning_objective}
+                                            </p>
+                                        )}
+
                                         {[
                                             ["Tasks", data.project_result.tasks],
                                             ["Requirements", data.project_result.technical_requirements],
+                                            // What a student may not do, and what they
+                                            // hand in - both were being dropped, and
+                                            // both are graded against later.
+                                            ["Constraints", data.project_result.constraints],
+                                            ["Deliverables", data.project_result.deliverables],
                                             ["Done when", data.project_result.acceptance_criteria],
                                         ].map(([heading, items]) => (
                                             items?.length ? (
@@ -460,6 +475,27 @@ function MaterialLearningReview({ onChanged }) {
                                             {r.source_name} · {r.resource_type.replace(/_/g, " ")}
                                         </p>
                                         <p className="text-sm text-gray-400 mt-2">{r.description}</p>
+
+                                        {/* The link itself, so a reviewer can check
+                                            the resource rather than judge it by its
+                                            title - approving a dead or wrong link is
+                                            the easiest mistake to make here. */}
+                                        {r.url && (
+                                            <a href={r.url} target="_blank" rel="noreferrer"
+                                                className="mt-2 inline-flex items-start gap-1.5 text-xs text-[#00b0c2] hover:underline break-all">
+                                                <ExternalLink size={12} className="shrink-0 mt-0.5" />
+                                                {r.url}
+                                            </a>
+                                        )}
+
+                                        {/* Why the AI picked it. This is the argument
+                                            a reviewer is actually accepting or
+                                            refusing, and it was being dropped. */}
+                                        {r.why_recommended && (
+                                            <p className="mt-3 text-xs text-gray-400 border-l-2 border-[#0097a7]/30 pl-3">
+                                                {r.why_recommended}
+                                            </p>
+                                        )}
                                     </div>
                                 ))}
                             </Section>

@@ -2,7 +2,7 @@ import React, { useCallback, useEffect, useState } from "react";
 import api from "../../api";
 import {
     Bot, TrendingUp, Plus, Network, Trash2, Check, X, RefreshCw,
-    AlertTriangle, Inbox, ChevronRight, GitBranch,
+    AlertTriangle, Inbox, ChevronRight, GitBranch, ExternalLink,
 } from "lucide-react";
 
 // Stage slugs the AI service accepts for regenerate/edit.
@@ -284,13 +284,49 @@ function MaterialAiReview({ onChanged }) {
                                             <div key={i} className="rounded-2xl border border-white/10 bg-black/30 p-4">
                                                 <div className="flex items-start justify-between gap-3">
                                                     <h4 className="font-semibold">{t.title}</h4>
+
+                                                    {/* Her score is already a percentage -
+                                                        95 means 95. Multiplying by 100
+                                                        rendered "9500% confidence". */}
                                                     {t.confidence_score != null && (
-                                                        <span className="text-xs text-gray-500 shrink-0">
-                                                            {Math.round(t.confidence_score * 100)}% confidence
+                                                        <span className={`text-xs shrink-0 px-2 py-0.5 rounded-full ${
+                                                            t.confidence_score >= 80
+                                                                ? "bg-green-400/10 text-green-300"
+                                                                : t.confidence_score >= 50
+                                                                ? "bg-yellow-400/10 text-yellow-300"
+                                                                : "bg-red-400/10 text-red-300"
+                                                        }`}>
+                                                            {Math.round(t.confidence_score)}% confidence
                                                         </span>
                                                     )}
                                                 </div>
+
                                                 <p className="text-sm text-gray-400 mt-2">{t.description}</p>
+
+                                                {/* The evidence. A manager approving a
+                                                    module because the AI called something
+                                                    a trend is taking its word for it;
+                                                    these are the papers and standards it
+                                                    read, and they are checkable. */}
+                                                {t.sources?.length > 0 && (
+                                                    <div className="mt-3 pt-3 border-t border-white/5">
+                                                        <p className="text-xs text-gray-500 mb-2">
+                                                            {t.sources.length === 1 ? "Source" : `${t.sources.length} sources`}
+                                                        </p>
+
+                                                        <ul className="space-y-1.5">
+                                                            {t.sources.map((s, j) => (
+                                                                <li key={j}>
+                                                                    <a href={s.url} target="_blank" rel="noreferrer"
+                                                                        className="text-xs text-[#00b0c2] hover:underline inline-flex items-start gap-1.5 break-all">
+                                                                        <ExternalLink size={12} className="shrink-0 mt-0.5" />
+                                                                        {s.source_name || s.url}
+                                                                    </a>
+                                                                </li>
+                                                            ))}
+                                                        </ul>
+                                                    </div>
+                                                )}
                                             </div>
                                         ))}
                                     </Section>
