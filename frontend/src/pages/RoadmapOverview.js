@@ -132,6 +132,9 @@ function RoadmapOverview() {
                             stageTitle: item.stage_title ?? null,
                             isRecommended: Boolean(item.is_recommended),
 
+                            // Announced, its material still being written.
+                            comingSoon: Boolean(item.coming_soon),
+
                             // What clicking it does. A module either opens a
                             // roadmap of its own, offers a choice of topics, or
                             // has a page - the AI system's three node kinds.
@@ -430,7 +433,9 @@ function RoadmapOverview() {
                             const statusUI = getStatusUI(module.status);
 
                             const isLast = index === modules.length - 1;
-                            const isLocked = module.status === "locked";
+                            // A coming-soon module is locked whatever the
+                            // student has finished: there is nothing in it yet.
+                            const isLocked = module.comingSoon || module.status === "locked";
                             const isDone = module.status === "completed";
                             const hasChoices = module.choices.length > 0;
 
@@ -582,8 +587,18 @@ function RoadmapOverview() {
                                                     : "border-white/10 bg-white/[0.03] hover:border-[#0097a7]/40 cursor-pointer"
                                             }`}
                                         >
-                                            <h3 className="text-xl sm:text-2xl font-bold leading-snug">
+                                            <h3 className="text-xl sm:text-2xl font-bold leading-snug flex items-center gap-3 flex-wrap">
                                                 {module.title}
+
+                                                {/* Announced, not yet teachable. Said on
+                                                    the module itself so it does not read
+                                                    as one the student simply has not
+                                                    reached yet. */}
+                                                {module.comingSoon && (
+                                                    <span className="text-[10px] font-bold tracking-widest px-2.5 py-1 rounded-full bg-yellow-400/15 border border-yellow-400/30 text-yellow-200">
+                                                        COMING SOON
+                                                    </span>
+                                                )}
                                             </h3>
 
                                             <p className="mt-3 text-gray-400 leading-relaxed text-sm">
@@ -661,7 +676,12 @@ function RoadmapOverview() {
                                                             : "bg-[#0097a7] text-black hover:scale-[1.02]"
                                                     }`}
                                                 >
-                                                    {isLocked
+                                                    {module.comingSoon
+                                                        // Locked would suggest the
+                                                        // student has to earn it. This
+                                                        // one is waiting on us.
+                                                        ? "Material on its way"
+                                                        : isLocked
                                                         ? "Locked"
                                                         : module.linksToRoadmap
                                                         // It hands off to a roadmap, so

@@ -9,6 +9,7 @@ use App\Models\Quiz;
 use App\Models\Roadmap;
 use App\Models\RoadmapVersion;
 use App\Models\Tutorial;
+use App\Models\VersionNode;
 use App\Services\VersionPublishRules;
 use Illuminate\Http\Request;
 
@@ -205,7 +206,47 @@ class MaterialController extends Controller
             $item->update(['status' => 'Published']);
         }
 
+        // Approving a module's material is what makes it teachable, so this is
+        // where "coming soon" comes off. Checked after the approval above, and
+        // only once the module has all three - a tutorial alone is not a
+        // module a student can work through.
+        $this->liftComingSoon($item);
+
         return response()->json(['message' => 'Approved.']);
+    }
+
+    /**
+     * Take "coming soon" off a module once its material is approved.
+     *
+     * The mark says the module was announced before it could be taught. It
+     * comes off when the module has an approved tutorial, quiz and project -
+     * the same three the publish gate asks for, so a module stops being
+     * coming-soon exactly when it would have been publishable anyway.
+     *
+     * Only material belongs to a module; approving a roadmap or a version has
+     * nothing to lift.
+     */
+    private function liftComingSoon(mixed $item): void
+    {
+        $versionNodeId = $item->version_node_id ?? null;
+
+        if (! $versionNodeId) {
+            return;
+        }
+
+        $versionNode = VersionNode::find($versionNodeId);
+
+        if (! $versionNode || ! $versionNode->coming_soon) {
+            return;
+        }
+
+        $ready = $versionNode->tutorials()->approved()->exists()
+            && $versionNode->quizzes()->approved()->exists()
+            && $versionNode->projects()->approved()->exists();
+
+        if ($ready) {
+            $versionNode->update(['coming_soon' => false]);
+        }
     }
 
     public function reject(Request $request, string $type, int $id)

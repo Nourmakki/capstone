@@ -15,7 +15,8 @@ class AiRoadmapCommitService
 {
     public function __construct(
         private VersionCloner $cloner,
-        private VersionGraphRules $rules
+        private VersionGraphRules $rules,
+        private LearningRunLauncher $learning
     ) {
     }
 
@@ -57,6 +58,10 @@ class AiRoadmapCommitService
             // temporary AI id => real nodes.id
             $realIdFor = [];
 
+            // The modules this commit invents, so the learning workflow can be
+            // pointed at them once the graph is written.
+            $newVersionNodes = [];
+
             foreach ($placements as $placement) {
                 $tempId = (int) $placement['suggested_node_id'];
 
@@ -79,9 +84,14 @@ class AiRoadmapCommitService
 
                 $realIdFor[$tempId] = $node->id;
 
-                VersionNode::create([
+                // Announced, not yet teachable. The learning workflow is
+                // started for it below; until that material is approved the
+                // module is visible to students but cannot be entered, and
+                // the publish gate lets the version go live regardless.
+                $newVersionNodes[] = VersionNode::create([
                     'roadmap_version_id' => $version->id,
                     'node_id'            => $node->id,
+                    'coming_soon'        => true,
                 ]);
             }
 
@@ -109,8 +119,31 @@ class AiRoadmapCommitService
                 'committed_version_id' => $version->id,
             ]);
 
+            // Each new module goes straight to the learning workflow, so its
+            // tutorial, quiz and project are being written before anyone asks.
+            // Outside the graph work above but inside the transaction: if the
+            // AI service is unreachable the runs simply are not queued, and
+            // the modules stay coming-soon until someone starts them by hand.
+            $this->queueLearningRuns($newVersionNodes);
+
             return $version;
         });
+    }
+
+    /**
+     * Point the learning workflow at each module this commit invented.
+     *
+     * Failures are swallowed by the launcher: a manager has just approved a
+     * roadmap, and an unreachable AI service should leave the modules marked
+     * coming-soon and startable by hand rather than undo that.
+     *
+     * @param array<int,\App\Models\VersionNode> $versionNodes
+     */
+    private function queueLearningRuns(array $versionNodes): void
+    {
+        foreach ($versionNodes as $versionNode) {
+            $this->learning->start($versionNode);
+        }
     }
 
     /**

@@ -74,6 +74,14 @@ class VersionPublishRules
                 continue;
             }
 
+            // Announced deliberately, its material still being written. This
+            // is the one case where an empty module may go live - and the
+            // reason the flag is stored rather than inferred from "has no
+            // material", which is also true of one nobody filled in.
+            if ($versionNode->coming_soon) {
+                continue;
+            }
+
             $missing = [];
 
             foreach (self::REQUIRED as $relation => $label) {

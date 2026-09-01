@@ -71,7 +71,12 @@ class LearningController extends Controller
             'external_resources' => $versionNode->externalResources,
             'prerequisites'      => $prerequisites,
             'is_completed'       => in_array($versionNode->node_id, $completed, true),
-            'is_unlocked'        => $prerequisites->every(fn ($p) => $p['completed']),
+            // Announced before its material was written. Shown on the rail so
+            // a student can see what is coming, but there is nothing here to
+            // do yet - so it is not unlocked however far they have got.
+            'coming_soon'        => $versionNode->coming_soon,
+            'is_unlocked'        => ! $versionNode->coming_soon
+                && $prerequisites->every(fn ($p) => $p['completed']),
             // What still has to be done before this module can be completed,
             // so the button can explain itself instead of failing on click.
             'completion_blockers' => $this->blockersFor($request, $versionNode),

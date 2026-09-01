@@ -231,6 +231,9 @@ class RoadmapController extends Controller
             'stage'           => $vn->stage,
             'stage_title'     => $vn->stage_title,
             'is_recommended'  => $vn->is_recommended,
+            // Announced, its material still being written: shown on the
+            // rail but not yet enterable.
+            'coming_soon'     => $vn->coming_soon,
             'recommendation_reason' => $vn->recommendation_reason,
 
             // standard: its own page. choice: buttons, each with a page.

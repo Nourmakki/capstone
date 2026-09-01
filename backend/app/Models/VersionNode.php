@@ -23,10 +23,12 @@ class VersionNode extends Model
         'stage_title',
         'is_recommended',
         'recommendation_reason',
+        'coming_soon',
     ];
 
     protected $casts = [
         'is_recommended' => 'boolean',
+        'coming_soon'    => 'boolean',
     ];
 
     /**

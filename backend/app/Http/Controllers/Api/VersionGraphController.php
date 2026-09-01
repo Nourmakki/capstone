@@ -291,6 +291,7 @@ class VersionGraphController extends Controller
             'stage'                 => $vn->stage,
             'stage_title'           => $vn->stage_title,
             'is_recommended'        => $vn->is_recommended,
+            'coming_soon'           => $vn->coming_soon,
             'recommendation_reason' => $vn->recommendation_reason,
             'prerequisite_node_ids' => $prerequisites[$vn->node_id] ?? [],
             'material_counts'       => [

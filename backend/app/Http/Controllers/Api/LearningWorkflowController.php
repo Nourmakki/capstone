@@ -7,6 +7,7 @@ use App\Models\NodeLearningWorkflow;
 use App\Models\VersionNode;
 use App\Services\AiLearningCommitService;
 use App\Services\AiWorkflowService;
+use App\Services\LearningRunLauncher;
 use Illuminate\Http\JsonResponse;
 use Illuminate\Http\Request;
 use RuntimeException;
@@ -14,8 +15,10 @@ use Throwable;
 
 class LearningWorkflowController extends Controller
 {
-    public function __construct(private AiWorkflowService $ai)
-    {
+    public function __construct(
+        private AiWorkflowService $ai,
+        private LearningRunLauncher $launcher
+    ) {
     }
 
     public function index(): JsonResponse
@@ -46,34 +49,16 @@ class LearningWorkflowController extends Controller
      */
     public function store(VersionNode $versionNode): JsonResponse
     {
-        $active = NodeLearningWorkflow::where('version_node_id', $versionNode->id)
-            ->whereNull('committed_at')
-            ->whereIn('status', ['awaiting_review', 'ready'])
-            ->exists();
-
-        if ($active) {
+        // The launcher owns both the guard and the payload, because the
+        // roadmap commit starts these too and a second copy of her contract
+        // would drift the first time it changed.
+        if ($this->launcher->hasActiveRun($versionNode)) {
             return response()->json([
                 'message' => 'This module already has a run awaiting review.',
             ], 409);
         }
 
-        $versionNode->load('node', 'roadmapVersion.roadmap');
-
-        $prerequisites = ProgressController::prerequisiteNodesFor($versionNode);
-
-        $payload = [
-            'roadmap_id'         => $versionNode->roadmapVersion->roadmap_id,
-            'roadmap_topic'      => strtolower($versionNode->roadmapVersion->roadmap->title),
-            'version_id'         => $versionNode->roadmap_version_id,
-            'version_number'     => (string) $versionNode->roadmapVersion->version_number,
-            'node'               => [
-                'id'          => $versionNode->node_id,
-                'title'       => $versionNode->node->title,
-                'description' => $versionNode->node->description,
-                'difficulty'  => $versionNode->node->difficulty,
-            ],
-            'prerequisite_nodes' => $prerequisites,
-        ];
+        $payload = $this->launcher->payloadFor($versionNode);
 
         return $this->proxy(function () use ($payload, $versionNode) {
             $response = $this->ai->startLearningWorkflow($payload);
