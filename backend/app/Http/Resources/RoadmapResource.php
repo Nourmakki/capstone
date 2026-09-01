@@ -42,8 +42,11 @@ class RoadmapResource extends JsonResource
             'latest_version' => $latest
                 ? new RoadmapVersionResource($latest)
                 : null,
+            // Rail modules only. Counting choices would advertise seven
+            // modules on a roadmap whose rail has four, and the student would
+            // be reading about HTML and CSS as though they were steps.
             'node_count'     => $latest && $latest->relationLoaded('versionNodes')
-                ? $latest->versionNodes->count()
+                ? $latest->versionNodes->whereNull('parent_version_node_id')->count()
                 : 0,
         ];
     }

@@ -118,7 +118,28 @@ class NodeChoiceTest extends TestCase
     // Her rules, restated
     // -----------------------------------------------------------------
 
-    /** Her ChoiceRoadmapNode: exactly one recommended choice. */
+    /**
+     * Choices that are parts rather than alternatives need no recommendation.
+     *
+     * HTML, CSS and JavaScript are all three required, so recommending one
+     * says nothing. Her schema demands exactly one because hers models
+     * alternatives; ours accepts none, which is a superset of her rule.
+     */
+    public function test_choices_may_have_no_recommendation_at_all(): void
+    {
+        ['version' => $version, 'parent' => $parent] = $this->draft();
+
+        $this->addChoice($version->id, $parent->id, ['title' => 'HTML'])->assertCreated();
+        $this->addChoice($version->id, $parent->id, ['title' => 'CSS'])->assertCreated();
+        $this->addChoice($version->id, $parent->id, ['title' => 'JavaScript'])->assertCreated();
+
+        $this->assertSame(0, $parent->choices()->where('is_recommended', true)->count());
+
+        // And it publishes: no recommendation is not an incomplete node.
+        (new \App\Services\NodeChoiceRules)->assertReadyToPublish($parent->fresh()->load('node'));
+    }
+
+    /** Her ChoiceRoadmapNode: never more than one recommended choice. */
     public function test_two_recommended_choices_are_refused(): void
     {
         ['version' => $version, 'parent' => $parent] = $this->draft();

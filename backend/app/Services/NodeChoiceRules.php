@@ -81,10 +81,20 @@ class NodeChoiceRules
             ]);
         }
 
-        if ($choices->where('is_recommended', true)->count() !== 1) {
+        // Deliberately "at most one", where her schema says exactly one.
+        //
+        // Hers models alternatives - React or Vue or Angular - where picking
+        // one means skipping the others, so a recommendation is the answer to
+        // "which?". Ours also has to carry choices that are parts rather than
+        // alternatives: HTML, CSS and JavaScript are all three required, and
+        // recommending one of them says nothing.
+        //
+        // This is a superset of her rule, so anything the agent generates
+        // still passes - a node with exactly one recommended is valid here too.
+        if ($choices->where('is_recommended', true)->count() > 1) {
             throw ValidationException::withMessages([
-                'choices' => "\"{$title}\" needs exactly one of its choices marked recommended, "
-                    . 'so a student who does not know which to pick has an answer.',
+                'choices' => "\"{$title}\" has more than one choice marked recommended, "
+                    . 'which leaves a student no better off than none.',
             ]);
         }
     }

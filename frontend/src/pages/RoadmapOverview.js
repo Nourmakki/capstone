@@ -5,6 +5,7 @@ import { useAuth } from "../context/AuthContext";
 import RoadmapCard from "../components/RoadmapCard";
 import {
     ArrowLeft,
+    Map,
     CheckCircle2,
     Lock,
     PlayCircle,
@@ -48,7 +49,13 @@ function RoadmapOverview() {
 
                 setRoadmap(detail);
 
-                if ((detail.children ?? []).length > 0) {
+                // A chooser is a roadmap with paths and nothing of its own -
+                // Web Development. Frontend also has a child now (React), but
+                // it has its own modules too, and React is reached from the
+                // module that links to it rather than from a list of paths.
+                // Testing children alone hid Frontend's whole rail behind a
+                // single card.
+                if ((detail.children ?? []).length > 0 && ! detail.latest_version) {
                     return;
                 }
 
@@ -124,6 +131,19 @@ function RoadmapOverview() {
                             stage: item.stage ?? null,
                             stageTitle: item.stage_title ?? null,
                             isRecommended: Boolean(item.is_recommended),
+
+                            // What clicking it does. A module either opens a
+                            // roadmap of its own, offers a choice of topics, or
+                            // has a page - the AI system's three node kinds.
+                            linksToRoadmap: item.links_to_roadmap ?? null,
+                            choices: (item.choices ?? []).map((choice) => ({
+                                versionNodeId: choice.id,
+                                title: choice.node?.title ?? "",
+                                description: choice.node?.description ?? "",
+                                isRecommended: Boolean(choice.is_recommended),
+                                recommendationReason: choice.recommendation_reason ?? null,
+                                linksToRoadmap: choice.links_to_roadmap ?? null,
+                            })),
                         };
                     })
                 );
@@ -139,6 +159,32 @@ function RoadmapOverview() {
             loadRoadmap();
         }
     }, [roadmapId, user?.id, selectedVersionId]);
+
+    /**
+     * Where a module takes you.
+     *
+     * Most have a page of their own. One that is too big for a page - React,
+     * say - opens a roadmap instead, which is the AI system's
+     * separate_roadmap.
+     */
+    const openModule = (module) => {
+        if (module.linksToRoadmap) {
+            navigate(`/roadmap/${module.linksToRoadmap.id}`);
+            return;
+        }
+
+        navigate(`/learning/${module.versionNodeId}`);
+    };
+
+    /** A choice is a module in every respect, so it goes the same two ways. */
+    const openChoice = (choice) => {
+        if (choice.linksToRoadmap) {
+            navigate(`/roadmap/${choice.linksToRoadmap.id}`);
+            return;
+        }
+
+        navigate(`/learning/${choice.versionNodeId}`);
+    };
 
     const chooseVersion = (id) => {
         setPickerOpen(false);
@@ -186,7 +232,10 @@ function RoadmapOverview() {
     // specializations. Rendering the rail here would draw an empty one.
     const paths = roadmap?.children ?? [];
 
-    if (paths.length > 0) {
+    // Same rule as the fetch above: paths and nothing of its own. Frontend has
+    // React beneath it and a rail besides, and React is reached from the
+    // module that links to it.
+    if (paths.length > 0 && ! roadmap?.latest_version) {
         return (
             <div className="min-h-screen bg-[#050B0D] text-white">
                 <div className="absolute top-0 left-0 w-full h-full bg-[radial-gradient(circle_at_center,rgba(0,255,200,0.15),transparent_55%)] pointer-events-none" />
@@ -383,6 +432,7 @@ function RoadmapOverview() {
                             const isLast = index === modules.length - 1;
                             const isLocked = module.status === "locked";
                             const isDone = module.status === "completed";
+                            const hasChoices = module.choices.length > 0;
 
                             // The rail above this stop belongs to the journey
                             // already travelled, so it lights up once the
@@ -516,13 +566,19 @@ function RoadmapOverview() {
 
                                         <div
                                             onClick={() => {
-                                                if (!isLocked) {
-                                                    navigate(`/learning/${module.versionNodeId}`);
+                                                // A module offering choices has no
+                                                // page of its own - the buttons below
+                                                // are the whole point of it, so the
+                                                // card itself does nothing.
+                                                if (!isLocked && !hasChoices) {
+                                                    openModule(module);
                                                 }
                                             }}
                                             className={`rounded-3xl border p-6 transition ${
                                                 isLocked
                                                     ? "border-white/10 bg-white/[0.02] opacity-60"
+                                                    : hasChoices
+                                                    ? "border-white/10 bg-white/[0.03]"
                                                     : "border-white/10 bg-white/[0.03] hover:border-[#0097a7]/40 cursor-pointer"
                                             }`}
                                         >
@@ -551,27 +607,74 @@ function RoadmapOverview() {
                                                 )}
                                             </div>
 
-                                            <button
-                                                disabled={isLocked}
-                                                onClick={(event) => {
-                                                    event.stopPropagation();
+                                            {/* One button per choice, rather than one
+                                                for the module. Each opens its own page
+                                                with its own tutorials, quizzes and
+                                                projects - HTML, CSS and JavaScript
+                                                under Fundamentals. */}
+                                            {hasChoices ? (
+                                                <div className="mt-6 flex flex-wrap gap-3">
+                                                    {module.choices.map((choice) => (
+                                                        <button
+                                                            key={choice.versionNodeId}
+                                                            disabled={isLocked}
+                                                            title={choice.recommendationReason ?? choice.description}
+                                                            onClick={(event) => {
+                                                                event.stopPropagation();
+                                                                if (!isLocked) openChoice(choice);
+                                                            }}
+                                                            className={`px-5 py-2.5 rounded-2xl font-semibold text-sm transition flex items-center gap-2 ${
+                                                                isLocked
+                                                                    ? "bg-gray-800 text-gray-500 cursor-not-allowed"
+                                                                    : choice.isRecommended
+                                                                    ? "bg-[#0097a7] text-black hover:scale-[1.02]"
+                                                                    : "bg-white/5 border border-white/10 text-gray-200 hover:border-[#0097a7]/40"
+                                                            }`}
+                                                        >
+                                                            {choice.title}
 
-                                                    if (!isLocked) {
-                                                        navigate(`/learning/${module.versionNodeId}`);
-                                                    }
-                                                }}
-                                                className={`mt-6 px-6 py-3 rounded-2xl font-semibold transition ${
-                                                    isLocked
-                                                        ? "bg-gray-800 text-gray-500 cursor-not-allowed"
-                                                        : "bg-[#0097a7] text-black hover:scale-[1.02]"
-                                                }`}
-                                            >
-                                                {isDone
-                                                    ? "Review Module"
-                                                    : module.status === "current"
-                                                    ? "Continue Learning"
-                                                    : "Locked"}
-                                            </button>
+                                                            {choice.linksToRoadmap && (
+                                                                <Map size={14} className="shrink-0 opacity-70" />
+                                                            )}
+
+                                                            {choice.isRecommended && !isLocked && (
+                                                                <span className="text-[10px] uppercase tracking-wide px-2 py-0.5 rounded-full bg-black/20">
+                                                                    Recommended
+                                                                </span>
+                                                            )}
+                                                        </button>
+                                                    ))}
+                                                </div>
+                                            ) : (
+                                                <button
+                                                    disabled={isLocked}
+                                                    onClick={(event) => {
+                                                        event.stopPropagation();
+
+                                                        if (!isLocked) {
+                                                            openModule(module);
+                                                        }
+                                                    }}
+                                                    className={`mt-6 px-6 py-3 rounded-2xl font-semibold transition ${
+                                                        isLocked
+                                                            ? "bg-gray-800 text-gray-500 cursor-not-allowed"
+                                                            : "bg-[#0097a7] text-black hover:scale-[1.02]"
+                                                    }`}
+                                                >
+                                                    {isLocked
+                                                        ? "Locked"
+                                                        : module.linksToRoadmap
+                                                        // It hands off to a roadmap, so
+                                                        // "Continue Learning" would
+                                                        // promise the wrong thing.
+                                                        ? `Open ${module.linksToRoadmap.title}`
+                                                        : isDone
+                                                        ? "Review Module"
+                                                        : module.status === "current"
+                                                        ? "Continue Learning"
+                                                        : "Locked"}
+                                                </button>
+                                            )}
                                         </div>
                                     </div>
                                 </div>

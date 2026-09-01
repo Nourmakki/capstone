@@ -80,10 +80,12 @@ const styleFor = (roadmap) =>
 function RoadmapCard({ roadmap, onOpen, ctaLabel = "View Roadmap" }) {
     const style = styleFor(roadmap);
 
-    // A parent has no modules of its own - it is a choice between
-    // specializations, so it is available on the strength of its children.
+    // A chooser is a roadmap with paths and nothing of its own - Web
+    // Development. Having children is not enough on its own: Frontend has
+    // React beneath it and a full rail besides, and React is reached from the
+    // module linking to it, not from a list of paths.
     const children = roadmap.children ?? [];
-    const isChooser = children.length > 0;
+    const isChooser = children.length > 0 && ! roadmap.latest_version;
 
     // But only as available as its paths actually are. Having children is not
     // the same as having somewhere to go: a parent whose topics are all
