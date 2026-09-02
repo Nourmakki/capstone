@@ -17,8 +17,31 @@ class AiWorkflowService
         );
     }
 
+    /**
+     * Let PHP wait as long as the HTTP call is willing to.
+     *
+     * The timeouts below are sized to the work behind each call - up to five
+     * minutes for a generation run. PHP's own execution limit is separate and
+     * shorter under `artisan serve`, and it wins: a manager approving a
+     * roadmap got "Maximum execution time of 120 seconds exceeded" and a 500
+     * with no message, while her service carried on and finished the work.
+     * The request had already been killed, so the answer arrived nowhere and
+     * the screen said the approval had failed when it had not.
+     *
+     * Given a few seconds of headroom over the socket timeout, so the HTTP
+     * client is always the thing that gives up first and can report why.
+     */
+    private function allowTimeFor(int $seconds): void
+    {
+        if (function_exists('set_time_limit')) {
+            @set_time_limit($seconds + 30);
+        }
+    }
+
     public function healthCheck(): Response
     {
+        $this->allowTimeFor(10);
+
         return Http::timeout(10)
             ->get($this->baseUrl . '/health');
     }
@@ -26,6 +49,8 @@ class AiWorkflowService
 
     public function startWorkflow(array $payload): Response
     {
+        $this->allowTimeFor(180);
+
         return Http::acceptJson()
             ->connectTimeout(5)
             ->timeout(180)
@@ -37,6 +62,8 @@ class AiWorkflowService
 
     public function getWorkflow(string $threadId): Response
     {
+        $this->allowTimeFor(30);
+
         return Http::acceptJson()
             ->connectTimeout(5)
             ->timeout(30)
@@ -47,6 +74,8 @@ class AiWorkflowService
 
     public function resumeWorkflow(string $threadId,array $decision): Response 
     {
+        $this->allowTimeFor(180);
+
         return Http::acceptJson()
             ->connectTimeout(5)
             ->timeout(180)
@@ -66,6 +95,8 @@ class AiWorkflowService
      */
     public function startLearningWorkflow(array $payload): Response
     {
+        $this->allowTimeFor(300);
+
         return Http::acceptJson()
             ->connectTimeout(5)
             ->timeout(300)
@@ -74,6 +105,8 @@ class AiWorkflowService
 
     public function getLearningWorkflow(string $threadId): Response
     {
+        $this->allowTimeFor(30);
+
         return Http::acceptJson()
             ->connectTimeout(5)
             ->timeout(30)
@@ -82,6 +115,8 @@ class AiWorkflowService
 
     public function resumeLearningWorkflow(string $threadId, array $decision): Response
     {
+        $this->allowTimeFor(300);
+
         return Http::acceptJson()
             ->connectTimeout(5)
             ->timeout(300)
@@ -111,6 +146,8 @@ class AiWorkflowService
         ?string $filePath = null,
         ?string $fileName = null
     ): Response {
+        $this->allowTimeFor(600);
+
         $request = Http::acceptJson()
             ->connectTimeout(5)
             // Cloning a repository and reading a notebook is slower than the
@@ -131,6 +168,8 @@ class AiWorkflowService
 
     public function getProjectAssessment(string $threadId): Response
     {
+        $this->allowTimeFor(30);
+
         return Http::acceptJson()
             ->connectTimeout(5)
             ->timeout(30)
@@ -150,6 +189,8 @@ class AiWorkflowService
      */
     public function startRoadmapBuilder(string $topic): Response
     {
+        $this->allowTimeFor(900);
+
         return Http::acceptJson()
             ->connectTimeout(5)
             ->timeout(900)
@@ -160,6 +201,8 @@ class AiWorkflowService
 
     public function getRoadmapBuilder(string $threadId): Response
     {
+        $this->allowTimeFor(30);
+
         return Http::acceptJson()
             ->connectTimeout(5)
             ->timeout(30)
@@ -173,6 +216,8 @@ class AiWorkflowService
      */
     public function resumeRoadmapBuilder(string $threadId, array $decision): Response
     {
+        $this->allowTimeFor(900);
+
         return Http::acceptJson()
             ->connectTimeout(5)
             ->timeout(900)
