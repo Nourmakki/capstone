@@ -49,22 +49,21 @@ function HomePage() {
             <div className="absolute top-0 left-0 w-full h-full bg-[radial-gradient(circle_at_center,rgba(0,255,200,0.15),transparent_55%)] pointer-events-none" />
 
             <nav className="sticky top-0 z-50 flex items-center justify-between gap-4 px-6 lg:px-8 py-5 border-b border-white/10 bg-black/80 backdrop-blur-md">
-                <div className="flex items-center gap-3 min-w-0">
-                    <img
-                        src="/logo-mark.png"
-                        alt=""
-                        className="w-10 h-10 shrink-0 object-contain"
-                    />
-
-                    <div className="min-w-0">
-                        <h1 className="text-2xl font-bold tracking-wide text-[#0097a7]">
-                            CS Mastery
-                        </h1>
-                        <p className="hidden sm:block text-sm text-gray-400">
-                            Structured CS Learning Platform
-                        </p>
-                    </div>
+               <div className="flex items-stretch gap-3 min-w-0">
+                <img
+                    src="/logo-mark.png"
+                    alt=""
+                    className="w-10 h-10 shrink-0 object-contain"
+                />
+                <div className="min-w-0 flex flex-col justify-center sm:justify-between">
+                    <h1 className="text-2xl leading-none font-bold tracking-wide text-[#0097a7]">
+                        CS Mastery
+                    </h1>
+                    <p className="hidden sm:block text-sm leading-none text-gray-400">
+                        Structured CS Learning Platform
+                    </p>
                 </div>
+            </div>
 
                 <div className="flex items-center gap-3 shrink-0">
                     <button
