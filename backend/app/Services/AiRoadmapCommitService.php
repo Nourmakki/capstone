@@ -226,7 +226,16 @@ class AiRoadmapCommitService
     {
         if (isset($suggestedById[$id])) {
             if (! isset($realIdFor[$id])) {
-                throw new RuntimeException("Suggested node {$id} is referenced but was never placed.");
+                // The proposal contradicts itself: one module is linked to
+                // another that the AI never gave a position to. Named rather
+                // than numbered, because the number is one of her temporary
+                // ids and means nothing to the manager reading this.
+                $title = $suggestedById[$id]['title'] ?? "module {$id}";
+
+                throw new RuntimeException(
+                    "The proposal links to \"{$title}\", but never says where that module goes. "
+                    . 'Regenerate the placement stage, or remove the link, then commit again.'
+                );
             }
 
             return $realIdFor[$id];
@@ -237,7 +246,14 @@ class AiRoadmapCommitService
             ->exists();
 
         if (! $inVersion) {
-            throw new RuntimeException("Node {$id} is not part of this version.");
+            // Her ids are ours, so this means she reasoned about a graph that
+            // is not the one being committed to - usually a version that has
+            // moved on since the run started.
+            throw new RuntimeException(
+                "The proposal links to a module that is not on this roadmap version "
+                . "(id {$id}). The roadmap may have changed since this run started - "
+                . 'start a new run against the current version.'
+            );
         }
 
         return $id;
