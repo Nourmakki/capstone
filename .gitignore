@@ -104,3 +104,10 @@ AI-System/data/cache/
 !AI-System/data/sample/
 !AI-System/data/sample/**
 !AI-System/data/.gitkeep
+
+# ---------------------------------------------------------------------------
+# Editor and tool settings
+# ---------------------------------------------------------------------------
+# Local to whoever is working, not to the project: launch.json only says how
+# to start the frontend dev server for a preview.
+.claude/
