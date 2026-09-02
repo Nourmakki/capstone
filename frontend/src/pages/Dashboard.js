@@ -3,7 +3,6 @@ import {
     BookOpen,
     CheckSquare,
     Users,
-    Trophy,
     LogOut,
     Menu,
     X,
