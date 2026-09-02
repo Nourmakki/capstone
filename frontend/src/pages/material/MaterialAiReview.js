@@ -1,6 +1,5 @@
 import React, { useCallback, useEffect, useState } from "react";
 import api from "../../api";
-import ModuleMaterial from "../../components/ModuleMaterial";
 import {
     Bot, TrendingUp, Plus, Network, Trash2, Check, X, RefreshCw,
     AlertTriangle, Inbox, ChevronRight, GitBranch, ExternalLink, Clock,
@@ -27,17 +26,21 @@ function MaterialAiReview({ onChanged }) {
     const [schedule, setSchedule] = useState(null);
     const [savingSchedule, setSavingSchedule] = useState(false);
 
-    // Unsaved edits to the proposed modules. Null while not editing, so the
-    // list falls back to what the AI actually sent.
+    // Unsaved edits, one pair per editable stage. Null while not editing, so
+    // each list falls back to what the AI actually sent.
     const [editingNodes, setEditingNodes] = useState(false);
     const [nodeEdits, setNodeEdits] = useState(null);
 
-    // Which existing module has its material open, in the roadmap-as-it-stands
-    // section above the proposal.
-    const [openExisting, setOpenExisting] = useState(null);
+    const [editingTrends, setEditingTrends] = useState(false);
+    const [trendEdits, setTrendEdits] = useState(null);
+
+    const [editingPlacement, setEditingPlacement] = useState(false);
+    const [placementEdits, setPlacementEdits] = useState(null);
 
     // The proposal refers to existing modules by id, which means nothing to
-    // a reviewer. The version's own graph is what turns them into titles.
+    // a reviewer. The version's own graph is what turns them into titles, and
+    // what the placement editor offers as things to link to - so it is still
+    // fetched even though the roadmap is no longer listed on this page.
     const [existingNodes, setExistingNodes] = useState([]);
 
     const loadList = useCallback(async () => {
@@ -82,9 +85,28 @@ function MaterialAiReview({ onChanged }) {
         }
     };
 
-    /** One field of one proposed module, while the edits are unsaved. */
-    const updateNodeEdit = (index, field, value) => {
-        setNodeEdits((prev) => prev.map((n, i) => (i === index ? { ...n, [field]: value } : n)));
+    /** One field of one item, while the edits are unsaved. */
+    const updateEdit = (setter) => (index, field, value) =>
+        setter((prev) => prev.map((item, i) => (i === index ? { ...item, [field]: value } : item)));
+
+    const updateNodeEdit      = updateEdit(setNodeEdits);
+    const updateTrendEdit     = updateEdit(setTrendEdits);
+    const updatePlacementEdit = updateEdit(setPlacementEdits);
+
+    /** Add or drop one module from one of a placement's three id lists. */
+    const togglePlacementLink = (index, field, nodeId) => {
+        setPlacementEdits((prev) => prev.map((p, i) => {
+            if (i !== index) return p;
+
+            const ids = p[field] ?? [];
+
+            return {
+                ...p,
+                [field]: ids.includes(nodeId)
+                    ? ids.filter((id) => id !== nodeId)
+                    : [...ids, nodeId],
+            };
+        }));
     };
 
     /**
@@ -107,12 +129,109 @@ function MaterialAiReview({ onChanged }) {
         setNodeEdits(null);
     };
 
+    /**
+     * Send the edited trends back.
+     *
+     * Every payload below is rebuilt field by field rather than spread from
+     * what she sent. Her edit models are extra="forbid", and the response
+     * carries fields the edit request does not accept - passing the object
+     * back whole is how an edit gets refused for a key nobody touched.
+     *
+     * The trends are what the modules were derived from, so changing one
+     * leaves the modules describing the old reading: regenerated, not kept.
+     */
+    const saveTrendEdits = async () => {
+        await decide({
+            action: "edit",
+            stage: "trends",
+            data: {
+                // Title and description are the manager's; the score and the
+                // sources are the AI's and ride back exactly as they came.
+                // Her model requires all four, so they are sent, not dropped.
+                trends: trendEdits.map((t) => ({
+                    title:            t.title,
+                    description:      t.description,
+                    confidence_score: t.confidence_score,
+                    sources: (t.sources ?? []).map((s) => ({
+                        source_name: s.source_name,
+                        url:         s.url,
+                    })),
+                })),
+            },
+            regenerate_after_edit: true,
+        });
+
+        setEditingTrends(false);
+        setTrendEdits(null);
+    };
+
+    /**
+     * Send the edited placement back.
+     *
+     * Placement is the last stage, so nothing downstream needs regenerating -
+     * asking for it would throw away the placement just written by hand.
+     *
+     * Her stage expects both keys together, so the removals ride along
+     * unchanged even when only a placement was touched.
+     */
+    const savePlacementEdits = async () => {
+        // Her PlacementSuggestionEditRequest refuses a module wired to
+        // nothing. Caught here so it reads as a sentence rather than as a
+        // validation error returned from a service two hops away.
+        const orphan = placementEdits.find((p) =>
+            !(p.direct_prerequisite_node_ids ?? []).length
+            && !(p.direct_successor_node_ids ?? []).length);
+
+        if (orphan) {
+            alert(`"${orphan.suggested_node_title}" needs at least one module `
+                + "before or after it.");
+            return;
+        }
+
+        await decide({
+            action: "edit",
+            stage: "placement",
+            data: {
+                placement_suggestions: placementEdits.map((p) => ({
+                    suggested_node_id:                p.suggested_node_id,
+                    suggested_node_title:             p.suggested_node_title,
+                    direct_prerequisite_node_ids:     p.direct_prerequisite_node_ids ?? [],
+                    direct_successor_node_ids:        p.direct_successor_node_ids ?? [],
+                    recommended_predecessor_node_ids: p.recommended_predecessor_node_ids ?? [],
+                    explanation:                      p.explanation,
+                })),
+                existing_edges_to_remove: (data?.existing_edges_to_remove ?? []).map((e) => ({
+                    from_node_id: e.from_node_id,
+                    to_node_id:   e.to_node_id,
+                })),
+            },
+            regenerate_after_edit: false,
+        });
+
+        setEditingPlacement(false);
+        setPlacementEdits(null);
+    };
+
+    /**
+     * Drop every unsaved edit.
+     *
+     * Opening another run has to clear these: the edits are keyed by position
+     * in a list, so an unsaved edit left over from one run would render
+     * against the next one's items and save that run's titles onto this one.
+     */
+    const clearEdits = () => {
+        setEditingNodes(false);     setNodeEdits(null);
+        setEditingTrends(false);    setTrendEdits(null);
+        setEditingPlacement(false); setPlacementEdits(null);
+    };
+
     const openWorkflow = async (workflow) => {
         setSelected(workflow);
         setProposal(null);
         setFeedback("");
         setServiceDown(false);
         setExistingNodes([]);
+        clearEdits();
         setBusy(true);
 
         // Fetched separately and allowed to fail: without titles the proposal
@@ -228,6 +347,54 @@ function MaterialAiReview({ onChanged }) {
         );
     };
 
+    /**
+     * Every module this proposal could link to: the ones already on the
+     * roadmap and the ones it is proposing, since a new module may well come
+     * after another new one.
+     */
+    const linkableNodes = [
+        ...(data?.node_suggestions_with_ids ?? []).map((n) => ({ id: n.id, title: n.title })),
+        ...existingNodes.map((n) => ({ id: n.node_id, title: n.title })),
+    ];
+
+    /**
+     * The chips again, but as toggles.
+     *
+     * A text box for a list of numeric ids would be asking a manager to type
+     * the thing the ids exist to hide - and one typo writes an edge to a
+     * module on another roadmap. Only real modules can be picked here.
+     */
+    const NodePicker = ({ index, label, field, selected, self }) => (
+        <div>
+            <span className="text-xs text-gray-500">{label}</span>
+
+            <div className="flex flex-wrap gap-2 mt-1.5">
+                {linkableNodes
+                    // A module cannot come after itself.
+                    .filter((n) => n.id !== self)
+                    .map((n) => {
+                        const on = (selected ?? []).includes(n.id);
+
+                        return (
+                            <button key={n.id} type="button"
+                                onClick={() => togglePlacementLink(index, field, n.id)}
+                                className={`text-xs px-3 py-1 rounded-full border transition ${
+                                    on
+                                        ? "border-[#0097a7]/30 bg-[#0097a7]/10 text-[#00b0c2]"
+                                        : "border-white/10 text-gray-500 hover:border-white/20"
+                                }`}>
+                                {n.title}
+                            </button>
+                        );
+                    })}
+
+                {linkableNodes.length === 0 && (
+                    <span className="text-xs text-gray-600">No modules to link to.</span>
+                )}
+            </div>
+        </div>
+    );
+
     // Read from the list rather than `selected`, so it refreshes after a
     // commit instead of holding the row as it was when it was opened.
     const alreadyCommitted = !!workflows.find((w) => w.id === selected?.id)?.committed_version_id;
@@ -236,7 +403,7 @@ function MaterialAiReview({ onChanged }) {
         <div className="p-8">
             <div className="flex items-center gap-3">
                 <Bot size={32} className="text-[#0097a7]" />
-                <h1 className="text-3xl lg:text-5xl font-black text-[#0097a7]">AI Proposals</h1>
+                <h1 className="text-3xl lg:text-5xl font-black text-[#0097a7]">AI-detected trends</h1>
             </div>
             <p className="text-gray-400 mt-2 mb-6">
                 The AI suggests roadmap changes. Nothing reaches students until you approve it.
@@ -401,61 +568,41 @@ function MaterialAiReview({ onChanged }) {
 
                             {data && (
                                 <>
-                                    {/* The roadmap as it stands. A proposal is a
-                                        change to something, and judging it without
-                                        seeing what it changes meant opening the
-                                        Roadmaps page in another tab. */}
-                                    <Section icon={<GitBranch size={18} className="text-gray-400" />}
-                                             title="This roadmap now" count={existingNodes.length}>
-                                        {existingNodes.length === 0 ? (
-                                            <p className="text-sm text-gray-500">
-                                                No modules yet - everything below would be new.
-                                            </p>
-                                        ) : (
-                                            <div className="space-y-2">
-                                                {existingNodes.map((n) => (
-                                                    <div key={n.version_node_id}
-                                                         className="rounded-xl border border-white/10 bg-black/20 p-3">
-                                                        <div className="flex items-center justify-between gap-3">
-                                                            <span className="text-sm font-medium">{n.title}</span>
-                                                            <span className="text-xs text-gray-500 capitalize shrink-0">
-                                                                {n.difficulty}
-                                                            </span>
-                                                        </div>
-
-                                                        {/* Its material, so a reviewer can
-                                                            see what the roadmap already
-                                                            teaches before adding to it. */}
-                                                        <button
-                                                            onClick={() => setOpenExisting(
-                                                                openExisting === n.version_node_id ? null : n.version_node_id
-                                                            )}
-                                                            className="text-xs text-gray-500 mt-2 flex items-center gap-1.5 hover:text-[#00b0c2] transition"
-                                                        >
-                                                            <ChevronRight size={11} className={`transition-transform ${
-                                                                openExisting === n.version_node_id ? "rotate-90" : ""
-                                                            }`} />
-                                                            what is on it
-                                                        </button>
-
-                                                        {openExisting === n.version_node_id && (
-                                                            <div className="mt-3 pt-3 border-t border-white/10">
-                                                                <ModuleMaterial
-                                                                    versionNodeId={n.version_node_id}
-                                                                    editable={false}
-                                                                />
-                                                            </div>
-                                                        )}
-                                                    </div>
-                                                ))}
-                                            </div>
-                                        )}
-                                    </Section>
-
                                     <Section icon={<TrendingUp size={18} className="text-[#0097a7]" />}
                                              title="Detected trends" count={data.trends?.length}>
-                                        {data.trends?.map((t, i) => (
+                                        {(trendEdits ?? data.trends ?? []).map((t, i) => (
                                             <div key={i} className="rounded-2xl border border-white/10 bg-black/30 p-4">
+                                                {editingTrends ? (
+                                                    <div className="space-y-3">
+                                                        <input
+                                                            value={t.title}
+                                                            onChange={(e) => updateTrendEdit(i, "title", e.target.value)}
+                                                            className="w-full p-2 rounded-lg bg-black/40 border border-white/10 text-white font-semibold"
+                                                        />
+
+                                                        <textarea
+                                                            value={t.description}
+                                                            rows={3}
+                                                            onChange={(e) => updateTrendEdit(i, "description", e.target.value)}
+                                                            className="w-full p-2 rounded-lg bg-black/40 border border-white/10 text-white text-sm"
+                                                        />
+
+                                                        {/* Shown, not editable. The confidence
+                                                            is the AI's own reading of its
+                                                            evidence, like the sources under
+                                                            it - a manager rewording a trend
+                                                            has not re-run that judgement, and
+                                                            a hand-set number would read as
+                                                            though they had. */}
+                                                        {t.confidence_score != null && (
+                                                            <p className="text-xs text-gray-500">
+                                                                {Math.round(t.confidence_score)}% confidence, and its
+                                                                sources, stay as the AI reported them.
+                                                            </p>
+                                                        )}
+                                                    </div>
+                                                ) : (
+                                                <>
                                                 <div className="flex items-start justify-between gap-3">
                                                     <h4 className="font-semibold">{t.title}</h4>
 
@@ -501,8 +648,42 @@ function MaterialAiReview({ onChanged }) {
                                                         </ul>
                                                     </div>
                                                 )}
+                                                </>
+                                                )}
                                             </div>
                                         ))}
+
+                                        {awaitingReview && data.trends?.length > 0 && (
+                                            <div className="flex flex-wrap gap-3 pt-2">
+                                                {editingTrends ? (
+                                                    <>
+                                                        <button onClick={saveTrendEdits} disabled={busy}
+                                                            className="px-5 py-2.5 rounded-xl bg-[#0097a7] text-black font-semibold text-sm hover:scale-[1.02] transition">
+                                                            Save changes
+                                                        </button>
+
+                                                        <button onClick={() => { setEditingTrends(false); setTrendEdits(null); }}
+                                                            className="px-5 py-2.5 rounded-xl border border-white/10 text-gray-300 text-sm">
+                                                            Cancel
+                                                        </button>
+
+                                                        <p className="text-xs text-gray-500 self-center">
+                                                            The modules were derived from these, so they are rewritten to match.
+                                                        </p>
+                                                    </>
+                                                ) : (
+                                                    <button
+                                                        onClick={() => {
+                                                            setTrendEdits(data.trends.map((t) => ({ ...t })));
+                                                            setEditingTrends(true);
+                                                        }}
+                                                        className="px-5 py-2.5 rounded-xl border border-[#0097a7]/30 text-[#0097a7] text-sm hover:bg-[#0097a7]/10 transition"
+                                                    >
+                                                        Edit these trends
+                                                    </button>
+                                                )}
+                                            </div>
+                                        )}
                                     </Section>
 
                                     <Section icon={<Plus size={18} className="text-green-400" />}
@@ -596,23 +777,84 @@ function MaterialAiReview({ onChanged }) {
 
                                     <Section icon={<Network size={18} className="text-purple-400" />}
                                              title="Where they go" count={data.placement_suggestions?.length}>
-                                        {data.placement_suggestions?.map((p, i) => (
+                                        {(placementEdits ?? data.placement_suggestions ?? []).map((p, i) => (
                                             <div key={i} className="rounded-2xl border border-white/10 bg-black/30 p-4">
                                                 <h4 className="font-semibold">{p.suggested_node_title}</h4>
-                                                <p className="text-sm text-gray-400 mt-2">{p.explanation}</p>
 
-                                                <NodeChips label="comes after" ids={p.direct_prerequisite_node_ids} />
-                                                <NodeChips label="comes before" ids={p.direct_successor_node_ids} />
-                                                <NodeChips label="suggested to follow" ids={p.recommended_predecessor_node_ids} />
+                                                {editingPlacement ? (
+                                                    <div className="space-y-3 mt-3">
+                                                        <textarea
+                                                            value={p.explanation}
+                                                            rows={2}
+                                                            onChange={(e) => updatePlacementEdit(i, "explanation", e.target.value)}
+                                                            className="w-full p-2 rounded-lg bg-black/40 border border-white/10 text-white text-sm"
+                                                        />
 
-                                                {!p.direct_prerequisite_node_ids?.length
-                                                    && !p.direct_successor_node_ids?.length && (
-                                                    <p className="text-xs text-gray-500 mt-2">
-                                                        Not linked to anything - it would be a starting module.
-                                                    </p>
+                                                        <NodePicker index={i} label="comes after"
+                                                            field="direct_prerequisite_node_ids"
+                                                            selected={p.direct_prerequisite_node_ids}
+                                                            self={p.suggested_node_id} />
+
+                                                        <NodePicker index={i} label="comes before"
+                                                            field="direct_successor_node_ids"
+                                                            selected={p.direct_successor_node_ids}
+                                                            self={p.suggested_node_id} />
+
+                                                        <NodePicker index={i} label="suggested to follow"
+                                                            field="recommended_predecessor_node_ids"
+                                                            selected={p.recommended_predecessor_node_ids}
+                                                            self={p.suggested_node_id} />
+                                                    </div>
+                                                ) : (
+                                                    <>
+                                                        <p className="text-sm text-gray-400 mt-2">{p.explanation}</p>
+
+                                                        <NodeChips label="comes after" ids={p.direct_prerequisite_node_ids} />
+                                                        <NodeChips label="comes before" ids={p.direct_successor_node_ids} />
+                                                        <NodeChips label="suggested to follow" ids={p.recommended_predecessor_node_ids} />
+
+                                                        {!p.direct_prerequisite_node_ids?.length
+                                                            && !p.direct_successor_node_ids?.length && (
+                                                            <p className="text-xs text-gray-500 mt-2">
+                                                                Not linked to anything - it would be a starting module.
+                                                            </p>
+                                                        )}
+                                                    </>
                                                 )}
                                             </div>
                                         ))}
+
+                                        {awaitingReview && data.placement_suggestions?.length > 0 && (
+                                            <div className="flex flex-wrap gap-3 pt-2">
+                                                {editingPlacement ? (
+                                                    <>
+                                                        <button onClick={savePlacementEdits} disabled={busy}
+                                                            className="px-5 py-2.5 rounded-xl bg-[#0097a7] text-black font-semibold text-sm hover:scale-[1.02] transition">
+                                                            Save changes
+                                                        </button>
+
+                                                        <button onClick={() => { setEditingPlacement(false); setPlacementEdits(null); }}
+                                                            className="px-5 py-2.5 rounded-xl border border-white/10 text-gray-300 text-sm">
+                                                            Cancel
+                                                        </button>
+
+                                                        <p className="text-xs text-gray-500 self-center">
+                                                            Placement is the last stage, so nothing is regenerated after this.
+                                                        </p>
+                                                    </>
+                                                ) : (
+                                                    <button
+                                                        onClick={() => {
+                                                            setPlacementEdits(data.placement_suggestions.map((p) => ({ ...p })));
+                                                            setEditingPlacement(true);
+                                                        }}
+                                                        className="px-5 py-2.5 rounded-xl border border-[#0097a7]/30 text-[#0097a7] text-sm hover:bg-[#0097a7]/10 transition"
+                                                    >
+                                                        Edit this placement
+                                                    </button>
+                                                )}
+                                            </div>
+                                        )}
                                     </Section>
 
                                     {data.existing_edges_to_remove?.length > 0 && (
