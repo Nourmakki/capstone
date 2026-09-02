@@ -284,7 +284,12 @@ function ProfessorReviews({ onChanged }) {
                                         </button>
                                     ) : (
                                         <div className="space-y-3">
-                                            <input type="number" min="0" max="100" placeholder="Score (0-100)"
+                                            {/* 110: the AI scores a base out of 100
+                                                plus up to 10 bonus, and this form
+                                                shows that score above. Capped at 100
+                                                it refused the number it had just
+                                                displayed. */}
+                                            <input type="number" min="0" max="110" placeholder="Score (0-110)"
                                                 value={form[r.id]?.score ?? ""}
                                                 onChange={(e) => setField(r.id, "score", e.target.value)}
                                                 className="w-full p-3 rounded-xl bg-black/30 border border-white/10 text-white" />
