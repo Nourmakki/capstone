@@ -214,11 +214,12 @@ function ModuleMaterial({ versionNodeId, editable = true, onChanged }) {
             </Group>
 
             {/* Correcting a quiz or project is a form of its own, and it lives
-                on Edit Material - linked rather than duplicated here. */}
-            {editable && (data.quizzes.length > 0 || data.external_resources.length > 0) && (
+                beside the module picker on Learning Material - linked rather
+                than duplicated here. */}
+            {editable && (data.quizzes.length > 0 || data.projects.length > 0) && (
                 <p className="text-xs text-gray-600 mt-4 flex items-center gap-1.5">
                     <Pencil size={11} />
-                    Correct a quiz, project or resource from Edit Material.
+                    Correct a quiz or project from Learning Material.
                 </p>
             )}
         </div>

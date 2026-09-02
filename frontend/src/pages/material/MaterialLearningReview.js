@@ -1,8 +1,9 @@
 import React, { useCallback, useEffect, useState } from "react";
 import api from "../../api";
 import { firstRoadmapIn } from "../../components/RoadmapPicker";
+import ModuleMaterialEditor from "../../components/ModuleMaterialEditor";
 import {
-    Sparkles, Video, Brain, Code2, BookOpen, Check, X,
+    Sparkles, Video, Brain, Code2, BookOpen, Check, X, Pencil,
     RefreshCw, AlertTriangle, Inbox, ChevronRight, Play, ExternalLink,
 } from "lucide-react";
 
@@ -302,6 +303,24 @@ function MaterialLearningReview({ onChanged }) {
                     {busy ? "Working..." : "Generate Material"}
                 </button>
             </div>
+
+            {/* What that module already has, correctable in place.
+                Generating material and fixing it used to be two screens with
+                a set of dropdowns each, so correcting what a run had just
+                written meant finding the same module a second time. The
+                module is already chosen above; this is what is on it. */}
+            {moduleId && (
+                <div className="rounded-3xl border border-white/10 bg-white/[0.03] p-8 mb-8">
+                    <div className="flex items-center gap-3 mb-6">
+                        <Pencil size={20} className="text-[#0097a7]" />
+                        <h2 className="text-2xl font-bold">
+                            What {modules.find((m) => m.version_node_id === moduleId)?.title ?? "this module"} has now
+                        </h2>
+                    </div>
+
+                    <ModuleMaterialEditor versionNodeId={moduleId} onChanged={onChanged} />
+                </div>
+            )}
 
             {serviceDown && (
                 <div className="mb-8 flex items-start gap-3 rounded-2xl border border-yellow-400/30 bg-yellow-400/5 p-4">

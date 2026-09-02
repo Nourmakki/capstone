@@ -5,7 +5,6 @@ import { useAuth } from "../context/AuthContext";
 import {
     Bot, ClipboardCheck, History, UserRound, LogOut, Menu, X, Map,
     Sparkles,
-    Pencil,
 } from "lucide-react";
 
 import MaterialAiReview from "./material/MaterialAiReview";
@@ -14,7 +13,6 @@ import MaterialHistory from "./material/MaterialHistory";
 import AdminRoadmaps from "./admin/AdminRoadmaps";
 import ProfilePage from "./ProfilePage";
 import MaterialLearningReview from "./material/MaterialLearningReview";
-import MaterialEditor from "./material/MaterialEditor";
 
 function MaterialManagerDashboard() {
     const navigate = useNavigate();
@@ -62,12 +60,11 @@ function MaterialManagerDashboard() {
     };
 
     const navItems = [
-        { id: "ai", label: "AI Proposals", icon: <Bot size={20} />, badge: awaitingAi },
-        // Roadmap shape comes from AI Proposals; what fills each module comes
-        // from here.
+        { id: "ai", label: "AI-detected trends", icon: <Bot size={20} />, badge: awaitingAi },
+        // Roadmap shape comes from AI-detected trends; what fills each module
+        // comes from here - including fixing what is already on it, which had
+        // a screen of its own until the module picker here could serve both.
         { id: "learning", label: "Learning Material", icon: <Sparkles size={20} /> },
-        // Fixing what is already on a module, AI-written or not.
-        { id: "edit", label: "Edit Material", icon: <Pencil size={20} /> },
         { id: "queue", label: "Content Queue", icon: <ClipboardCheck size={20} />, badge: pending },
         { id: "roadmaps", label: "Roadmaps", icon: <Map size={20} /> },
         { id: "history", label: "History", icon: <History size={20} /> },
@@ -185,7 +182,6 @@ function MaterialManagerDashboard() {
             }`}>
                 {activePage === "ai" && <MaterialAiReview onChanged={loadStats} />}
                 {activePage === "learning" && <MaterialLearningReview onChanged={loadStats} />}
-                {activePage === "edit" && <MaterialEditor onChanged={loadStats} />}
                 {activePage === "queue" && <MaterialQueue onChanged={loadStats} />}
                 {activePage === "roadmaps" && <AdminRoadmaps onChanged={loadStats} />}
                 {activePage === "history" && <MaterialHistory />}
