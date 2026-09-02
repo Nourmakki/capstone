@@ -81,7 +81,12 @@ class RoadmapController extends Controller
             // "Foundations". Always null for a student, who only gets the
             // top level.
             'parent' => fn ($q) => $q->when(! $staff, fn ($inner) => $inner->approved()),
-            'children' => fn ($q) => $q->when(! $staff, fn ($inner) => $inner->approved())->orderBy('title'),
+            // In the order they were created, which is the order they were
+            // meant to be taken: Frontend before Backend, Machine Learning
+            // before Deep Learning, Platform Foundations before the rest.
+            // Alphabetical put Backend first and Deep Learning before the
+            // Machine Learning it builds on.
+            'children' => fn ($q) => $q->when(! $staff, fn ($inner) => $inner->approved())->orderBy('id'),
             'children.versions' => $published,
             'children.versions.versionNodes',
         ])->orderBy('title')->get();
@@ -110,7 +115,12 @@ class RoadmapController extends Controller
             // belongs to. Scoped, or a student would be pointed at a parent
             // they are not allowed to open.
             'parent' => fn ($q) => $q->when(! $staff, fn ($inner) => $inner->approved()),
-            'children' => fn ($q) => $q->when(! $staff, fn ($inner) => $inner->approved())->orderBy('title'),
+            // In the order they were created, which is the order they were
+            // meant to be taken: Frontend before Backend, Machine Learning
+            // before Deep Learning, Platform Foundations before the rest.
+            // Alphabetical put Backend first and Deep Learning before the
+            // Machine Learning it builds on.
+            'children' => fn ($q) => $q->when(! $staff, fn ($inner) => $inner->approved())->orderBy('id'),
             'children.versions' => $published,
             'children.versions.versionNodes',
         ]);

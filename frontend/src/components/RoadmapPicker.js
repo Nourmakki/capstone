@@ -20,9 +20,10 @@ import React, { useState } from "react";
  * title among the roadmaps and invited content onto something with nowhere
  * to put it.
  *
- * A path keeps that offer, because a path is a roadmap: Frontend has a rail
- * of its own as well as React and Vue beneath it, and a row listing only its
- * children would put that rail out of reach.
+ * Roadmaps below the top row are chosen by clicking them, and stay chosen
+ * while the row of what they contain opens underneath. No row repeats the
+ * roadmap above it: Frontend is already selected in its own row, so an entry
+ * for it among React and Vue would be a second button doing the same thing.
  */
 /**
  * What a panel should open on: the first roadmap under the first subject.
@@ -98,28 +99,12 @@ function RoadmapPicker({ roadmaps, selectedId, onSelect }) {
 
     /** One row of buttons. `activeId` is what counts as chosen at this level. */
     const row = (items, activeId, {
-        large = false, label = null, itself = null, onPick = onSelect,
+        large = false, label = null, onPick = onSelect,
     } = {}) => (
         <div className={`flex flex-wrap items-center gap-3 ${
             large ? "mb-4" : "mb-4 pl-4 border-l-2 border-[#0097a7]/30"
         }`}>
             {label && <span className="text-xs text-gray-500">{label}</span>}
-
-            {/* A path stays selectable beside its children: it holds a rail of
-                its own, and a row offering only React and Vue would hide it.
-                Guarded on having a parent rather than trusting the caller,
-                because this is the one slot that could put a subject back
-                among the roadmaps. */}
-            {itself?.parent_roadmap_id && (
-                <button onClick={() => onSelect(itself.id)}
-                    className={`px-4 py-2 rounded-xl text-sm transition ${
-                        selectedId === itself.id
-                            ? "bg-[#0097a7] text-black font-semibold"
-                            : "bg-white/5 border border-white/10 text-gray-400"
-                    }`}>
-                    {itself.title} itself
-                </button>
-            )}
 
             {items.map((r) => {
                 const active = activeId === r.id;
@@ -164,9 +149,11 @@ function RoadmapPicker({ roadmaps, selectedId, onSelect }) {
                 label: `${activeL1?.title} roadmaps:`,
             })}
 
+            {/* The roadmaps inside the one that is open. That roadmap stays
+                chosen in the row above, so it needs no entry of its own down
+                here - clicking it there is what opened this row. */}
             {deeper.length > 0 && row(deeper, selectedId, {
                 label: `In ${activeL2?.title}:`,
-                itself: activeL2,
             })}
         </>
     );
