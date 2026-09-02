@@ -3,7 +3,7 @@ import api from "../../api";
 import ModuleMaterial from "../../components/ModuleMaterial";
 import {
     Upload, Network, AlertTriangle, Sparkles, Check, X, ChevronRight,
-    Inbox, GitBranch, Layers, ArrowLeft,
+    Inbox, GitBranch, Layers, ArrowLeft, RefreshCw,
 } from "lucide-react";
 
 const STATUS_STYLE = {
@@ -28,6 +28,17 @@ function AdminRoadmaps({ onChanged }) {
     const [runs, setRuns] = useState([]);
     const [starting, setStarting] = useState(false);
     const [serviceDown, setServiceDown] = useState(false);
+
+    // What the AI is proposing, for the run currently opened. Approving
+    // without this was approving blind: the buttons said yes or no to
+    // something the page never showed.
+    const [openRun, setOpenRun] = useState(null);
+    const [proposal, setProposal] = useState(null);
+    const [loadingProposal, setLoadingProposal] = useState(false);
+
+    // Which run is mid-decision, and which way. Per run rather than a single
+    // flag, so one long approval does not blank the buttons on every row.
+    const [working, setWorking] = useState(null);
 
     // --- browsing ----------------------------------------------------
     const [roadmaps, setRoadmaps] = useState([]);
@@ -82,16 +93,62 @@ function AdminRoadmaps({ onChanged }) {
         }
     };
 
+    /**
+     * Read what a run is proposing.
+     *
+     * The list only carries the run's status. The proposal itself lives in her
+     * service, keyed by thread, and has to be fetched per run - which is why
+     * it loads on opening one rather than with the list.
+     */
+    const openProposal = async (run) => {
+        if (openRun === run.id) {
+            setOpenRun(null);
+            setProposal(null);
+            return;
+        }
+
+        setOpenRun(run.id);
+        setProposal(null);
+        setLoadingProposal(true);
+
+        try {
+            const response = await api.get(`/roadmap-builder-runs/${run.id}`);
+            setProposal(response.data);
+        } catch (err) {
+            fail(err);
+            setOpenRun(null);
+        } finally {
+            setLoadingProposal(false);
+        }
+    };
+
+    /**
+     * Approve or reject the stage a run is waiting on.
+     *
+     * This is a long call - her service writes the next roadmap before it
+     * answers, which is minutes, not seconds. `working` is per run and drives
+     * visible text on the button: disabled alone looked identical to doing
+     * nothing, so the first approval read as a dead button and was pressed
+     * again while it was still running.
+     */
     const resumeRun = async (run, action) => {
-        setBusy(true);
+        setWorking({ id: run.id, action });
 
         try {
             await api.post(`/roadmap-builder-runs/${run.id}/resume`, { action });
             await loadRuns();
+
+            // The stage has moved on, so the proposal on screen answers the
+            // previous question. Re-read it rather than close it: what comes
+            // back is the next thing to decide about.
+            if (openRun === run.id) {
+                const response = await api.get(`/roadmap-builder-runs/${run.id}`);
+                setProposal(response.data);
+            }
         } catch (err) {
             fail(err);
         } finally {
-            setBusy(false);
+            setWorking(null);
         }
     };
 
@@ -213,6 +270,198 @@ function AdminRoadmaps({ onChanged }) {
 
     const parentIsSubject = parent && !parent.parent_roadmap_id;
 
+    /** One roadmap the builder wrote: its modules, in order. */
+    const ProposedRoadmap = ({ result, heading }) => (
+        <div className="rounded-2xl border border-white/10 bg-black/20 p-4">
+            <h5 className="font-semibold text-sm">{heading ?? result.title}</h5>
+            <p className="text-xs text-gray-400 mt-1">{result.description}</p>
+
+            <div className="mt-3 space-y-2">
+                {(result.nodes ?? []).map((n) => (
+                    <div key={n.node_id} className="rounded-xl border border-white/5 bg-black/20 p-3">
+                        <div className="flex items-baseline gap-2 flex-wrap">
+                            <span className="text-xs text-gray-600">{n.order}</span>
+                            <span className="text-sm font-medium">{n.title}</span>
+
+                            {n.type === "choice" && (
+                                <span className="text-xs px-2 py-0.5 rounded-full bg-[#0097a7]/10 text-[#00b0c2]">
+                                    {n.choices?.length ?? 0} to choose from
+                                </span>
+                            )}
+                        </div>
+
+                        <p className="text-xs text-gray-500 mt-1">{n.description}</p>
+
+                        {/* The choices, because a choice node is the shape of
+                            the roadmap and not a detail. */}
+                        {n.type === "choice" && (
+                            <div className="mt-2 space-y-1.5 pl-3 border-l border-white/10">
+                                {n.choices.map((c) => (
+                                    <div key={c.choice_id}>
+                                        <div className="flex items-center gap-2 flex-wrap">
+                                            <span className="text-xs font-medium">{c.title}</span>
+
+                                            {c.recommended && (
+                                                <span className="text-xs px-2 py-0.5 rounded-full bg-[#0097a7]/10 text-[#00b0c2]">
+                                                    recommended
+                                                </span>
+                                            )}
+
+                                            {c.separate_roadmap && (
+                                                <span className="text-xs text-gray-600">
+                                                    becomes its own roadmap
+                                                </span>
+                                            )}
+                                        </div>
+
+                                        <p className="text-xs text-gray-600">{c.description}</p>
+
+                                        {c.recommendation_reason && (
+                                            <p className="text-xs text-gray-600 italic">
+                                                {c.recommendation_reason}
+                                            </p>
+                                        )}
+                                    </div>
+                                ))}
+                            </div>
+                        )}
+                    </div>
+                ))}
+            </div>
+
+            {result.freshness_summary && (
+                <p className="text-xs text-gray-600 mt-3 pt-3 border-t border-white/5">
+                    {result.freshness_summary}
+                </p>
+            )}
+        </div>
+    );
+
+    /**
+     * A roadmap already accepted, in one line.
+     *
+     * Summarised rather than shown in full: it is context for the decision in
+     * hand, and three roadmaps of six modules each rendered whole would bury
+     * the one actually being asked about.
+     */
+    const Accepted = ({ pkg }) => {
+        const modules = pkg.roadmap_result?.nodes ?? [];
+        const children = pkg.child_roadmaps ?? [];
+
+        return (
+            <div className="rounded-xl border border-green-400/20 bg-green-400/5 p-3">
+                <div className="flex items-center gap-2 flex-wrap">
+                    <Check size={12} className="text-green-400 shrink-0" />
+                    <span className="text-sm font-medium">{pkg.path_title}</span>
+                    <span className="text-xs text-gray-500">
+                        {modules.length} modules
+                        {children.length > 0 && `, ${children.length} branching off`}
+                    </span>
+                </div>
+
+                <p className="text-xs text-gray-500 mt-1 ml-5">
+                    {modules.map((n) => n.title).join(" · ")}
+                </p>
+            </div>
+        );
+    };
+
+    /** Whatever the run is currently asking a manager to decide about. */
+    const Proposal = ({ detail }) => {
+        const data = detail?.data;
+
+        if (!data) {
+            return <p className="text-xs text-gray-600">Nothing to show for this run.</p>;
+        }
+
+        // Stage one: which roadmaps belong under the subject.
+        if (detail.review_stage === "scope_review" && data.scope_result) {
+            const scope = data.scope_result;
+
+            return (
+                <div>
+                    <h4 className="text-sm font-semibold mb-1">
+                        Proposed roadmaps under {scope.input_topic}
+                    </h4>
+                    <p className="text-xs text-gray-500 mb-3">{scope.scope_summary}</p>
+
+                    <div className="space-y-2">
+                        {(scope.paths ?? []).map((p) => (
+                            <div key={p.path_id}
+                                 className="rounded-xl border border-white/10 bg-black/20 p-3">
+                                <span className="text-sm font-medium">{p.title}</span>
+                                <p className="text-xs text-gray-500 mt-1">{p.description}</p>
+                            </div>
+                        ))}
+                    </div>
+                </div>
+            );
+        }
+
+        const done = data.approved_roadmap_packages ?? [];
+        const pkg  = data.roadmap_package;
+
+        if (!pkg && done.length === 0) {
+            return <p className="text-xs text-gray-600">Nothing to review at this stage.</p>;
+        }
+
+        // Stage two: the roadmap being decided on, and everything already
+        // accepted above it. Judging roadmap three on its own says nothing
+        // about whether the set covers the subject without repeating itself.
+        return (
+            <div className="space-y-4">
+                {done.length > 0 && (
+                    <div>
+                        <h4 className="text-sm font-semibold mb-2">
+                            Approved so far
+                            <span className="ml-2 text-xs font-normal text-gray-500">
+                                {done.length} of {data.total_roadmaps ?? done.length}
+                            </span>
+                        </h4>
+
+                        <div className="space-y-2">
+                            {done.map((p, i) => (
+                                <Accepted key={p.path_id ?? i} pkg={p} />
+                            ))}
+                        </div>
+                    </div>
+                )}
+
+                {pkg && (
+                    <div>
+                        <div className="flex items-center gap-2 mb-2 flex-wrap">
+                            <h4 className="text-sm font-semibold">{pkg.path_title}</h4>
+
+                            <span className="text-xs px-2 py-0.5 rounded-full bg-yellow-400/10 text-yellow-300">
+                                deciding on this one
+                            </span>
+
+                            {data.total_roadmaps > 0 && (
+                                <span className="text-xs text-gray-500">
+                                    roadmap {data.current_roadmap_number} of {data.total_roadmaps}
+                                </span>
+                            )}
+                        </div>
+
+                        <div className="space-y-3">
+                            <ProposedRoadmap result={pkg.roadmap_result} />
+
+                            {/* A choice that becomes its own roadmap arrives
+                                with that roadmap already written. */}
+                            {(pkg.child_roadmaps ?? []).map((child) => (
+                                <ProposedRoadmap
+                                    key={`${child.parent_node_id}-${child.choice_id}`}
+                                    result={child.roadmap_result}
+                                    heading={`${child.choice_title} — its own roadmap`}
+                                />
+                            ))}
+                        </div>
+                    </div>
+                )}
+            </div>
+        );
+    };
+
     /** The way from a module into the roadmap it hands off to. */
     const RoadmapDoor = ({ roadmap }) => (
         <button onClick={() => openRoadmap(roadmap.id)}
@@ -284,7 +533,8 @@ function AdminRoadmaps({ onChanged }) {
                     <div className="mt-6 space-y-3">
                         {runs.map((run) => (
                             <div key={run.id}
-                                 className="rounded-2xl border border-white/10 bg-black/30 p-4 flex flex-col md:flex-row md:items-center justify-between gap-3">
+                                 className="rounded-2xl border border-white/10 bg-black/30 p-4">
+                            <div className="flex flex-col md:flex-row md:items-center justify-between gap-3">
                                 <div className="min-w-0">
                                     <div className="flex items-center gap-2 flex-wrap">
                                         <span className="font-semibold">{run.topic}</span>
@@ -295,7 +545,7 @@ function AdminRoadmaps({ onChanged }) {
 
                                         {run.review_stage && (
                                             <span className="text-xs text-gray-500">
-                                                reviewing {run.review_stage}
+                                                reviewing {run.review_stage.replace(/_/g, " ")}
                                             </span>
                                         )}
                                     </div>
@@ -305,23 +555,52 @@ function AdminRoadmaps({ onChanged }) {
                                             Committed as {run.roadmap.title}.
                                         </p>
                                     )}
+
+                                    {/* Read it before deciding on it. */}
+                                    {!run.committed && (
+                                        <button onClick={() => openProposal(run)}
+                                            className="text-xs text-gray-500 mt-2 flex items-center gap-1.5 hover:text-[#00b0c2] transition">
+                                            <ChevronRight size={11} className={`transition-transform ${
+                                                openRun === run.id ? "rotate-90" : ""
+                                            }`} />
+                                            {openRun === run.id ? "hide what it proposes" : "see what it proposes"}
+                                        </button>
+                                    )}
                                 </div>
 
                                 {!run.committed && (
                                     <div className="flex flex-wrap gap-2 shrink-0">
-                                        {run.status === "awaiting_review" && (
-                                            <>
-                                                <button onClick={() => resumeRun(run, "approve")} disabled={busy}
-                                                    className="flex items-center gap-1.5 px-4 py-2 rounded-xl border border-green-400/30 text-green-300 hover:bg-green-400/10 text-sm transition">
-                                                    <Check size={14} /> Approve
-                                                </button>
+                                        {run.status === "awaiting_review" && (() => {
+                                            const mine = working?.id === run.id;
 
-                                                <button onClick={() => resumeRun(run, "reject")} disabled={busy}
-                                                    className="flex items-center gap-1.5 px-4 py-2 rounded-xl border border-red-400/30 text-red-400 hover:bg-red-400/10 text-sm transition">
-                                                    <X size={14} /> Reject
-                                                </button>
-                                            </>
-                                        )}
+                                            // Approving writes the next roadmap before it
+                                            // answers, so this sits here for minutes. The
+                                            // button has to say so.
+                                            if (mine) {
+                                                return (
+                                                    <span className="flex items-center gap-2 px-4 py-2 text-sm text-[#00b0c2]">
+                                                        <RefreshCw size={14} className="animate-spin" />
+                                                        {working.action === "approve"
+                                                            ? "Approving - the AI is writing the next roadmap, this takes a few minutes"
+                                                            : "Rejecting..."}
+                                                    </span>
+                                                );
+                                            }
+
+                                            return (
+                                                <>
+                                                    <button onClick={() => resumeRun(run, "approve")} disabled={!!working}
+                                                        className="flex items-center gap-1.5 px-4 py-2 rounded-xl border border-green-400/30 text-green-300 hover:bg-green-400/10 text-sm transition disabled:opacity-40">
+                                                        <Check size={14} /> Approve
+                                                    </button>
+
+                                                    <button onClick={() => resumeRun(run, "reject")} disabled={!!working}
+                                                        className="flex items-center gap-1.5 px-4 py-2 rounded-xl border border-red-400/30 text-red-400 hover:bg-red-400/10 text-sm transition disabled:opacity-40">
+                                                        <X size={14} /> Reject
+                                                    </button>
+                                                </>
+                                            );
+                                        })()}
 
                                         {run.status === "ready_for_commit" && (
                                             <button onClick={() => commitRun(run)} disabled={busy}
@@ -331,6 +610,15 @@ function AdminRoadmaps({ onChanged }) {
                                         )}
                                     </div>
                                 )}
+                            </div>
+
+                            {openRun === run.id && (
+                                <div className="mt-4 pt-4 border-t border-white/10">
+                                    {loadingProposal
+                                        ? <p className="text-xs text-gray-500">Reading the proposal...</p>
+                                        : <Proposal detail={proposal} />}
+                                </div>
+                            )}
                             </div>
                         ))}
                     </div>

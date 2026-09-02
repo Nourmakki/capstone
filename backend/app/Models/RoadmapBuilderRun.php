@@ -21,10 +21,12 @@ class RoadmapBuilderRun extends Model
         'committed_roadmap_id',
         'committed_at',
         'started_by',
+        'approved_packages',
     ];
 
     protected $casts = [
-        'committed_at' => 'datetime',
+        'committed_at'      => 'datetime',
+        'approved_packages' => 'array',
     ];
 
     /** Her statuses that still want a human, as opposed to finished ones. */

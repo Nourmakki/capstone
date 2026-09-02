@@ -104,7 +104,9 @@ class RoadmapBuilderController extends Controller
                 'review_stage' => $body['review_stage'] ?? null,
             ]);
 
-            return response()->json($body + ['run' => $this->summary($run->fresh())]);
+            return response()->json(
+                $this->withApproved($run, $body) + ['run' => $this->summary($run->fresh())]
+            );
         });
     }
 
@@ -125,6 +127,22 @@ class RoadmapBuilderController extends Controller
         }
 
         return $this->proxy(function () use ($run, $data) {
+            // The roadmap being decided on, captured before the decision is
+            // sent: approving moves her workflow to the next one, and she
+            // only reports the approved set once the whole run is finished.
+            // Without keeping it here, a manager reviewing roadmap three
+            // cannot see the two they already accepted.
+            // Only at the roadmap stage: the scope stage is answering "are
+            // these the right roadmaps", and there is no package written yet
+            // to keep. Asking for one there was a wasted call to her service
+            // on every scope approval.
+            $answeringRoadmap = ($data['stage'] ?? null) === 'roadmap'
+                || (($data['stage'] ?? null) === null && $run->review_stage === 'roadmap_review');
+
+            $current = ($data['action'] === 'approve' && $answeringRoadmap)
+                ? $this->currentPackage($run)
+                : null;
+
             $response = $this->ai->resumeRoadmapBuilder(
                 $run->thread_id,
                 array_filter($data, fn ($value) => $value !== null)
@@ -137,11 +155,14 @@ class RoadmapBuilderController extends Controller
             $body = $response->json();
 
             $run->update([
-                'status'       => $body['status'],
-                'review_stage' => $body['review_stage'] ?? null,
+                'status'            => $body['status'],
+                'review_stage'      => $body['review_stage'] ?? null,
+                'approved_packages' => $current
+                    ? [...($run->approved_packages ?? []), $current]
+                    : $run->approved_packages,
             ]);
 
-            return response()->json($body);
+            return response()->json($this->withApproved($run, $body));
         });
     }
 
@@ -202,6 +223,47 @@ class RoadmapBuilderController extends Controller
                 'message' => 'The AI system is not responding. Check that it is running, then try again.',
             ], 503);
         }
+    }
+
+    /**
+     * The roadmap her workflow is currently asking about, if any.
+     *
+     * Read from her service rather than from the request: the manager is
+     * approving what the page showed them, and the page reads the same
+     * endpoint, so this is the same object.
+     */
+    private function currentPackage(RoadmapBuilderRun $run): ?array
+    {
+        try {
+            $response = $this->ai->getRoadmapBuilder($run->thread_id);
+
+            return $response->successful()
+                ? ($response->json()['data']['roadmap_package'] ?? null)
+                : null;
+        } catch (\Throwable) {
+            // Losing the record of an approved roadmap is not a reason to
+            // refuse the approval itself.
+            return null;
+        }
+    }
+
+    /**
+     * Fold what we kept into what she reports.
+     *
+     * Hers wins once the run finishes and she fills the list herself; ours is
+     * what fills the gap during the review stages, when hers is empty.
+     */
+    private function withApproved(RoadmapBuilderRun $run, array $body): array
+    {
+        $hers = $body['data']['approved_roadmap_packages'] ?? [];
+
+        if (! empty($hers) || empty($run->approved_packages)) {
+            return $body;
+        }
+
+        $body['data']['approved_roadmap_packages'] = $run->approved_packages;
+
+        return $body;
     }
 
     private function summary(RoadmapBuilderRun $run): array
