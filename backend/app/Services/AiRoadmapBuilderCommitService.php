@@ -2,6 +2,7 @@
 
 namespace App\Services;
 
+use App\Jobs\StartLearningRun;
 use App\Models\Edge;
 use App\Models\Node;
 use App\Models\Roadmap;
@@ -53,7 +54,7 @@ class AiRoadmapBuilderCommitService
             ]);
         }
 
-        return DB::transaction(function () use ($run, $packages) {
+        $subject = DB::transaction(function () use ($run, $packages) {
             $subject = $this->subjectFor($run);
 
             foreach ($packages as $package) {
@@ -68,6 +69,39 @@ class AiRoadmapBuilderCommitService
 
             return $subject;
         });
+
+        // Outside the transaction, and on the queue.
+        //
+        // Approving a build is what starts its material being written - the
+        // manager should not have to ask for it module by module. But her
+        // learning endpoint runs the whole graph before it answers, so sixty
+        // modules started inline would hold this request open for hours.
+        // Dispatched after the commit has been written, so a queue that is
+        // not running leaves the roadmap intact and merely unwritten.
+        $this->queueLearningRuns($subject);
+
+        return $subject;
+    }
+
+    /**
+     * Every module of everything just committed, including the choices.
+     *
+     * Choices are included deliberately: a choice that is only a signpost
+     * into another roadmap has that roadmap's own modules queued too, and one
+     * that teaches something itself would otherwise be the only module in the
+     * subject left with nothing on it.
+     */
+    private function queueLearningRuns(Roadmap $subject): void
+    {
+        $pathIds  = Roadmap::where('parent_roadmap_id', $subject->id)->pluck('id');
+        $childIds = Roadmap::whereIn('parent_roadmap_id', $pathIds)->pluck('id');
+
+        $versionIds = RoadmapVersion::whereIn('roadmap_id', $pathIds->concat($childIds))
+            ->pluck('id');
+
+        VersionNode::whereIn('roadmap_version_id', $versionIds)
+            ->pluck('id')
+            ->each(fn ($id) => StartLearningRun::dispatch($id));
     }
 
     /**
@@ -140,12 +174,23 @@ class AiRoadmapBuilderCommitService
     /** A module, and its choices if it has any. */
     private function commitNode(RoadmapVersion $version, array $node): VersionNode
     {
+        // Announced, not yet teachable - the same mark the trends commit puts
+        // on the modules it invents.
+        //
+        // Without it a whole new subject could not be published at all: the
+        // gate asks every module for a tutorial, quiz and project, and a
+        // roadmap the AI has just written has none. Sixty-odd modules would
+        // each have needed a learning run before a student could see any of
+        // it. Marked coming-soon they are exempt from the gate, so the
+        // structure goes live locked, and each module opens as its material
+        // is approved - which is exactly what the trends path already does.
         $created = VersionNode::create([
             'roadmap_version_id' => $version->id,
             'node_id'            => $this->makeNode($node)->id,
             // Her `order` is the sequence; we group by it so a generated
             // roadmap arrives with stages rather than as a flat list.
             'stage'              => $node['order'] ?? null,
+            'coming_soon'        => true,
         ]);
 
         foreach ($node['choices'] ?? [] as $choice) {
@@ -155,6 +200,7 @@ class AiRoadmapBuilderCommitService
                 'parent_version_node_id' => $created->id,
                 'is_recommended'         => (bool) ($choice['recommended'] ?? false),
                 'recommendation_reason'  => $choice['recommendation_reason'] ?? null,
+                'coming_soon'            => true,
             ]);
         }
 

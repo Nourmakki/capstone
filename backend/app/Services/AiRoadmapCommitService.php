@@ -2,6 +2,7 @@
 
 namespace App\Services;
 
+use App\Jobs\StartLearningRun;
 use App\Models\Edge;
 use App\Models\Node;
 use App\Models\RoadmapAiWorkflow;
@@ -51,7 +52,7 @@ class AiRoadmapCommitService
 
         $source = $workflow->roadmapVersion;
 
-        return DB::transaction(function () use ($source, $workflow, $placements, $edgesToRemove, $suggestedById, $committedBy) {
+        $committed = DB::transaction(function () use ($source, $workflow, $placements, $edgesToRemove, $suggestedById, $committedBy) {
             $version = RoadmapVersion::create([
                 'roadmap_id'     => $source->roadmap_id,
                 'version_number' => (string) (RoadmapVersion::where('roadmap_id', $source->roadmap_id)->count() + 1),
@@ -126,17 +127,25 @@ class AiRoadmapCommitService
                 'committed_version_id' => $version->id,
             ]);
 
-            // Each new module goes straight to the learning workflow, so its
-            // tutorial, quiz and project are being written before anyone asks.
-            // Outside the graph work above but inside the transaction: if the
-            // AI service is unreachable the runs simply are not queued, and
-            // the modules stay coming-soon until someone starts them by hand.
-            $this->queueLearningRuns($newVersionNodes);
-
             $this->goLive($version, $committedBy);
 
-            return $version;
+            return [$version, $newVersionNodes];
         });
+
+        [$version, $newVersionNodes] = $committed;
+
+        // Each new module goes straight to the learning workflow, so its
+        // tutorial, quiz and project are being written before anyone asks.
+        //
+        // On the queue, and after the transaction has closed. Her learning
+        // endpoint runs the whole graph before it answers - up to five
+        // minutes for a single module - so starting them inline held the
+        // commit open for as long as that took, inside a transaction, and
+        // risked losing the whole commit to PHP's execution limit. Handing
+        // them to the queue cannot fail a commit that is already written.
+        $this->queueLearningRuns($newVersionNodes);
+
+        return $version;
     }
 
     /**
@@ -205,7 +214,7 @@ class AiRoadmapCommitService
     private function queueLearningRuns(array $versionNodes): void
     {
         foreach ($versionNodes as $versionNode) {
-            $this->learning->start($versionNode);
+            StartLearningRun::dispatch($versionNode->id);
         }
     }
 

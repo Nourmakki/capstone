@@ -6,7 +6,9 @@ use App\Models\Roadmap;
 use App\Models\RoadmapBuilderRun;
 use App\Models\VersionNode;
 use Illuminate\Foundation\Testing\RefreshDatabase;
+use App\Jobs\StartLearningRun;
 use Illuminate\Support\Facades\Http;
+use Illuminate\Support\Facades\Queue;
 use Tests\Concerns\BuildsPlatform;
 use Tests\TestCase;
 
@@ -157,6 +159,7 @@ class RoadmapBuilderTest extends TestCase
         $run = $this->startRun();
 
         Http::fake([self::THREAD => Http::response($this->readyBody(), 200)]);
+        Queue::fake();
 
         $this->actingAs($this->makeManager(), 'sanctum')
             ->postJson("/api/roadmap-builder-runs/{$run->id}/commit")
@@ -183,6 +186,7 @@ class RoadmapBuilderTest extends TestCase
     {
         $run = $this->startRun();
         Http::fake([self::THREAD => Http::response($this->readyBody(), 200)]);
+        Queue::fake();
 
         $this->actingAs($this->makeManager(), 'sanctum')
             ->postJson("/api/roadmap-builder-runs/{$run->id}/commit")
@@ -213,6 +217,7 @@ class RoadmapBuilderTest extends TestCase
     {
         $run = $this->startRun();
         Http::fake([self::THREAD => Http::response($this->readyBody(), 200)]);
+        Queue::fake();
 
         $this->actingAs($this->makeManager(), 'sanctum')
             ->postJson("/api/roadmap-builder-runs/{$run->id}/commit")
@@ -232,6 +237,7 @@ class RoadmapBuilderTest extends TestCase
     {
         $run = $this->startRun();
         Http::fake([self::THREAD => Http::response($this->readyBody(), 200)]);
+        Queue::fake();
 
         $this->actingAs($this->makeManager(), 'sanctum')
             ->postJson("/api/roadmap-builder-runs/{$run->id}/commit")
@@ -252,6 +258,7 @@ class RoadmapBuilderTest extends TestCase
         $body['status'] = 'awaiting_review';
 
         Http::fake([self::THREAD => Http::response($body, 200)]);
+        Queue::fake();
 
         $this->actingAs($this->makeManager(), 'sanctum')
             ->postJson("/api/roadmap-builder-runs/{$run->id}/commit")
@@ -264,6 +271,7 @@ class RoadmapBuilderTest extends TestCase
     {
         $run = $this->startRun();
         Http::fake([self::THREAD => Http::response($this->readyBody(), 200)]);
+        Queue::fake();
 
         $manager = $this->makeManager();
 
@@ -289,6 +297,7 @@ class RoadmapBuilderTest extends TestCase
 
         $run = $this->startRun();
         Http::fake([self::THREAD => Http::response($this->readyBody(), 200)]);
+        Queue::fake();
 
         $this->actingAs($this->makeManager(), 'sanctum')
             ->postJson("/api/roadmap-builder-runs/{$run->id}/commit")

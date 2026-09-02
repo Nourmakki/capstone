@@ -10,6 +10,8 @@ use App\Models\VersionEdge;
 use App\Models\VersionNode;
 use App\Services\AiRoadmapCommitService;
 use Illuminate\Foundation\Testing\RefreshDatabase;
+use Illuminate\Support\Facades\Http;
+use Illuminate\Support\Facades\Queue;
 use Illuminate\Validation\ValidationException;
 use PHPUnit\Framework\Attributes\DataProvider;
 use RuntimeException;
@@ -19,6 +21,29 @@ use Tests\TestCase;
 class AiCommitTest extends TestCase
 {
     use RefreshDatabase, BuildsPlatform;
+
+    /**
+     * Nothing here may reach the AI service.
+     *
+     * Committing starts a learning run for every module it invents. The queue
+     * driver under test is `sync`, so a dispatched job runs immediately, and
+     * with nothing faked those runs went out over the network to whatever was
+     * listening on the configured port - a real service, generating real
+     * material, on every run of this file. It was the reason these tests took
+     * five minutes.
+     *
+     * preventStrayRequests is the belt to the queue's braces: it turns any
+     * unfaked call into a failure that names the URL, rather than a silent
+     * request that quietly succeeds.
+     */
+    protected function setUp(): void
+    {
+        parent::setUp();
+
+        Queue::fake();
+        Http::preventStrayRequests();
+        Http::fake();
+    }
 
     private function service(): AiRoadmapCommitService
     {
