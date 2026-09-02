@@ -163,6 +163,96 @@ class ComingSoonTest extends TestCase
     }
 
     // -----------------------------------------------------------------
+    // Committing puts it in front of students
+    // -----------------------------------------------------------------
+
+    /**
+     * Announcing is the point. A committed proposal goes live so a student
+     * sees the module arriving; coming-soon is what stops them entering it.
+     * Left as a draft, nobody knew the roadmap had grown until the material
+     * was finished - which is when the mark comes off anyway.
+     */
+    public function test_committing_puts_the_new_module_in_front_of_students(): void
+    {
+        Http::fake(['*' => Http::response(['thread_id' => 'learn-1', 'status' => 'awaiting_review'], 201)]);
+
+        ['version' => $source, 'nodes' => $nodes, 'versionNodes' => $versionNodes] =
+            $this->makeRoadmap(['Basics'], 'Published');
+
+        // The roadmap has to be publishable in the first place. Material
+        // hangs off the version node, and the cloner carries it forward, so
+        // the copy in the committed version has it too.
+        $this->giveMaterial($versionNodes[0]);
+
+        $workflow = RoadmapAiWorkflow::create([
+            'roadmap_version_id' => $source->id,
+            'thread_id'          => 'trend-live',
+            'status'             => 'ready_for_commit',
+        ]);
+
+        $newId = $nodes[0]->id + 500;
+
+        $version = app(AiRoadmapCommitService::class)->commit($workflow, [
+            'node_suggestions_with_ids' => [[
+                'id' => $newId, 'title' => 'Zero Trust',
+                'description' => 'Never trust, always verify.', 'difficulty' => 'advanced',
+            ]],
+            'placement_suggestions' => [[
+                'suggested_node_id'            => $newId,
+                'direct_prerequisite_node_ids' => [$nodes[0]->id],
+                'direct_successor_node_ids'    => [],
+            ]],
+        ])->fresh();
+
+        $this->assertSame('Published', $version->status);
+        $this->assertSame('approved', $version->review_status);
+
+        // Only one version of a roadmap is served at a time.
+        $this->assertSame('Archived', $source->fresh()->status);
+
+        $new = VersionNode::whereHas('node', fn ($q) => $q->where('title', 'Zero Trust'))
+            ->where('roadmap_version_id', $version->id)
+            ->firstOrFail();
+
+        // Visible, and still not enterable: that is the whole arrangement.
+        $this->assertTrue($new->coming_soon);
+
+        $response = $this->actingAs($this->makeStudent(), 'sanctum')
+            ->getJson("/api/version-nodes/{$new->id}")
+            ->assertOk();
+
+        $this->assertTrue($response->json('coming_soon'));
+        $this->assertFalse($response->json('is_unlocked'));
+    }
+
+    /**
+     * Roadmaps published before the readiness rule existed would not satisfy
+     * it today. Going live is skipped for those rather than failing - the
+     * commit happens inside a transaction, so throwing would undo it and
+     * committing onto such a roadmap would stop working altogether.
+     */
+    public function test_a_roadmap_that_cannot_publish_leaves_the_commit_a_draft(): void
+    {
+        Http::fake(['*' => Http::response(['thread_id' => 'learn-1', 'status' => 'awaiting_review'], 201)]);
+
+        // commitProposal builds a roadmap whose module has no material.
+        ['version' => $version, 'node' => $node] = $this->commitProposal();
+
+        $this->assertSame('Draft', $version->fresh()->status);
+        $this->assertTrue($node->coming_soon, 'The commit still happened.');
+    }
+
+    /** Everything the publish gate asks of one module. */
+    private function giveMaterial(VersionNode $module): void
+    {
+        Tutorial::create(['version_node_id' => $module->id, 'title' => 'T', 'url' => 'https://x.test',
+            'description' => 'd', 'source_name' => 's', 'review_status' => 'approved']);
+        Quiz::create(['version_node_id' => $module->id, 'title' => 'Q', 'score' => 0, 'review_status' => 'approved']);
+        Project::create(['version_node_id' => $module->id, 'title' => 'P', 'description' => 'd',
+            'difficulty' => 'beginner', 'review_status' => 'approved']);
+    }
+
+    // -----------------------------------------------------------------
     // The mark comes off
     // -----------------------------------------------------------------
 

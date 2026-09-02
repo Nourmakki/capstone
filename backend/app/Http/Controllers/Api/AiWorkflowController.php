@@ -8,6 +8,7 @@ use App\Models\RoadmapAiWorkflow;
 use App\Models\RoadmapVersion;
 use App\Services\AiWorkflowService;
 use Illuminate\Http\JsonResponse;
+use Illuminate\Http\Request;
 use Throwable;
 
 class AiWorkflowController extends Controller
@@ -133,10 +134,11 @@ class AiWorkflowController extends Controller
         });
     }
 
-        /**
-     * Turn an approved proposal into a new draft version.
+    /**
+     * Turn an approved proposal into a new version, and put it in front of
+     * students with its new modules marked coming-soon.
      */
-    public function commit(RoadmapAiWorkflow $workflow): JsonResponse
+    public function commit(Request $request, RoadmapAiWorkflow $workflow): JsonResponse
     {
         if ($workflow->committed_version_id) {
             return response()->json([
@@ -163,7 +165,7 @@ class AiWorkflowController extends Controller
 
             try {
                 $version = app(\App\Services\AiRoadmapCommitService::class)
-                    ->commit($workflow, $body['data'] ?? []);
+                    ->commit($workflow, $body['data'] ?? [], $request->user());
             } catch (\RuntimeException $e) {
                 return response()->json(['message' => $e->getMessage()], 422);
             } catch (\Illuminate\Validation\ValidationException $e) {

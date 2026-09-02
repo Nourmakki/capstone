@@ -920,13 +920,18 @@ function MaterialAiReview({ onChanged }) {
 
                                     <p className="text-sm text-gray-400 mb-5">
                                         Nothing has been written yet. Committing copies this
-                                        roadmap's current graph into a new draft version and
-                                        adds the approved modules and links to it.
+                                        roadmap's current graph into a new version, adds the
+                                        approved modules to it, and puts it in front of
+                                        students marked <span className="text-yellow-200">coming soon</span> -
+                                        they see what is arriving but cannot enter it. The AI
+                                        starts writing the material straight away, and each
+                                        module opens once you approve its tutorial, quiz and
+                                        project in the Content Queue.
                                     </p>
 
                                     {alreadyCommitted ? (
                                         <p className="text-sm text-green-300">
-                                            Already committed to a new draft version.
+                                            Already committed.
                                         </p>
                                     ) : (
                                         <button onClick={commit} disabled={busy}

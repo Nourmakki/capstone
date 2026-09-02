@@ -6,9 +6,11 @@ use App\Models\Edge;
 use App\Models\Node;
 use App\Models\RoadmapAiWorkflow;
 use App\Models\RoadmapVersion;
+use App\Models\User;
 use App\Models\VersionEdge;
 use App\Models\VersionNode;
 use Illuminate\Support\Facades\DB;
+use Illuminate\Validation\ValidationException;
 use RuntimeException;
 
 class AiRoadmapCommitService
@@ -22,9 +24,14 @@ class AiRoadmapCommitService
 
     /**
      * @param array $proposal the "data" object from the AI service response
+     * @param ?User $committedBy who pressed commit, recorded as the reviewer
+     *                           when the version goes live
      */
-    public function commit(RoadmapAiWorkflow $workflow, array $proposal): RoadmapVersion
-    {
+    public function commit(
+        RoadmapAiWorkflow $workflow,
+        array $proposal,
+        ?User $committedBy = null
+    ): RoadmapVersion {
         $suggestions   = $proposal['node_suggestions_with_ids'] ?? [];
         $placements    = $proposal['placement_suggestions']     ?? [];
         $edgesToRemove = $proposal['existing_edges_to_remove']  ?? [];
@@ -44,7 +51,7 @@ class AiRoadmapCommitService
 
         $source = $workflow->roadmapVersion;
 
-        return DB::transaction(function () use ($source, $workflow, $placements, $edgesToRemove, $suggestedById) {
+        return DB::transaction(function () use ($source, $workflow, $placements, $edgesToRemove, $suggestedById, $committedBy) {
             $version = RoadmapVersion::create([
                 'roadmap_id'     => $source->roadmap_id,
                 'version_number' => (string) (RoadmapVersion::where('roadmap_id', $source->roadmap_id)->count() + 1),
@@ -126,8 +133,64 @@ class AiRoadmapCommitService
             // the modules stay coming-soon until someone starts them by hand.
             $this->queueLearningRuns($newVersionNodes);
 
+            $this->goLive($version, $committedBy);
+
             return $version;
         });
+    }
+
+    /**
+     * Put the committed version in front of students.
+     *
+     * Committing is the manager saying yes to the shape of the roadmap, and
+     * the new modules are marked coming-soon, so this makes them visible
+     * without making them enterable: is_unlocked is false while coming_soon
+     * is true, however far a student has got. They see what is arriving and
+     * can reach none of it.
+     *
+     * Left as a draft instead, the whole point of coming-soon was lost - the
+     * modules sat in a version nobody could see, and a student learned the
+     * roadmap had grown only once the material was finished and it was
+     * published, which is exactly when the mark was due to come off.
+     *
+     * What is still gated is the material: MaterialController::liftComingSoon
+     * takes the mark off a module once its tutorial, quiz and project are
+     * approved, and only then can it be worked through.
+     *
+     * The readiness rule still decides, but it cannot fail the commit.
+     *
+     * Some roadmaps were published before that rule existed and would not
+     * satisfy it today - Frontend is live right now with two modules that
+     * have no material at all. Throwing here would roll back the whole
+     * transaction inside which this runs, so committing any proposal onto
+     * such a roadmap would stop working. It stays a draft instead, exactly
+     * as it did before, and the manager publishes it the usual way.
+     */
+    private function goLive(RoadmapVersion $version, ?User $committedBy): void
+    {
+        try {
+            app(VersionPublishRules::class)->assertReadyToPublish($version);
+        } catch (ValidationException) {
+            return;
+        }
+
+        // One live version per roadmap: the one this was cloned from steps
+        // aside rather than being served alongside it.
+        RoadmapVersion::where('roadmap_id', $version->roadmap_id)
+            ->where('id', '!=', $version->id)
+            ->where('status', 'Published')
+            ->update(['status' => 'Archived']);
+
+        // approveBy rather than a raw update, so the reviewer is recorded the
+        // same way the Content Queue records one - a version that went live
+        // with nobody's name on it reads like it published itself.
+        if ($committedBy) {
+            $version->approveBy($committedBy, 'Committed from an AI proposal.');
+        } else {
+            $version->update(['review_status' => 'approved', 'reviewed_at' => now()]);
+        }
+
+        $version->update(['status' => 'Published']);
     }
 
     /**
