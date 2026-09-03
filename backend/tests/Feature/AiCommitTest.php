@@ -9,7 +9,10 @@ use App\Models\Tutorial;
 use App\Models\VersionEdge;
 use App\Models\VersionNode;
 use App\Services\AiRoadmapCommitService;
+use App\Services\AiWorkflowService;
+use GuzzleHttp\Psr7\Response as GuzzleResponse;
 use Illuminate\Foundation\Testing\RefreshDatabase;
+use Illuminate\Http\Client\Response as ClientResponse;
 use Illuminate\Support\Facades\Http;
 use Illuminate\Support\Facades\Queue;
 use Illuminate\Validation\ValidationException;
@@ -48,6 +51,14 @@ class AiCommitTest extends TestCase
     private function service(): AiRoadmapCommitService
     {
         return app(AiRoadmapCommitService::class);
+    }
+
+    /** One of her JSON replies, as the client would hand it back. */
+    private function aiResponse(array $body): ClientResponse
+    {
+        return new ClientResponse(
+            new GuzzleResponse(200, ['Content-Type' => 'application/json'], json_encode($body))
+        );
     }
 
     private function workflowFor(RoadmapVersion $version): RoadmapAiWorkflow
@@ -140,6 +151,64 @@ class AiCommitTest extends TestCase
 
         $this->assertSame($committed->id, $workflow->committed_version_id);
         $this->assertSame('committed', $workflow->status);
+    }
+
+    /**
+     * The same commit, but through the endpoint a manager actually presses.
+     *
+     * Every other test in this file calls the service directly, which left the
+     * controller wrapping it uncovered - and it was broken: the closure passed
+     * to proxy() used $request without capturing it, so every real commit died
+     * on "Undefined variable $request". While proxy() still caught Throwable
+     * that surfaced as "the AI service is not reachable", so the one visible
+     * symptom pointed at a service that was answering fine.
+     *
+     * Worth a route-level test rather than a second service-level one: what
+     * failed here was the wiring, and only a request exercises the wiring.
+     */
+    public function test_a_manager_can_commit_a_proposal_through_the_endpoint(): void
+    {
+        ['version' => $live, 'nodes' => $nodes] = $this->makeRoadmap(['Basics', 'Components']);
+        $workflow = $this->workflowFor($live);
+        $manager  = $this->makeManager();
+
+        $temp = 900;
+
+        // Her service is read again at commit time, so the proposal has to
+        // come from it rather than from the row we stored. Stubbed at the
+        // service rather than with Http::fake(): setUp() registers a catch-all
+        // fake, and that one answers first, so a URL stub added here never
+        // gets consulted.
+        $this->mock(AiWorkflowService::class, function ($mock) use ($workflow, $temp, $nodes) {
+            $mock->shouldReceive('getWorkflow')
+                ->with($workflow->thread_id)
+                ->andReturn($this->aiResponse([
+                    'thread_id' => $workflow->thread_id,
+                    'status'    => 'ready_for_commit',
+                    'data'      => [
+                        'node_suggestions_with_ids' => [$this->suggestion($temp, 'Testing')],
+                        'placement_suggestions'     => [$this->placement($temp, 'Testing', [$nodes[1]->id])],
+                        'existing_edges_to_remove'  => [],
+                    ],
+                ]));
+        });
+
+        $response = $this->actingAs($manager)
+            ->postJson("/api/ai-workflows/{$workflow->id}/commit");
+
+        // The assertion that matters. With the closure not capturing $request,
+        // this was an error every single time, for every proposal.
+        $response->assertCreated();
+
+        $committed = RoadmapVersion::find($response->json('version_id'));
+
+        $this->assertNotNull($committed);
+        $this->assertNotSame($live->id, $committed->id);
+        $this->assertSame($committed->id, $workflow->fresh()->committed_version_id);
+
+        // The reviewer $request->user() carries is only stamped on a version
+        // that can go live, and this one cannot: the module just added has no
+        // material yet, so it stays a pending draft. goLive covers that.
     }
 
     public function test_the_live_version_is_left_untouched(): void

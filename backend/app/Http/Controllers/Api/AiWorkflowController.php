@@ -146,7 +146,7 @@ class AiWorkflowController extends Controller
             ], 409);
         }
 
-        return $this->proxy(function () use ($workflow) {
+        return $this->proxy(function () use ($request, $workflow) {
             // Read the live state rather than our cached row - the reviewer
             // may have edited the proposal since we last synced.
             $response = $this->aiWorkflowService->getWorkflow($workflow->thread_id);
