@@ -6,6 +6,7 @@ use App\Http\Controllers\Controller;
 use App\Models\ExternalResources;
 use App\Models\Project;
 use App\Models\Quiz;
+use App\Jobs\RebuildAssistantIndex;
 use App\Models\Roadmap;
 use App\Models\RoadmapVersion;
 use App\Models\Tutorial;
@@ -211,6 +212,10 @@ class MaterialController extends Controller
         // only once the module has all three - a tutorial alone is not a
         // module a student can work through.
         $this->liftComingSoon($item);
+
+        // What students can see has changed, so the assistant's index is now
+        // one approval out of date. Queued, so the manager does not wait.
+        RebuildAssistantIndex::dispatch();
 
         return response()->json(['message' => 'Approved.']);
     }

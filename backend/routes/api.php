@@ -1,6 +1,8 @@
 <?php
 
 use App\Http\Controllers\Api\AdminController;
+use App\Http\Controllers\Api\AssistantController;
+use App\Http\Controllers\Api\AssistantCorpusController;
 use App\Http\Controllers\Api\AiWorkflowController;
 use App\Http\Controllers\Api\AuthController;
 use App\Http\Controllers\Api\LearningController;
@@ -47,6 +49,16 @@ Route::middleware('auth:sanctum')->group(function () {
 
     Route::post('/logout', [AuthController::class, 'logout']);
     Route::get('/me', [AuthController::class, 'me']);
+
+    // The catalogue as prose, for the RAG assistant to index. Published and
+    // approved content only, and nothing belonging to a person - see the
+    // controller. Behind auth but not behind a role: it exposes exactly what
+    // any signed-in student can already read.
+    Route::get('/assistant/corpus', [AssistantCorpusController::class, 'index']);
+
+    // Ask the assistant. Laravel decides who is asking and attaches their
+    // progress, so the browser cannot claim to be somebody else.
+    Route::post('/assistant/ask', [AssistantController::class, 'ask']);
 
     /*
     |----------------------------------------------------------------------

@@ -106,6 +106,20 @@ AI-System/data/cache/
 !AI-System/data/.gitkeep
 
 # ---------------------------------------------------------------------------
+# AI assistant: its own key, its own environment, its own index
+# ---------------------------------------------------------------------------
+# A separate service from AI-System, so the same exclusions are needed again
+# rather than inherited - the rules above are all path-scoped to that folder.
+AI-Assistant/.env
+AI-Assistant/.env.*
+!AI-Assistant/.env.example
+AI-Assistant/.venv/
+
+# The vector store is built from the database by running the indexer. It is
+# derived data, it is large, and it is machine-local.
+AI-Assistant/chroma_persist/
+
+# ---------------------------------------------------------------------------
 # Editor and tool settings
 # ---------------------------------------------------------------------------
 # Local to whoever is working, not to the project: launch.json only says how

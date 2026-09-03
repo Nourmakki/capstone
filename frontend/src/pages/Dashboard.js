@@ -19,6 +19,7 @@ import TeamsPage from "./TeamsPage";
 import ContinueLearningPage from "./ContinueLearningPage";
 import ProfilePage from "./ProfilePage";
 import WorkshopsPage from "./WorkshopsPage";
+import AssistantChat from "../components/AssistantChat";
 
 function Dashboard() {
     const [activePage, setActivePage] = useState("dashboard");
@@ -250,6 +251,12 @@ function Dashboard() {
                 {activePage === "workshops" && <WorkshopsPage />}
                 {activePage === "profile" && <ProfilePage />}
             </main>
+
+            {/* Outside main, so it stays put while the page behind it scrolls
+                and is reachable from every tab rather than being one of
+                them - the questions it answers are about whatever the
+                student is already looking at. */}
+            <AssistantChat />
         </div>
     );
 }

@@ -1,0 +1,31 @@
+# RAG assistant for the CS Mastery platform.
+#
+# Deliberately separate from AI-System: that folder has its own virtual
+# environment, its own requirements and its own .env, and sharing any of
+# them would mean one half's install could break the other's.
+
+# --- the model -------------------------------------------------------
+# Gemini, for both embeddings and generation, on this project's own key.
+google-genai==2.11.0
+
+# --- the vector store ------------------------------------------------
+chromadb==1.4.1
+
+# --- the service ------------------------------------------------------
+fastapi==0.139.0
+uvicorn==0.42.0
+
+# --- reading the platform's data -------------------------------------
+httpx==0.28.1
+
+# --- configuration ----------------------------------------------------
+python-dotenv==1.2.1
+pydantic==2.13.4
+
+# --- optional: local embeddings instead of Gemini's ------------------
+# The reference project embeds locally with sentence-transformers, which
+# needs no API key but pulls in PyTorch - about 2.5 GB. Gemini's embedding
+# endpoint uses the key already configured here and installs nothing, so it
+# is the default. Uncomment if you would rather embed on this machine.
+#
+# sentence-transformers==5.1.2

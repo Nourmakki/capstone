@@ -3,6 +3,7 @@
 namespace App\Http\Controllers\Api;
 
 use App\Http\Controllers\Controller;
+use App\Jobs\RebuildAssistantIndex;
 use App\Http\Requests\StoreRoadmapRequest;
 use App\Http\Resources\RoadmapResource;
 use App\Http\Resources\RoadmapVersionResource;
@@ -349,6 +350,10 @@ class RoadmapController extends Controller
             ->update(['status' => 'Archived']);
 
         $version->update(['status' => 'Published']);
+
+        // A whole roadmap just became visible. Without this the assistant
+        // would go on denying it exists while students read it.
+        RebuildAssistantIndex::dispatch();
 
         return response()->json([
             'message' => 'Version published.',

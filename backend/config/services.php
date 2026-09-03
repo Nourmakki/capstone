@@ -39,4 +39,10 @@ return [
         'url' => env('AI_SERVICE_URL', 'http://127.0.0.1:8001'),
     ],
 
+    // The RAG assistant. A separate service from ai_system, on its own port
+    // and its own model key, so neither can take the other down.
+    'assistant' => [
+        'url' => env('ASSISTANT_SERVICE_URL', 'http://127.0.0.1:8002'),
+    ],
+
 ];
