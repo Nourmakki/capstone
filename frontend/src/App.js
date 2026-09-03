@@ -4,6 +4,7 @@ import { BrowserRouter, Routes, Route } from "react-router-dom";
 import { AuthProvider } from "./context/AuthContext";
 import ProtectedRoute from "./components/ProtectedRoute";
 import ScrollToTop from "./components/ScrollToTop";
+import AssistantChat from "./components/AssistantChat";
 
 import HomePage from "./pages/HomePage";
 import Login from "./pages/Login";
@@ -68,6 +69,14 @@ function App() {
                     } />
 
                 </Routes>
+
+                {/* Outside Routes, so it survives navigation instead of being
+                    torn down and rebuilt with each page - a student can ask
+                    about a module, open it, and still have the answer.
+
+                    It shows itself only to a signed-in student; every other
+                    page renders it as nothing. */}
+                <AssistantChat />
             </AuthProvider>
         </BrowserRouter>
     );

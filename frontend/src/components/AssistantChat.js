@@ -1,5 +1,6 @@
 import React, { useEffect, useRef, useState } from "react";
 import api from "../api";
+import { useAuth } from "../context/AuthContext";
 import { Bot, Send, X, MessageCircle, BookOpen } from "lucide-react";
 
 /**
@@ -9,12 +10,25 @@ import { Bot, Send, X, MessageCircle, BookOpen } from "lucide-react";
  * looking at a roadmap, and sending them to another screen to ask about the
  * one they just left is the wrong shape for the question.
  *
+ * Mounted once, at the top of the app, rather than on each page. It used to
+ * sit inside the dashboard, which meant it vanished the moment a student
+ * opened a roadmap or a module - the two screens its questions are most
+ * often about. Mounted above the router it is on every student page there
+ * is, including any added later.
+ *
+ * Which is why it decides for itself whether to appear: sitting above the
+ * routes, it has no route to tell it who is looking. A professor or a
+ * manager gets nothing - the answers are built from a student's own
+ * progress, and staff have none.
+ *
  * It answers only from this platform's own content. Every answer carries the
  * roadmaps and modules it was built from, shown underneath, so a student can
  * check a claim against the platform rather than take its word - and when
  * nothing on the platform matched, it says so instead of answering anyway.
  */
 function AssistantChat() {
+    const { user } = useAuth();
+
     const [open, setOpen] = useState(false);
     const [question, setQuestion] = useState("");
     const [messages, setMessages] = useState([]);
@@ -67,6 +81,13 @@ function AssistantChat() {
             setBusy(false);
         }
     };
+
+    // Students only, and only once signed in. Checked here rather than at the
+    // mount point so there is one place that decides, and no way to add a
+    // student page that forgets the assistant or a staff page that gets it.
+    if (user?.role !== "Student") {
+        return null;
+    }
 
     if (!open) {
         return (
