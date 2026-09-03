@@ -299,6 +299,31 @@ class ProgressController extends Controller
             }
         }
 
+        // 4. A module offering a choice needs one of them finished.
+        //
+        // A choice node carries no material of its own - the work is in
+        // React, or Vue, or Angular - so none of the checks above find
+        // anything on it and it had no blockers at all. A student could mark
+        // "Pick a Framework" done without opening any of the three and carry
+        // on down the roadmap, which is the one thing a fork must not allow.
+        //
+        // One is enough, deliberately: that is what a choice means, and the
+        // progress denominator already counts the rail only, so the two a
+        // student correctly skipped never hold them below 100%.
+        $choices = $versionNode->choices;
+
+        if ($choices->isNotEmpty()) {
+            $chosen = $choices->contains(
+                fn ($choice) => in_array($choice->node_id, $completed, true)
+            );
+
+            if (! $chosen) {
+                $titles = $choices->map(fn ($c) => $c->node->title ?? '')->filter()->implode(', ');
+
+                $blockers[] = "Finish one of these first: {$titles}.";
+            }
+        }
+
         return $blockers;
     }
 

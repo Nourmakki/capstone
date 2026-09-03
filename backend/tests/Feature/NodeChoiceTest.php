@@ -9,6 +9,10 @@ use App\Models\VersionNode;
 use App\Services\NodeChoiceRules;
 use Illuminate\Foundation\Testing\RefreshDatabase;
 use Illuminate\Validation\ValidationException;
+use App\Http\Controllers\Api\ProgressController;
+use App\Models\CompletedNode;
+use App\Models\Student;
+use App\Models\UserRoadmapProgress;
 use Tests\Concerns\BuildsPlatform;
 use Tests\TestCase;
 
@@ -127,6 +131,62 @@ class NodeChoiceTest extends TestCase
     private function draftRoadmapId(RoadmapVersion $version): int
     {
         return $version->roadmap_id;
+    }
+
+    // -----------------------------------------------------------------
+    // Finishing a fork
+    // -----------------------------------------------------------------
+
+    /**
+     * A choice node carries no material of its own, so every other
+     * completion check finds nothing on it. Without this rule a student
+     * could tick "Pick a Framework" without opening React, Vue or Angular
+     * and walk straight past the fork.
+     */
+    public function test_a_choice_node_cannot_be_completed_before_a_choice_is(): void
+    {
+        ['version' => $version, 'parent' => $parent] = $this->draft();
+
+        foreach (['React', 'Vue', 'Angular'] as $title) {
+            $this->addChoice($version, $parent, ['title' => $title]);
+        }
+
+        $user = $this->makeStudent();
+        $student = Student::where('user_id', $user->id)->firstOrFail();
+
+        $blockers = ProgressController::completionBlockers($parent->fresh(), $student, null);
+
+        $this->assertNotEmpty($blockers, 'A fork with nothing chosen should not be completable.');
+        $this->assertStringContainsString('React', implode(' ', $blockers));
+    }
+
+    /** One is enough - that is what a choice means. */
+    public function test_finishing_one_choice_completes_the_fork(): void
+    {
+        ['version' => $version, 'parent' => $parent] = $this->draft();
+
+        $react = $this->addChoice($version, $parent, ['title' => 'React']);
+        $this->addChoice($version, $parent, ['title' => 'Vue']);
+        $this->addChoice($version, $parent, ['title' => 'Angular']);
+
+        $user = $this->makeStudent();
+        $student = Student::where('user_id', $user->id)->firstOrFail();
+
+        $progress = UserRoadmapProgress::create([
+            'student_id'         => $student->id,
+            'roadmap_version_id' => $version->id,
+            'status'             => 'in_progress',
+        ]);
+
+        CompletedNode::create([
+            'user_roadmap_progress_id' => $progress->id,
+            'node_id'                  => $react->node_id,
+        ]);
+
+        // Vue and Angular are deliberately left undone.
+        $blockers = ProgressController::completionBlockers($parent->fresh(), $student, $progress);
+
+        $this->assertSame([], $blockers, 'One choice finished should be enough to pass the fork.');
     }
 
     // -----------------------------------------------------------------
