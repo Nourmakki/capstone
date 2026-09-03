@@ -19,9 +19,15 @@ class LearningContentSeeder extends Seeder
         foreach (RoadmapFixtures::all() as $fixture) {
             $roadmap = Roadmap::where('title', $fixture['title'])->firstOrFail();
 
+            // Null once the hierarchy seeder has moved this roadmap's
+            // version onto the path beneath it. Nothing left to do here.
             $version = RoadmapVersion::where('roadmap_id', $roadmap->id)
                 ->where('version_number', '1')
-                ->firstOrFail();
+                ->first();
+
+            if (! $version) {
+                continue;
+            }
 
             foreach ($fixture['nodes'] as $nodeFixture) {
                 $node = Node::where('title', $nodeFixture['title'])->first();
@@ -45,6 +51,8 @@ class LearningContentSeeder extends Seeder
                         [
                             'title' => $resource['title'],
                             'type'  => $resource['type'],
+                            // Seeded material is already-approved material.
+                            'review_status' => 'approved',
                         ]
                     );
                 }
@@ -55,7 +63,7 @@ class LearningContentSeeder extends Seeder
                             'version_node_id' => $versionNode->id,
                             'title'           => $nodeFixture['quiz']['title'],
                         ],
-                        ['score' => 0]
+                        ['score' => 0, 'review_status' => 'approved']
                     );
 
                     foreach ($nodeFixture['quiz']['questions'] as $question) {
@@ -82,6 +90,7 @@ class LearningContentSeeder extends Seeder
                         [
                             'description' => $nodeFixture['project']['description'],
                             'difficulty'  => $nodeFixture['project']['difficulty'],
+                            'review_status' => 'approved',
                         ]
                     );
                 }

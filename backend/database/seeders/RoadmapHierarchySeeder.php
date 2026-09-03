@@ -186,11 +186,132 @@ class RoadmapHierarchySeeder extends Seeder
             ],
 
             [
-                'subject'     => 'Cybersecurity',
-                'description' => 'Offensive and defensive security.',
-                'paths'       => ['Network Security'],
-                // No built path: Cybersecurity has no material yet, so it stays
-                // withheld from students until one of its paths is published.
+                'subject' => 'Cybersecurity',
+                'paths'   => ['Network Security', 'Application Security', 'Offensive Security'],
+                'built'   => 'Network Security',
+                'reshape' => [
+                    'Web Application Security' => [
+                        'rename' => 'Pick an Attack Surface',
+                        'description' => 'One is enough to start. Each opens a roadmap of its own.',
+                        'choices' => [
+                            ['title' => 'Web Exploitation', 'recommended' => true,
+                             'reason' => 'The surface most bugs and most jobs are found on.',
+                             'opens' => [
+                                'description' => 'Injection, broken access control and the rest, hands on.',
+                                'modules' => [['Injection and XSS', 'How untrusted input becomes code, and how to stop it.', 'intermediate']],
+                             ]],
+                            ['title' => 'Binary Exploitation', 'opens' => [
+                                'description' => 'Memory safety, and what happens when it is not there.',
+                                'modules' => [['Buffer Overflows', 'The stack, the overflow, and the mitigations since.', 'advanced']],
+                            ]],
+                        ],
+                    ],
+                ],
+            ],
+
+            [
+                'subject' => 'Mobile Development',
+                'paths'   => ['Android Development', 'iOS Development', 'Cross-Platform Mobile Development'],
+                'built'   => 'Android Development',
+                'reshape' => [
+                    'Building Interfaces' => [
+                        'rename' => 'Pick a UI Toolkit',
+                        'description' => 'One is enough. Each opens a roadmap of its own.',
+                        'choices' => [
+                            ['title' => 'Jetpack Compose', 'recommended' => true,
+                             'reason' => 'The direction Android itself has moved to.',
+                             'opens' => [
+                                'description' => 'Declarative Android UI: composables, state and recomposition.',
+                                'modules' => [['Composables and State', 'Building a screen that redraws itself when its data changes.', 'intermediate']],
+                             ]],
+                            ['title' => 'XML Layouts', 'opens' => [
+                                'description' => 'The older view system, still under most existing apps.',
+                                'modules' => [['Views and ViewGroups', 'Layouts, constraints and inflating a view.', 'intermediate']],
+                            ]],
+                        ],
+                    ],
+                ],
+            ],
+
+            [
+                'subject' => 'Desktop Development',
+                'paths'   => ['Cross-Platform Desktop', 'Native Desktop'],
+                'built'   => 'Cross-Platform Desktop',
+                'reshape' => [
+                    'Working with the File System' => [
+                        'opens' => [
+                            'title' => 'Working with the File System',
+                            'description' => 'Reading, writing and watching files - all three, in order.',
+                            'stage_title' => 'Files and Storage',
+                            'modules' => [
+                                ['Reading and Writing', 'Paths, encodings and not losing a file half-written.', 'intermediate'],
+                                ['Watching for Changes', 'Reacting when something edits a file underneath you.', 'intermediate'],
+                                ['Local Storage', 'Settings, databases and where an app is allowed to put them.', 'intermediate'],
+                            ],
+                        ],
+                        'description' => 'Reading, writing and watching files - all three. Opens a roadmap of its own.',
+                    ],
+                ],
+            ],
+
+            [
+                'subject' => 'Game Development',
+                'paths'   => ['Game Programming', 'Game Art and Design'],
+                'built'   => 'Game Programming',
+                'reshape' => [
+                    'Graphics and Animation' => [
+                        'rename' => 'Pick an Engine',
+                        'description' => 'One is enough. Each opens a roadmap of its own.',
+                        'choices' => [
+                            ['title' => 'Godot', 'recommended' => true,
+                             'reason' => 'Free, open source, and small enough to learn the whole of.',
+                             'opens' => [
+                                'description' => 'Nodes, scenes and GDScript.',
+                                'modules' => [['Nodes and Scenes', 'How a Godot game is put together.', 'intermediate']],
+                             ]],
+                            ['title' => 'Unity', 'opens' => [
+                                'description' => 'The engine most studio job adverts ask for.',
+                                'modules' => [['GameObjects and Components', 'The component model, and C# scripting on top of it.', 'intermediate']],
+                            ]],
+                        ],
+                    ],
+                ],
+            ],
+
+            // Announced rather than built: the shape exists, the material does
+            // not. Students see it in the catalogue tagged coming soon, can
+            // read the modules, and cannot open any of them.
+            [
+                'subject'     => 'Data Engineering',
+                'description' => 'Pipelines, warehouses, and moving data at scale.',
+                'paths'       => ['Data Pipelines'],
+                'built'       => 'Data Pipelines',
+                'announced'   => true,
+                'rail'        => [
+                    [
+                        'title' => 'How Data Moves',
+                        'description' => 'Batch and streaming, and why a pipeline is not just a script.',
+                        'difficulty' => 'beginner', 'stage' => 1, 'stage_title' => 'Foundations',
+                    ],
+                    [
+                        'title' => 'Modelling a Warehouse',
+                        'description' => 'Facts, dimensions, and designing for the questions people ask.',
+                        'difficulty' => 'intermediate', 'stage' => 1, 'stage_title' => 'Foundations',
+                        'after' => ['How Data Moves'],
+                    ],
+                    [
+                        'title' => 'Orchestration',
+                        'description' => 'Scheduling, retries and what happens when step four fails at 3am.',
+                        'difficulty' => 'intermediate', 'stage' => 2, 'stage_title' => 'Running It',
+                        'after' => ['Modelling a Warehouse'],
+                    ],
+                    [
+                        'title' => 'Streaming at Scale',
+                        'description' => 'Event logs, partitions and processing data that never stops arriving.',
+                        'difficulty' => 'advanced', 'stage' => 2, 'stage_title' => 'Running It',
+                        'after' => ['Orchestration'],
+                    ],
+                ],
             ],
         ];
     }
@@ -259,7 +380,7 @@ class RoadmapHierarchySeeder extends Seeder
         }
 
         $version = RoadmapVersion::where('roadmap_id', $built->id)->orderBy('id')->first()
-            ?? $this->freshVersionFor($built);
+            ?? $this->freshVersionFor($built, ! empty($spec['announced']));
 
         if (! empty($spec['rail'])) {
             $this->buildRail($built, $version, $spec['rail']);
@@ -289,11 +410,20 @@ class RoadmapHierarchySeeder extends Seeder
         return $roadmap;
     }
 
-    private function freshVersionFor(Roadmap $roadmap): RoadmapVersion
+    /**
+     * A version for a path that has none.
+     *
+     * Announced means the shape exists but the material does not: it stays a
+     * Draft, so students can read the modules and open none of them. Live is
+     * the default, since every other path here arrives with material.
+     */
+    private function freshVersionFor(Roadmap $roadmap, bool $announced = false): RoadmapVersion
     {
         return RoadmapVersion::firstOrCreate(
             ['roadmap_id' => $roadmap->id, 'version_number' => '1'],
-            ['status' => 'Published', 'review_status' => 'approved']
+            $announced
+                ? ['status' => 'Draft', 'review_status' => 'pending', 'announced' => true]
+                : ['status' => 'Published', 'review_status' => 'approved']
         );
     }
 

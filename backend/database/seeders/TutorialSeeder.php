@@ -16,9 +16,15 @@ class TutorialSeeder extends Seeder
         foreach (RoadmapFixtures::all() as $fixture) {
             $roadmap = Roadmap::where('title', $fixture['title'])->firstOrFail();
 
+            // Null once the hierarchy seeder has moved this roadmap's
+            // version onto the path beneath it. Nothing left to do here.
             $version = RoadmapVersion::where('roadmap_id', $roadmap->id)
                 ->where('version_number', '1')
-                ->firstOrFail();
+                ->first();
+
+            if (! $version) {
+                continue;
+            }
 
             foreach ($fixture['nodes'] as $nodeFixture) {
                 if (empty($nodeFixture['tutorials'])) {
@@ -47,6 +53,10 @@ class TutorialSeeder extends Seeder
                             'title'       => $tutorial['title'],
                             'description' => $tutorial['description'],
                             'source_name' => $tutorial['source_name'],
+                            // Seeded material is material a manager already
+                            // approved. Left pending it is invisible to
+                            // students, and every module opens on empty tabs.
+                            'review_status' => 'approved',
                         ]
                     );
                 }

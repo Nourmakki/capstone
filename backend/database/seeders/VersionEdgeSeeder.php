@@ -16,9 +16,15 @@ class VersionEdgeSeeder extends Seeder
         foreach (RoadmapFixtures::all() as $fixture) {
             $roadmap = Roadmap::where('title', $fixture['title'])->firstOrFail();
 
+            // Null once the hierarchy seeder has moved this roadmap's
+            // version onto the path beneath it. Nothing left to do here.
             $version = RoadmapVersion::where('roadmap_id', $roadmap->id)
                 ->where('version_number', '1')
-                ->firstOrFail();
+                ->first();
+
+            if (! $version) {
+                continue;
+            }
 
             $nodeIds = Node::whereIn('title', array_column($fixture['nodes'], 'title'))
                 ->pluck('id');
