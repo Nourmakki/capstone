@@ -213,6 +213,12 @@ Route::middleware('auth:sanctum')->group(function () {
         Route::post('/roadmap-versions/{version}/ai-workflows', [AiWorkflowController::class, 'store']);
         Route::post('/ai-workflows/{workflow}/commit', [AiWorkflowController::class, 'commit']);
         Route::get('/learning-runs', [LearningWorkflowController::class, 'index']);
+
+        // Modules the builder left empty, for generating one at a time. Above
+        // /learning-runs/{run} on purpose: as a sibling of it, the literal
+        // path would be read as a run id.
+        Route::get('/modules-awaiting-material', [LearningWorkflowController::class, 'pendingModules']);
+
         Route::get('/learning-runs/{run}', [LearningWorkflowController::class, 'show']);
         Route::post('/learning-runs/{run}/resume', [LearningWorkflowController::class, 'resume']);
         Route::post('/learning-runs/{run}/commit', [LearningWorkflowController::class, 'commit']);

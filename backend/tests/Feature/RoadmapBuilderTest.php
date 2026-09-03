@@ -182,6 +182,120 @@ class RoadmapBuilderTest extends TestCase
         $this->assertSame($subject->id, $run->committed_roadmap_id);
     }
 
+    /**
+     * Committing writes the structure and asks for no material.
+     *
+     * It used to queue a learning run per module, so approving one build put
+     * the whole subject into generation at once - seventy-odd multi-minute
+     * calls to her service, which took the site down and spent the day's
+     * quota on modules nobody had chosen to fill in. The manager picks them
+     * off the awaiting list instead, one at a time.
+     */
+    public function test_committing_starts_no_learning_runs(): void
+    {
+        $run = $this->startRun();
+
+        Http::fake([self::THREAD => Http::response($this->readyBody(), 200)]);
+        Queue::fake();
+
+        $this->actingAs($this->makeManager(), 'sanctum')
+            ->postJson("/api/roadmap-builder-runs/{$run->id}/commit")
+            ->assertOk();
+
+        Queue::assertNotPushed(StartLearningRun::class);
+
+        // The modules are there, empty and marked coming-soon - which is what
+        // lets the structure publish while its material is still unwritten.
+        $modules = VersionNode::whereHas(
+            'node',
+            fn ($q) => $q->whereIn('title', ['Web Fundamentals', 'Pick a Framework'])
+        )->get();
+
+        $this->assertNotEmpty($modules);
+
+        foreach ($modules as $module) {
+            $this->assertTrue((bool) $module->coming_soon);
+        }
+    }
+
+    /** Those same empty modules, offered as the worklist to generate from. */
+    public function test_the_committed_modules_are_listed_as_awaiting_material(): void
+    {
+        $run = $this->startRun();
+
+        Http::fake([self::THREAD => Http::response($this->readyBody(), 200)]);
+        Queue::fake();
+
+        $manager = $this->makeManager();
+
+        $this->actingAs($manager, 'sanctum')
+            ->postJson("/api/roadmap-builder-runs/{$run->id}/commit")
+            ->assertOk();
+
+        $response = $this->actingAs($manager, 'sanctum')
+            ->getJson('/api/modules-awaiting-material')
+            ->assertOk();
+
+        $titles = collect($response->json('groups'))
+            ->flatMap(fn ($group) => collect($group['modules'])->pluck('title'))
+            ->all();
+
+        $this->assertContains('Web Fundamentals', $titles);
+
+        // A module offering choices holds no material of its own - the
+        // material belongs to the choices under it - so it is not on the
+        // list, exactly as the publish gate treats it.
+        $this->assertNotContains('Pick a Framework', $titles);
+    }
+
+    /**
+     * A module drops off the list once its run is under way.
+     *
+     * Otherwise it stays there looking unstarted, and the obvious thing to do
+     * about that is press Generate again - which is how one module ends up
+     * with two runs writing over each other.
+     */
+    public function test_a_module_being_generated_leaves_the_awaiting_list(): void
+    {
+        $run = $this->startRun();
+
+        Http::fake([self::THREAD => Http::response($this->readyBody(), 200)]);
+        Queue::fake();
+
+        $manager = $this->makeManager();
+
+        $this->actingAs($manager, 'sanctum')
+            ->postJson("/api/roadmap-builder-runs/{$run->id}/commit")
+            ->assertOk();
+
+        $module = VersionNode::whereHas('node', fn ($q) => $q->where('title', 'Web Fundamentals'))
+            ->firstOrFail();
+
+        Http::fake(['*/learning-workflows' => Http::response([
+            'thread_id'    => 'learn-1',
+            'status'       => 'awaiting_review',
+            'review_stage' => 'tutorial_review',
+        ], 201)]);
+
+        $this->actingAs($manager, 'sanctum')
+            ->postJson("/api/version-nodes/{$module->id}/learning-runs")
+            ->assertCreated();
+
+        $titles = collect(
+            $this->actingAs($manager, 'sanctum')
+                ->getJson('/api/modules-awaiting-material')
+                ->json('groups')
+        )->flatMap(fn ($group) => collect($group['modules'])->pluck('title'))->all();
+
+        $this->assertNotContains('Web Fundamentals', $titles);
+
+        // And a second press is refused outright, so the list going stale in
+        // somebody's browser cannot start a duplicate either.
+        $this->actingAs($manager, 'sanctum')
+            ->postJson("/api/version-nodes/{$module->id}/learning-runs")
+            ->assertStatus(409);
+    }
+
     public function test_the_choice_node_lands_with_its_choices_and_link(): void
     {
         $run = $this->startRun();

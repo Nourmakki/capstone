@@ -2,7 +2,6 @@
 
 namespace App\Services;
 
-use App\Jobs\StartLearningRun;
 use App\Models\Edge;
 use App\Models\Node;
 use App\Models\Roadmap;
@@ -29,6 +28,11 @@ use Illuminate\Validation\ValidationException;
  * Everything lands unapproved and unpublished. The AI proposes a subject; a
  * material manager decides whether students ever see it, which is the same
  * line every other AI path draws.
+ *
+ * The structure only. No learning material is written and none is asked for -
+ * a subject is far too many modules to generate in one go, and which of them
+ * are worth filling in is the manager's call, module by module, on the
+ * Learning Material page.
  *
  * One transaction: a half-written subject is worse than none, because the
  * pieces look real and nobody knows which are missing.
@@ -70,38 +74,19 @@ class AiRoadmapBuilderCommitService
             return $subject;
         });
 
-        // Outside the transaction, and on the queue.
+        // No learning runs are started here, deliberately.
         //
-        // Approving a build is what starts its material being written - the
-        // manager should not have to ask for it module by module. But her
-        // learning endpoint runs the whole graph before it answers, so sixty
-        // modules started inline would hold this request open for hours.
-        // Dispatched after the commit has been written, so a queue that is
-        // not running leaves the roadmap intact and merely unwritten.
-        $this->queueLearningRuns($subject);
-
+        // This used to queue one per module, so approving a build put the
+        // whole subject into generation at once. A subject is sixty-odd
+        // modules and each run is a multi-minute call to her service, so that
+        // buried the machine and took the site down with it - and it spent
+        // the day's API quota on modules nobody had decided to fill in yet.
+        //
+        // The modules arrive marked coming-soon instead, which is what makes
+        // them publishable while empty. They are listed on the Learning
+        // Material page as awaiting material, and a manager generates them
+        // one at a time, in the order they care about.
         return $subject;
-    }
-
-    /**
-     * Every module of everything just committed, including the choices.
-     *
-     * Choices are included deliberately: a choice that is only a signpost
-     * into another roadmap has that roadmap's own modules queued too, and one
-     * that teaches something itself would otherwise be the only module in the
-     * subject left with nothing on it.
-     */
-    private function queueLearningRuns(Roadmap $subject): void
-    {
-        $pathIds  = Roadmap::where('parent_roadmap_id', $subject->id)->pluck('id');
-        $childIds = Roadmap::whereIn('parent_roadmap_id', $pathIds)->pluck('id');
-
-        $versionIds = RoadmapVersion::whereIn('roadmap_id', $pathIds->concat($childIds))
-            ->pluck('id');
-
-        VersionNode::whereIn('roadmap_version_id', $versionIds)
-            ->pluck('id')
-            ->each(fn ($id) => StartLearningRun::dispatch($id));
     }
 
     /**

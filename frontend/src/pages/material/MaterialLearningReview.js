@@ -5,6 +5,7 @@ import ModuleMaterialEditor from "../../components/ModuleMaterialEditor";
 import {
     Sparkles, Video, Brain, Code2, BookOpen, Check, X, Pencil,
     RefreshCw, AlertTriangle, Inbox, ChevronRight, Play, ExternalLink,
+    Layers, Wand2,
 } from "lucide-react";
 
 // Stages her service accepts for regenerate.
@@ -32,6 +33,14 @@ function MaterialLearningReview({ onChanged }) {
     const [modules, setModules] = useState([]);
     const [moduleId, setModuleId] = useState(null);
 
+    // Modules the roadmap builder left empty. Which roadmap is expanded, and
+    // which single module is generating - one at a time is the point of this
+    // whole screen, so it is one id rather than a set.
+    const [pending, setPending] = useState([]);
+    const [pendingTotal, setPendingTotal] = useState(0);
+    const [openGroup, setOpenGroup] = useState(null);
+    const [generating, setGenerating] = useState(null);
+
     const loadRuns = useCallback(async () => {
         try {
             const response = await api.get("/learning-runs");
@@ -43,7 +52,44 @@ function MaterialLearningReview({ onChanged }) {
         }
     }, []);
 
-    useEffect(() => { loadRuns(); }, [loadRuns]);
+    const loadPending = useCallback(async () => {
+        try {
+            const response = await api.get("/modules-awaiting-material");
+            setPending(response.data.groups ?? []);
+            setPendingTotal(response.data.total ?? 0);
+        } catch (err) {
+            console.error(err);
+        }
+    }, []);
+
+    useEffect(() => { loadRuns(); loadPending(); }, [loadRuns, loadPending]);
+
+    /**
+     * Generate for one module off the awaiting list.
+     *
+     * Deliberately one at a time: committing a built subject used to queue a
+     * run for every module at once, which took the site down. Every other
+     * button on the list is disabled while one is running, so the same thing
+     * cannot be done by hand from here.
+     */
+    const generateFor = async (module) => {
+        setGenerating(module.version_node_id);
+        setServiceDown(false);
+
+        try {
+            await api.post(`/version-nodes/${module.version_node_id}/learning-runs`);
+            await Promise.all([loadRuns(), loadPending()]);
+            onChanged?.();
+        } catch (err) {
+            if (err.response?.status === 503) {
+                setServiceDown(true);
+            } else {
+                alert(err.response?.data?.message ?? "Could not start generation.");
+            }
+        } finally {
+            setGenerating(null);
+        }
+    };
 
     useEffect(() => {
         api.get("/roadmaps")
@@ -122,7 +168,7 @@ function MaterialLearningReview({ onChanged }) {
 
         try {
             await api.post(`/version-nodes/${moduleId}/learning-runs`);
-            await loadRuns();
+            await Promise.all([loadRuns(), loadPending()]);
             onChanged?.();
         } catch (err) {
             if (err.response?.status === 503) {
@@ -187,7 +233,7 @@ function MaterialLearningReview({ onChanged }) {
                 + `${c.project} project, ${c.resources} resources.`
             );
 
-            await loadRuns();
+            await Promise.all([loadRuns(), loadPending()]);
             await openRun(selected);
             onChanged?.();
         } catch (err) {
@@ -223,6 +269,104 @@ function MaterialLearningReview({ onChanged }) {
                 The AI writes a tutorial, quiz, project and resources for one module.
                 Nothing reaches students until you approve it.
             </p>
+
+            {/* Awaiting material.
+                The roadmap builder writes a whole subject of empty modules
+                and starts nothing, so this is the worklist it leaves behind.
+                Above the picker below because it is the common case: these
+                are the modules that need writing, already named, rather than
+                a module to be hunted down through three dropdowns. */}
+            {pendingTotal > 0 && (
+                <div className="rounded-3xl border border-yellow-400/20 bg-yellow-400/[0.03] p-6 mb-10">
+                    <div className="flex items-center gap-3 mb-2 flex-wrap">
+                        <Layers size={20} className="text-yellow-400" />
+                        <h2 className="text-2xl font-bold">Awaiting material</h2>
+                        <span className="text-xs px-3 py-1 rounded-full bg-yellow-400/10 text-yellow-300">
+                            {pendingTotal} {pendingTotal === 1 ? "module" : "modules"}
+                        </span>
+                    </div>
+
+                    <p className="text-sm text-gray-400 mb-6">
+                        Modules with nothing on them yet. Generate them one at a
+                        time - each takes a few minutes, and starting many at once
+                        is what the AI service cannot take.
+                    </p>
+
+                    <div className="space-y-2">
+                        {pending.map((group) => {
+                            const open = openGroup === group.roadmap;
+
+                            return (
+                                <div key={group.roadmap}
+                                     className="rounded-2xl border border-white/10 bg-black/20 overflow-hidden">
+                                    <button
+                                        onClick={() => setOpenGroup(open ? null : group.roadmap)}
+                                        className="w-full flex items-center justify-between gap-3 p-4 text-left hover:bg-white/[0.02] transition">
+                                        <span className="font-semibold">{group.roadmap}</span>
+
+                                        <span className="flex items-center gap-3 shrink-0">
+                                            <span className="text-xs text-gray-500">
+                                                {group.modules.length} to write
+                                            </span>
+                                            <ChevronRight size={16} className={`text-gray-600 transition-transform ${
+                                                open ? "rotate-90" : ""
+                                            }`} />
+                                        </span>
+                                    </button>
+
+                                    {open && (
+                                        <div className="px-4 pb-4 space-y-2">
+                                            {group.modules.map((m) => {
+                                                const mine = generating === m.version_node_id;
+
+                                                return (
+                                                    <div key={m.version_node_id}
+                                                         className="flex items-center justify-between gap-3 rounded-xl border border-white/5 bg-black/20 p-3">
+                                                        <div className="min-w-0">
+                                                            <span className="text-sm font-medium">{m.title}</span>
+
+                                                            {m.difficulty && (
+                                                                <span className="ml-2 text-xs text-gray-600 capitalize">
+                                                                    {m.difficulty}
+                                                                </span>
+                                                            )}
+                                                        </div>
+
+                                                        {/* Generation takes minutes and says so on
+                                                            the button, because a spinner alone read
+                                                            as a dead control and invited a second
+                                                            press. */}
+                                                        {mine ? (
+                                                            <span className="flex items-center gap-2 text-xs text-[#00b0c2] shrink-0">
+                                                                <RefreshCw size={13} className="animate-spin" />
+                                                                Starting - this takes a few minutes
+                                                            </span>
+                                                        ) : (
+                                                            <button
+                                                                onClick={() => generateFor(m)}
+                                                                disabled={!!generating || busy}
+                                                                className="flex items-center gap-1.5 px-4 py-2 rounded-xl border border-[#0097a7]/30 text-[#00b0c2] text-xs hover:bg-[#0097a7]/10 transition disabled:opacity-30 shrink-0">
+                                                                <Wand2 size={13} /> Generate
+                                                            </button>
+                                                        )}
+                                                    </div>
+                                                );
+                                            })}
+                                        </div>
+                                    )}
+                                </div>
+                            );
+                        })}
+                    </div>
+
+                    {generating && (
+                        <p className="text-xs text-gray-500 mt-4">
+                            One at a time - the other modules become available again
+                            when this run has started.
+                        </p>
+                    )}
+                </div>
+            )}
 
             {/* Start a run */}
             <div className="rounded-3xl border border-white/10 bg-white/[0.03] p-6 mb-10">

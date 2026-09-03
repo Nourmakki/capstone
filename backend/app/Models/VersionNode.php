@@ -115,4 +115,10 @@ class VersionNode extends Model
     {
         return $this->hasMany(Workshop::class);
     }
+
+    /** The AI generation runs started for this module, finished or not. */
+    public function learningWorkflows()
+    {
+        return $this->hasMany(NodeLearningWorkflow::class);
+    }
 }

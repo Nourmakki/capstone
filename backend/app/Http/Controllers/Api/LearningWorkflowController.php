@@ -44,6 +44,58 @@ class LearningWorkflowController extends Controller
     }
 
     /**
+     * Modules with nothing on them and nothing under way, newest first.
+     *
+     * The roadmap builder writes a whole subject of empty modules and no
+     * longer queues a run for each - sixty multi-minute calls at once took
+     * the site down, and picking which modules matter is a judgement the
+     * manager makes anyway. This is that worklist: what the builder left
+     * unwritten, ready to be generated one at a time.
+     *
+     * Only standard modules. A module that opens a roadmap or offers choices
+     * holds no material of its own - the material belongs to what it opens -
+     * which is the same rule the publish gate applies.
+     */
+    public function pendingModules(): JsonResponse
+    {
+        $active = ['awaiting_review', 'ready', 'ready_for_commit'];
+
+        $nodes = VersionNode::with('node', 'roadmapVersion.roadmap')
+            ->whereNull('links_to_roadmap_id')
+            ->whereDoesntHave('choices')
+            // Anything already written or being written is not outstanding.
+            ->whereDoesntHave('tutorials')
+            ->whereDoesntHave('quizzes')
+            ->whereDoesntHave('projects')
+            ->whereDoesntHave('learningWorkflows', fn ($q) => $q
+                ->whereNull('committed_at')
+                ->whereIn('status', $active))
+            ->orderByDesc('id')
+            ->get();
+
+        // Grouped by the roadmap that holds them: a subject arrives as a
+        // dozen roadmaps at once, and a flat list of sixty module names says
+        // nothing about which roadmap a manager is working through.
+        $groups = $nodes
+            ->groupBy(fn ($n) => $n->roadmapVersion->roadmap->title ?? 'Unknown')
+            ->map(fn ($group, $roadmap) => [
+                'roadmap' => $roadmap,
+                'modules' => $group->map(fn ($n) => [
+                    'version_node_id' => $n->id,
+                    'title'           => $n->node->title ?? 'Untitled',
+                    'difficulty'      => $n->node->difficulty ?? null,
+                    'coming_soon'     => (bool) $n->coming_soon,
+                ])->values(),
+            ])
+            ->values();
+
+        return response()->json([
+            'total'  => $nodes->count(),
+            'groups' => $groups,
+        ]);
+    }
+
+    /**
      * Generation runs per module, so the payload describes one node and what
      * comes before it - the AI needs that to avoid repeating earlier material.
      */
