@@ -17,6 +17,20 @@ class LearningController extends Controller
      */
     public function nodeDetail(Request $request, VersionNode $versionNode)
     {
+        // A module of an announced version is not enterable. The roadmap page
+        // draws these locked, but locking in the page alone is decoration -
+        // this endpoint takes a version_node_id and, without the check, opened
+        // any module of any version to anyone holding the URL.
+        //
+        // Staff still reach it: reviewing material means opening the module it
+        // is on, and that is exactly a version not published yet.
+        if (
+            $versionNode->roadmapVersion?->isAnnounced()
+            && ! in_array($request->user()?->role, ['MaterialManager', 'Professor', 'Admin'], true)
+        ) {
+            abort(403, 'This module is coming soon. Its material is still being written.');
+        }
+
         $versionNode->load([
             'node',
             // Only material a manager approved reaches students.

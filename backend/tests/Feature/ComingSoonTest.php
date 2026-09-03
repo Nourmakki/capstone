@@ -6,6 +6,7 @@ use App\Models\NodeLearningWorkflow;
 use App\Models\Project;
 use App\Models\Quiz;
 use App\Models\RoadmapAiWorkflow;
+use App\Models\RoadmapVersion;
 use App\Models\Tutorial;
 use App\Models\VersionNode;
 use App\Services\AiRoadmapCommitService;
@@ -114,12 +115,26 @@ class ComingSoonTest extends TestCase
     // What it means while it is on
     // -----------------------------------------------------------------
 
+    /**
+     * The version goes live, so what is being tested is the mark.
+     *
+     * A committed version is announced until it is published, and no module
+     * of an announced version opens at all - so without this the assertions
+     * below would be measuring the version's status rather than the module's
+     * coming-soon mark.
+     */
+    private function publish(RoadmapVersion $version): void
+    {
+        $version->update(['status' => 'Published', 'review_status' => 'approved']);
+    }
+
     /** Visible on the rail, but there is nothing in it to do yet. */
     public function test_a_coming_soon_module_cannot_be_entered(): void
     {
         Http::fake(['*' => Http::response(['thread_id' => 'learn-1', 'status' => 'awaiting_review'], 201)]);
 
-        ['node' => $node] = $this->commitProposal();
+        ['version' => $version, 'node' => $node] = $this->commitProposal();
+        $this->publish($version);
 
         $response = $this->actingAs($this->makeStudent(), 'sanctum')
             ->getJson("/api/version-nodes/{$node->id}")
@@ -127,6 +142,43 @@ class ComingSoonTest extends TestCase
 
         $this->assertTrue($response->json('coming_soon'));
         $this->assertFalse($response->json('is_unlocked'));
+    }
+
+    /**
+     * A version students may read but not enter.
+     *
+     * Locking every module in the page is decoration on its own: this
+     * endpoint takes a version_node_id, and it used to open any module of any
+     * version to anyone holding the URL.
+     */
+    public function test_no_module_of_an_announced_version_opens_for_a_student(): void
+    {
+        Http::fake(['*' => Http::response(['thread_id' => 'learn-1', 'status' => 'awaiting_review'], 201)]);
+
+        ['version' => $version, 'node' => $node, 'carried' => $carried] = $this->commitProposal();
+
+        $this->assertTrue($version->fresh()->isAnnounced());
+
+        $student = $this->makeStudent();
+
+        // The new module, and one carried over that is not coming-soon at
+        // all: it is the version that is closed, not the mark on a module.
+        $this->actingAs($student, 'sanctum')
+            ->getJson("/api/version-nodes/{$node->id}")
+            ->assertStatus(403);
+
+        $carriedNode = VersionNode::whereHas('node', fn ($q) => $q->where('title', 'Basics'))
+            ->where('roadmap_version_id', $version->id)
+            ->firstOrFail();
+
+        $this->actingAs($student, 'sanctum')
+            ->getJson("/api/version-nodes/{$carriedNode->id}")
+            ->assertStatus(403);
+
+        // A manager reviewing the material has to be able to open it.
+        $this->actingAs($this->makeManager(), 'sanctum')
+            ->getJson("/api/version-nodes/{$node->id}")
+            ->assertOk();
     }
 
     /**
@@ -291,7 +343,8 @@ class ComingSoonTest extends TestCase
     {
         Http::fake(['*' => Http::response(['thread_id' => 'learn-1', 'status' => 'awaiting_review'], 201)]);
 
-        ['node' => $node] = $this->commitProposal();
+        ['version' => $version, 'node' => $node] = $this->commitProposal();
+        $this->publish($version);
 
         $node->update(['coming_soon' => false]);
 

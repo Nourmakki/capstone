@@ -19,6 +19,8 @@ class RoadmapVersionResource extends JsonResource
                 . ($this->title ? ' · ' . $this->title : ''),
             'status'         => $this->status,
             'review_status'  => $this->review_status,
+            // Committed but not published: readable, every module locked.
+            'announced'      => $this->isAnnounced(),
             'created_at'     => $this->created_at,
         ];
     }

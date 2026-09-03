@@ -33,6 +33,10 @@ function RoadmapOverview() {
     const [isLatest, setIsLatest] = useState(true);
     const [pickerOpen, setPickerOpen] = useState(false);
 
+    // Committed but not published: the shape is readable, every module is
+    // locked, and none of them can be opened.
+    const [announced, setAnnounced] = useState(false);
+
     const { user } = useAuth();
 
     useEffect(() => {
@@ -79,11 +83,13 @@ function RoadmapOverview() {
                 const {
                     nodes, edges, completed, current_node, requirements,
                     version: versionInfo, available_versions, is_latest,
+                    announced: isAnnounced,
                 } = progressResponse.data;
 
                 setVersion(versionInfo);
                 setVersions(available_versions ?? []);
                 setIsLatest(is_latest);
+                setAnnounced(!!isAnnounced);
 
                 // Map node id -> the node ids that must be completed first.
                 const prerequisites = {};
@@ -114,7 +120,13 @@ function RoadmapOverview() {
                             title: item.node.title,
                             description: item.node.description,
                             difficulty: item.node.difficulty,
-                            status: isCompleted
+                            // Nothing in an announced version opens, whatever
+                            // the prerequisites say - it has no material yet.
+                            // The server refuses these too; this is what
+                            // stops a student being invited to try.
+                            status: isAnnounced
+                                ? "locked"
+                                : isCompleted
                                 ? "completed"
                                 : isCurrent || isUnlocked
                                 ? "current"
@@ -307,14 +319,16 @@ function RoadmapOverview() {
                                     <button
                                         onClick={() => setPickerOpen((open) => !open)}
                                         className={`inline-flex items-center gap-2 px-4 py-1 rounded-full border text-sm transition ${
-                                            isLatest
+                                            announced
+                                                ? "border-yellow-400/40 bg-yellow-400/10 text-yellow-300 hover:bg-yellow-400/20"
+                                                : isLatest
                                                 ? "border-[#0097a7]/30 bg-[#0097a7]/10 text-[#00b0c2] hover:bg-[#0097a7]/20"
                                                 : "border-yellow-400/30 bg-yellow-400/10 text-yellow-300 hover:bg-yellow-400/20"
                                         }`}
                                     >
                                         <GitBranch size={14} />
                                         {version.label}
-                                        {!isLatest && " (older)"}
+                                        {announced ? " · coming soon" : !isLatest && " (older)"}
                                         <ChevronDown size={14} />
                                     </button>
 
@@ -337,12 +351,19 @@ function RoadmapOverview() {
                                                     <div className="flex items-center justify-between gap-3">
                                                         <span className="font-semibold">v{v.version_number}</span>
 
+                                                        {/* Three states, not two: a version can
+                                                            also be one that exists but cannot be
+                                                            worked through yet. */}
                                                         <span className={`text-xs px-2 py-0.5 rounded-full ${
-                                                            v.status === "Published"
+                                                            v.announced
+                                                                ? "bg-yellow-400/10 text-yellow-300"
+                                                                : v.status === "Published"
                                                                 ? "bg-green-400/10 text-green-300"
                                                                 : "bg-white/5 text-gray-500"
                                                         }`}>
-                                                            {v.status === "Published" ? "current" : "past"}
+                                                            {v.announced
+                                                                ? "coming soon"
+                                                                : v.status === "Published" ? "current" : "past"}
                                                         </span>
                                                     </div>
 
@@ -357,7 +378,41 @@ function RoadmapOverview() {
                             )}
                         </div>
 
-                        {!isLatest && (
+                        {/* Said plainly, and as a panel rather than a line:
+                            every module below is locked, and without this the
+                            roadmap simply looks broken. */}
+                        {announced && (
+                            <div className="mb-5 flex items-start gap-3 rounded-2xl border border-yellow-400/30 bg-yellow-400/5 p-4">
+                                <AlertCircle size={18} className="text-yellow-400 shrink-0 mt-0.5" />
+
+                                <div>
+                                    <p className="font-semibold text-yellow-200">
+                                        Coming soon - not published yet
+                                    </p>
+
+                                    <p className="text-sm text-gray-300 mt-1">
+                                        This is a preview of what is being prepared. You can see
+                                        the modules and the order they come in, but none of them
+                                        can be opened yet - their tutorials, quizzes and projects
+                                        are still being written and reviewed.
+                                        {versions.some((v) => !v.announced) && (
+                                            <>
+                                                {" "}
+                                                <button
+                                                    onClick={() => setSelectedVersionId(null)}
+                                                    className="underline text-yellow-200 hover:text-yellow-100"
+                                                >
+                                                    Go back to the version you can work through
+                                                </button>
+                                                .
+                                            </>
+                                        )}
+                                    </p>
+                                </div>
+                            </div>
+                        )}
+
+                        {!announced && !isLatest && (
                             <div className="flex items-center gap-2 mb-5 text-sm text-yellow-300">
                                 <AlertCircle size={15} />
                                 You are reading an older version.

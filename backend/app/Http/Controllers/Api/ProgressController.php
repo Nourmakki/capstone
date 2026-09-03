@@ -331,10 +331,14 @@ class ProgressController extends Controller
     {
         $student = Student::where('user_id', $userId)->firstOrFail();
 
-        // Every version a student may read: published and manager-approved.
+        // Every version a student may read. Published and manager-approved as
+        // before, plus announced ones: committed but not yet published, shown
+        // so the roadmap's shape can be read while its material is written.
         $availableVersions = RoadmapVersion::where('roadmap_id', $roadmapId)
-            ->whereIn('status', ['Published', 'Archived'])
-            ->approved()
+            ->where(function ($q) {
+                $q->where(fn ($v) => $v->whereIn('status', ['Published', 'Archived'])->approved())
+                    ->orWhere(fn ($v) => $v->announced());
+            })
             ->orderByDesc('id')
             ->get();
 
@@ -345,10 +349,15 @@ class ProgressController extends Controller
 
         $version = $requested
             ? $availableVersions->firstWhere('id', (int) $requested)
+            // Never an announced one by default. Landing on a roadmap should
+            // open what can be worked through; the preview is something you
+            // choose from the dropdown, not something you arrive in.
             : $availableVersions->firstWhere('status', 'Published');
 
-        // An unknown or unreadable id falls back rather than 404ing.
-        $version ??= $availableVersions->first();
+        // An unknown or unreadable id falls back rather than 404ing - to the
+        // live version where there is one, and only then to the preview.
+        $version ??= $availableVersions->firstWhere('status', 'Published')
+            ?? $availableVersions->first();
 
         $nodes = VersionNode::with(['node', 'quizzes', 'projects', 'choices.node', 'choices.linksToRoadmap', 'linksToRoadmap'])
             ->where('roadmap_version_id', $version->id)
@@ -380,8 +389,14 @@ class ProgressController extends Controller
             $prerequisites[$edge['to_node_id']][] = $edge['from_node_id'];
         }
 
+        // An announced version has nothing to enter, so it has no current
+        // module either. Left null rather than pointing at the first one,
+        // which would offer a "continue here" for a module that is locked.
+        $announced = $version->isAnnounced();
+
         $currentNode = null;
-        foreach ($nodes as $versionNode) {
+
+        foreach ($announced ? [] : $nodes as $versionNode) {
             $nodeId = $versionNode->node_id;
 
             if (in_array($nodeId, $completed, true)) {
@@ -408,11 +423,17 @@ class ProgressController extends Controller
         return response()->json([
             'version'            => new RoadmapVersionResource($version),
             'is_latest'          => $version->status === 'Published',
+            // Readable, not enterable. The page locks every module on this
+            // and says why, rather than letting a student open one to find
+            // three empty tabs.
+            'announced'          => $announced,
             'available_versions' => RoadmapVersionResource::collection($availableVersions),
             'nodes'              => $nodes,
             'requirements'       => $requirements,
             'edges'              => $edges,
-            'completed'          => $completed,
+            // Nothing is completed in a version nobody can enter, whatever
+            // rows an earlier version may have left behind.
+            'completed'          => $announced ? [] : $completed,
             'current_node'       => $currentNode,
         ]);
     }

@@ -132,6 +132,10 @@ class AiRoadmapBuilderCommitService
             // still asks for material on every module first.
             'status'         => 'Draft',
             'review_status'  => 'pending',
+            // But visible meanwhile. Students see the roadmap's shape marked
+            // coming soon, with every module locked, rather than nothing at
+            // all while its material is being written.
+            'announced'      => true,
         ]);
 
         // Her node ids are local to the payload, so keep a map from hers to
@@ -264,6 +268,9 @@ class AiRoadmapBuilderCommitService
             'version_number' => '1',
             'status'         => 'Draft',
             'review_status'  => 'pending',
+            // Announced like its parent: a choice that opens its own roadmap
+            // would otherwise lead to an empty page.
+            'announced'      => true,
         ]);
 
         $nodeIdMap = [];

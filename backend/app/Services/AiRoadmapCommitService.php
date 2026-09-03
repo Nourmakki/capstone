@@ -58,6 +58,10 @@ class AiRoadmapCommitService
                 'version_number' => (string) (RoadmapVersion::where('roadmap_id', $source->roadmap_id)->count() + 1),
                 'title'          => 'AI proposal ' . now()->format('Y-m-d'),
                 'status'         => 'Draft',
+                // Readable as coming soon while its new modules are written.
+                // goLive() below clears this when the version can publish for
+                // real, so a version is never both announced and live.
+                'announced'      => true,
             ]);
 
             // Start from the graph the AI actually reasoned about.

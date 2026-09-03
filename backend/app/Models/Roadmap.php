@@ -73,22 +73,59 @@ class Roadmap extends Model
      * Managers are deliberately not filtered by this: the roadmap they are
      * halfway through building is exactly the one they need to reach.
      */
-    public function scopeOpenable($query)
+    /**
+     * What a student may see at all, in one place.
+     *
+     * Two ways in, and they are gated differently on purpose:
+     *
+     * - Open for real: the roadmap is approved and something live sits behind
+     *   it. The rule that has always applied.
+     * - Announced: a committed version students may read but not enter. Its
+     *   review status is not asked about, because a subject arrives from the
+     *   builder with every roadmap in it still pending - and waiting for that
+     *   review is exactly the wait announcing it exists to remove.
+     *
+     * Nothing unapproved is enterable either way: an announced version locks
+     * every module, and material is filtered to approved wherever it is read.
+     */
+    public function scopeStudentVisible($query)
     {
-        $live = fn ($q) => $q->where('status', 'Published')
-            ->where('review_status', 'approved');
-
-        return $query->where(function ($q) use ($live) {
-            $q->whereHas('versions', $live)
-                ->orWhereHas('children', fn ($child) => $child
-                    ->where('review_status', 'approved')
-                    ->whereHas('versions', $live));
+        return $query->where(function ($q) {
+            // Live, and every roadmap on the way to it approved - the rule
+            // that has always applied, unchanged.
+            $q->where(fn ($r) => $r->approved()->whereHas('versions', fn ($v) => $v->live()))
+                ->orWhere(fn ($r) => $r->approved()->whereHas(
+                    'children',
+                    fn ($c) => $c->approved()->whereHas('versions', fn ($v) => $v->live())
+                ))
+                // Announced, where review status is not asked about.
+                ->orWhereHas('versions', fn ($v) => $v->announced())
+                ->orWhereHas('children.versions', fn ($v) => $v->announced());
         });
     }
 
     /** The same question asked of one roadmap rather than a query. */
-    public function isOpenable(): bool
+    public function isStudentVisible(): bool
     {
-        return static::whereKey($this->id)->openable()->exists();
+        return static::whereKey($this->id)->studentVisible()->exists();
+    }
+
+    /**
+     * Nothing a student can enter yet - only announced versions.
+     *
+     * Drives the "coming soon" mark on a roadmap in the catalogue, so it can
+     * be told apart from one that is genuinely open.
+     */
+    public function scopeOnlyAnnounced($query)
+    {
+        return $query
+            ->whereDoesntHave('versions', fn ($q) => $q->live())
+            ->whereDoesntHave('children.versions', fn ($q) => $q->live());
+    }
+
+    /** Announced, with nothing live behind it. */
+    public function isOnlyAnnounced(): bool
+    {
+        return static::whereKey($this->id)->onlyAnnounced()->exists();
     }
 }

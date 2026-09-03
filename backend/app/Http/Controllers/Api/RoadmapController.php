@@ -55,6 +55,23 @@ class RoadmapController extends Controller
         return in_array($request->user()?->role, ['MaterialManager', 'Professor'], true);
     }
 
+    /**
+     * The versions a given reader may load onto a roadmap.
+     *
+     * Staff get every published one; a student gets the live one and any
+     * announced alongside it, so a roadmap whose only version is coming soon
+     * still arrives with its modules rather than looking empty.
+     */
+    private function readableVersions(bool $staff): callable
+    {
+        return fn ($q) => $q
+            ->when($staff, fn ($inner) => $inner->where('status', 'Published'))
+            ->when(! $staff, fn ($inner) => $inner->where(
+                fn ($v) => $v->live()->orWhere(fn ($a) => $a->announced())
+            ))
+            ->orderByDesc('id');
+    }
+
     public function index(Request $request)
     {
         $staff = $this->seesUnapproved($request);
@@ -66,13 +83,11 @@ class RoadmapController extends Controller
         // the material out of reach.
         $query = Roadmap::query()
             // What may be seen at all.
-            ->when(! $staff, fn ($q) => $q->approved()->openable())
+            ->when(! $staff, fn ($q) => $q->studentVisible())
             // How much of the tree is listed.
             ->when(! $this->seesWholeTree($request), fn ($q) => $q->topLevel());
 
-        $published = fn ($q) => $q->where('status', 'Published')
-            ->when(! $staff, fn ($inner) => $inner->approved())
-            ->orderByDesc('id');
+        $published = $this->readableVersions($staff);
 
         $roadmaps = $query->with([
             'versions' => $published,
@@ -81,13 +96,13 @@ class RoadmapController extends Controller
             // roadmap it belongs to - two roadmaps may both have a
             // "Foundations". Always null for a student, who only gets the
             // top level.
-            'parent' => fn ($q) => $q->when(! $staff, fn ($inner) => $inner->approved()),
+            'parent' => fn ($q) => $q->when(! $staff, fn ($inner) => $inner->studentVisible()),
             // In the order they were created, which is the order they were
             // meant to be taken: Frontend before Backend, Machine Learning
             // before Deep Learning, Platform Foundations before the rest.
             // Alphabetical put Backend first and Deep Learning before the
             // Machine Learning it builds on.
-            'children' => fn ($q) => $q->when(! $staff, fn ($inner) => $inner->approved())->orderBy('id'),
+            'children' => fn ($q) => $q->when(! $staff, fn ($inner) => $inner->studentVisible())->orderBy('id'),
             'children.versions' => $published,
             'children.versions.versionNodes',
         ])->orderBy('title')->get();
@@ -101,11 +116,9 @@ class RoadmapController extends Controller
 
         // Hidden means hidden: a roadmap kept off the list because it cannot
         // be opened should not be reachable by typing its URL either.
-        abort_if(! $staff && (! $roadmap->isApproved() || ! $roadmap->isOpenable()), 404);
+        abort_if(! $staff && ! $roadmap->isStudentVisible(), 404);
 
-        $published = fn ($q) => $q->where('status', 'Published')
-            ->when(! $staff, fn ($inner) => $inner->approved())
-            ->orderByDesc('id');
+        $published = $this->readableVersions($staff);
 
         // Children too: a parent roadmap has no modules of its own, so the
         // page shows its specializations instead of an empty rail.
@@ -115,13 +128,13 @@ class RoadmapController extends Controller
             // So a specialization can offer a way back to the roadmap it
             // belongs to. Scoped, or a student would be pointed at a parent
             // they are not allowed to open.
-            'parent' => fn ($q) => $q->when(! $staff, fn ($inner) => $inner->approved()),
+            'parent' => fn ($q) => $q->when(! $staff, fn ($inner) => $inner->studentVisible()),
             // In the order they were created, which is the order they were
             // meant to be taken: Frontend before Backend, Machine Learning
             // before Deep Learning, Platform Foundations before the rest.
             // Alphabetical put Backend first and Deep Learning before the
             // Machine Learning it builds on.
-            'children' => fn ($q) => $q->when(! $staff, fn ($inner) => $inner->approved())->orderBy('id'),
+            'children' => fn ($q) => $q->when(! $staff, fn ($inner) => $inner->studentVisible())->orderBy('id'),
             'children.versions' => $published,
             'children.versions.versionNodes',
         ]);
