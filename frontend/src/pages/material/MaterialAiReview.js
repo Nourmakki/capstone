@@ -328,8 +328,17 @@ function MaterialAiReview({ onChanged }) {
     };
 
     const data = proposal?.data;
-    const awaitingReview = proposal?.status === "awaiting_review";
-    const readyToCommit = proposal?.status === "ready_for_commit";
+
+    // Committed is ours to know: her thread reports ready_for_commit for
+    // ever, because nothing tells her service the proposal was written into
+    // a version. Read from our own list, and it outranks whatever status the
+    // proposal came back with - otherwise the page tags a finished proposal
+    // "ready for commit" above a button saying it already has been.
+    const committed = !!workflows.find((w) => w.id === selected?.id)?.committed_version_id;
+
+    const awaitingReview = !committed && proposal?.status === "awaiting_review";
+    const readyToCommit = !committed && proposal?.status === "ready_for_commit";
+    const shownStatus = committed ? "committed" : proposal?.status?.replace(/_/g, " ");
 
     /**
      * Suggested modules are checked first, exactly as the commit does: the
@@ -409,10 +418,6 @@ function MaterialAiReview({ onChanged }) {
             </div>
         </div>
     );
-
-    // Read from the list rather than `selected`, so it refreshes after a
-    // commit instead of holding the row as it was when it was opened.
-    const alreadyCommitted = !!workflows.find((w) => w.id === selected?.id)?.committed_version_id;
 
     return (
         <div className="p-8">
@@ -562,11 +567,13 @@ function MaterialAiReview({ onChanged }) {
                                     </div>
 
                                     <span className={`text-sm px-4 py-1 rounded-full ${
-                                        awaitingReview
+                                        committed
+                                            ? "bg-green-400/10 text-green-300"
+                                            : awaitingReview
                                             ? "bg-yellow-400/20 text-yellow-300"
                                             : "bg-white/5 text-gray-400"
                                     }`}>
-                                        {proposal.status?.replace(/_/g, " ")}
+                                        {shownStatus}
                                     </span>
                                 </div>
 
@@ -954,17 +961,31 @@ function MaterialAiReview({ onChanged }) {
                                         project in the Content Queue.
                                     </p>
 
-                                    {alreadyCommitted ? (
-                                        <p className="text-sm text-green-300">
-                                            Already committed.
-                                        </p>
-                                    ) : (
-                                        <button onClick={commit} disabled={busy}
-                                            className="flex items-center gap-2 px-6 py-3 rounded-2xl bg-[#0097a7] text-black font-bold hover:scale-105 transition disabled:bg-gray-700 disabled:text-gray-400 disabled:hover:scale-100">
-                                            <GitBranch size={18} />
-                                            {busy ? "Committing..." : "Commit to a New Version"}
-                                        </button>
-                                    )}
+                                    <button onClick={commit} disabled={busy}
+                                        className="flex items-center gap-2 px-6 py-3 rounded-2xl bg-[#0097a7] text-black font-bold hover:scale-105 transition disabled:bg-gray-700 disabled:text-gray-400 disabled:hover:scale-100">
+                                        <GitBranch size={18} />
+                                        {busy ? "Committing..." : "Commit to a New Version"}
+                                    </button>
+                                </div>
+                            )}
+
+                            {/* Its own panel rather than a line inside the
+                                one above: that panel opens "nothing has been
+                                written yet", which stopped being true the
+                                moment this proposal was committed. */}
+                            {committed && (
+                                <div className="rounded-3xl border border-green-400/20 bg-green-400/5 p-6">
+                                    <h3 className="text-xl font-bold mb-2 flex items-center gap-2">
+                                        <Check size={20} className="text-green-400" /> Committed
+                                    </h3>
+
+                                    <p className="text-sm text-gray-400">
+                                        This proposal has been written into a new draft version
+                                        of {selected.roadmap}. Nothing further is decided here -
+                                        the version and its modules are reviewed in the Content
+                                        Queue, and the new modules are marked coming soon until
+                                        their material is approved.
+                                    </p>
                                 </div>
                             )}
                         </div>

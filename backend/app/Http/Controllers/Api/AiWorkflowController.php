@@ -104,17 +104,62 @@ class AiWorkflowController extends Controller
                 $data = $response->json();
 
                 $workflow->update([
-                    'status'       => $data['status'] ?? $workflow->status,
+                    // Except once it is committed. Committing is ours alone -
+                    // her thread stays "ready_for_commit" forever because
+                    // nothing tells it otherwise - so copying her status back
+                    // over ours undid the commit on every page load. The page
+                    // then showed a proposal tagged ready to commit above a
+                    // button saying it already had been.
+                    'status'       => $workflow->isCommitted()
+                        ? $workflow->status
+                        : ($data['status'] ?? $workflow->status),
                     'review_stage' => $data['review_stage'] ?? null,
                 ]);
             }
 
-            return response()->json($response->json(), $response->status());
+            // Only over a real proposal. Her failures pass through untouched -
+            // stamping our status onto a 404 body would dress an error up as
+            // a committed proposal.
+            if (! $response->successful()) {
+                return response()->json($response->json(), $response->status());
+            }
+
+            return response()->json(
+                $this->withLocalStatus($workflow->fresh(), $response->json()),
+                $response->status()
+            );
         });
+    }
+
+    /**
+     * Our committed status, over hers, in what the page reads.
+     *
+     * The row is now right, but the body returned is still hers, and the page
+     * renders its status directly. Committed is a state only we know about,
+     * so it has to be the one that reaches the browser.
+     */
+    private function withLocalStatus(RoadmapAiWorkflow $workflow, mixed $body): mixed
+    {
+        if (! is_array($body) || ! $workflow->isCommitted()) {
+            return $body;
+        }
+
+        $body['status']               = $workflow->status;
+        $body['committed_version_id'] = $workflow->committed_version_id;
+
+        return $body;
     }
 
     public function resume(ResumeAiWorkflowRequest $request, RoadmapAiWorkflow $workflow): JsonResponse
     {
+        // A committed proposal is finished with. Reviewing it again would
+        // move her thread on while our version stays as it was written.
+        if ($workflow->isCommitted()) {
+            return response()->json([
+                'message' => 'This proposal has already been committed, so it cannot be reviewed again.',
+            ], 409);
+        }
+
         return $this->proxy(function () use ($request, $workflow) {
             $response = $this->aiWorkflowService->resumeWorkflow(
                 $workflow->thread_id,

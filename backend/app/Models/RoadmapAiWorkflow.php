@@ -25,4 +25,17 @@ class RoadmapAiWorkflow extends Model
     {
         return $this->belongsTo(RoadmapVersion::class, 'committed_version_id');
     }
+
+    /**
+     * The proposal has been written into a version of ours.
+     *
+     * Ours to know, not hers: committing happens entirely on this side, and
+     * her service goes on reporting the thread as ready_for_commit forever
+     * because nothing ever tells it otherwise. Anywhere her status is copied
+     * over ours has to check this first.
+     */
+    public function isCommitted(): bool
+    {
+        return $this->committed_version_id !== null;
+    }
 }

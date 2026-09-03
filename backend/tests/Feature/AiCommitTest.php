@@ -211,6 +211,170 @@ class AiCommitTest extends TestCase
         // material yet, so it stays a pending draft. goLive covers that.
     }
 
+    /**
+     * A committed proposal stays committed when the page is reopened.
+     *
+     * Her thread reports ready_for_commit for ever - nothing tells her
+     * service the proposal was written into a version - and show() copied
+     * her status straight over ours. So every reload undid the commit in our
+     * row, and the page tagged the proposal "ready for commit" above a
+     * button saying it had already been committed.
+     */
+    public function test_reopening_a_committed_proposal_keeps_it_committed(): void
+    {
+        ['version' => $live, 'nodes' => $nodes] = $this->makeRoadmap(['Basics', 'Components']);
+        $workflow = $this->workflowFor($live);
+        $manager  = $this->makeManager();
+        $temp     = 900;
+
+        // What her service says, before and after the commit alike.
+        $hers = $this->aiResponse([
+            'thread_id' => $workflow->thread_id,
+            'status'    => 'ready_for_commit',
+            'data'      => [
+                'node_suggestions_with_ids' => [$this->suggestion($temp, 'Testing')],
+                'placement_suggestions'     => [$this->placement($temp, 'Testing', [$nodes[1]->id])],
+                'existing_edges_to_remove'  => [],
+            ],
+        ]);
+
+        $this->mock(AiWorkflowService::class, function ($mock) use ($hers) {
+            $mock->shouldReceive('getWorkflow')->andReturn($hers);
+        });
+
+        $this->actingAs($manager, 'sanctum')
+            ->postJson("/api/ai-workflows/{$workflow->id}/commit")
+            ->assertCreated();
+
+        $this->assertSame('committed', $workflow->fresh()->status);
+
+        // Reopening it is what used to undo the commit.
+        $this->actingAs($manager, 'sanctum')
+            ->getJson("/api/ai-workflows/{$workflow->id}")
+            ->assertOk()
+            ->assertJsonPath('status', 'committed');
+
+        $this->assertSame('committed', $workflow->fresh()->status);
+        $this->assertNotNull($workflow->fresh()->committed_version_id);
+    }
+
+    /** And it cannot be sent back through review afterwards. */
+    public function test_a_committed_proposal_cannot_be_reviewed_again(): void
+    {
+        ['version' => $live] = $this->makeRoadmap(['Basics', 'Components']);
+
+        $workflow = $this->workflowFor($live);
+        $workflow->update(['committed_version_id' => $live->id, 'status' => 'committed']);
+
+        $this->actingAs($this->makeManager(), 'sanctum')
+            ->postJson("/api/ai-workflows/{$workflow->id}/resume", ['action' => 'approve'])
+            ->assertStatus(409);
+
+        $this->assertSame('committed', $workflow->fresh()->status);
+    }
+
+    /**
+     * A roadmap with a choice on it survives being committed onto.
+     *
+     * The clone copied node_id and nothing else, so every choice arrived in
+     * the new version as a rail module with no prerequisites - and the graph
+     * rules then refused the commit for having four starting modules. The
+     * proposal was blamed for damage the copy had done, and no AI proposal
+     * could be committed onto any roadmap offering a choice.
+     */
+    public function test_committing_onto_a_roadmap_with_choices_keeps_them(): void
+    {
+        ['version' => $live, 'nodes' => $nodes, 'versionNodes' => $versionNodes]
+            = $this->makeRoadmap(['Basics', 'Pick a CI Tool']);
+
+        $pick = $versionNodes[1];
+
+        foreach ([['Jenkins', true], ['GitLab CI', false]] as [$title, $recommended]) {
+            $node = Node::create([
+                'title'       => $title,
+                'description' => "About {$title}.",
+                'difficulty'  => 'beginner',
+                'status'      => 'approved',
+            ]);
+
+            VersionNode::create([
+                'roadmap_version_id'     => $live->id,
+                'node_id'                => $node->id,
+                'parent_version_node_id' => $pick->id,
+                'is_recommended'         => $recommended,
+                'recommendation_reason'  => $recommended ? 'Most widely used.' : null,
+            ]);
+        }
+
+        $temp = 900;
+
+        // Would have thrown "A roadmap must have exactly one starting module".
+        $committed = $this->service()->commit($this->workflowFor($live), [
+            'node_suggestions_with_ids' => [$this->suggestion($temp, 'Containers')],
+            'placement_suggestions'     => [$this->placement($temp, 'Containers', [$nodes[0]->id])],
+            'existing_edges_to_remove'  => [],
+        ]);
+
+        $rail = VersionNode::with('node')
+            ->where('roadmap_version_id', $committed->id)
+            ->whereNull('parent_version_node_id')
+            ->get();
+
+        // Basics, Pick a CI Tool, Containers - and not the two choices.
+        $this->assertCount(3, $rail);
+        $this->assertNotContains('Jenkins', $rail->map(fn ($n) => $n->node->title)->all());
+
+        $newPick = $rail->firstWhere(fn ($n) => $n->node->title === 'Pick a CI Tool');
+        $choices = $newPick->choices()->with('node')->get();
+
+        $this->assertCount(2, $choices);
+        $this->assertSame('choice', $newPick->kind());
+
+        // The choices hang off the new version's node, not the old one's.
+        foreach ($choices as $choice) {
+            $this->assertSame($committed->id, $choice->roadmap_version_id);
+        }
+
+        $jenkins = $choices->firstWhere(fn ($c) => $c->node->title === 'Jenkins');
+
+        $this->assertTrue((bool) $jenkins->is_recommended);
+        $this->assertSame('Most widely used.', $jenkins->recommendation_reason);
+    }
+
+    /** The other columns the copy used to drop. */
+    public function test_committing_carries_a_module_link_and_its_coming_soon_mark(): void
+    {
+        ['version' => $live, 'nodes' => $nodes, 'versionNodes' => $versionNodes]
+            = $this->makeRoadmap(['Basics', 'Advanced']);
+
+        $other = \App\Models\Roadmap::create([
+            'title'         => 'A roadmap of its own',
+            'description'   => 'Opened by a module.',
+            'review_status' => 'approved',
+        ]);
+
+        $versionNodes[0]->update(['links_to_roadmap_id' => $other->id, 'stage' => 2]);
+        $versionNodes[1]->update(['coming_soon' => true]);
+
+        $temp = 900;
+
+        $committed = $this->service()->commit($this->workflowFor($live), [
+            'node_suggestions_with_ids' => [$this->suggestion($temp, 'Extra')],
+            'placement_suggestions'     => [$this->placement($temp, 'Extra', [$nodes[1]->id])],
+            'existing_edges_to_remove'  => [],
+        ]);
+
+        $copied = VersionNode::with('node')
+            ->where('roadmap_version_id', $committed->id)
+            ->get()
+            ->keyBy(fn ($n) => $n->node->title);
+
+        $this->assertSame($other->id, $copied['Basics']->links_to_roadmap_id);
+        $this->assertSame('roadmap', $copied['Basics']->kind());
+        $this->assertSame(2, (int) $copied['Basics']->stage);
+        $this->assertTrue((bool) $copied['Advanced']->coming_soon);
+    }
+
     public function test_the_live_version_is_left_untouched(): void
     {
         ['version' => $live, 'nodes' => $nodes] = $this->makeRoadmap(['Basics', 'Components']);
