@@ -81,7 +81,7 @@ function HomePage() {
                 </div>
             </nav>
 
-            <section className="relative z-10 px-8 lg:px-20 pt-20 pb-16">
+            <section className="relative z-10 px-8 lg:px-20 pt-10 pb-16">
                 <div className="max-w-4xl">
                     <div className="inline-block px-4 py-1 rounded-full border border-[#0097a7]/30 bg-[#0097a7]/10 text-[#00b0c2] text-sm mb-6">
                         AI-guided computer science roadmaps
