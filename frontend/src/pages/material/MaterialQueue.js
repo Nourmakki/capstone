@@ -6,6 +6,7 @@ import {
     // Map()` fails at runtime with "is not a constructor".
     Check, X, ExternalLink, CheckCircle2, Map as MapIcon, GitBranch, Video,
     FileText, Brain, Code2, PencilLine, ChevronRight, Folder, FolderOpen,
+    CheckCheck,
 } from "lucide-react";
 
 // Slug must match MaterialController::TYPES. The order is the order items
@@ -79,6 +80,64 @@ function MaterialQueue({ onChanged }) {
             alert(errors
                 ? Object.values(errors).flat().join("\n")
                 : (err.response?.data?.message ?? "Could not save that decision."));
+        } finally {
+            setBusy(null);
+        }
+    };
+
+    /**
+     * Approve everything pending under one subject.
+     *
+     * The confirmation names the count and, separately, anything back in the
+     * queue because it was edited after being approved - those are the items
+     * where "approve the folder" quietly means "re-approve a change nobody
+     * read", and they are the reason this asks at all.
+     */
+    const approveFolder = async (subject) => {
+        const items = subject.roadmaps.flatMap((group) => group.items);
+        const edited = items.filter((item) => item.change_note);
+
+        const warning = edited.length > 0
+            ? `\n\n${edited.length} of them ${edited.length === 1 ? "has" : "have"} been edited `
+                + `since being approved and ${edited.length === 1 ? "is" : "are"} back for a `
+                + `second look:\n${edited.map((e) => `  · ${e.title}`).join("\n")}`
+            : "";
+
+        if (!window.confirm(
+            `Approve all ${items.length} pending items under ${subject.subject}?`
+            + warning
+            + "\n\nApproved roadmaps and versions go live, and modules open to "
+            + "students as their material is approved."
+        )) return;
+
+        setBusy(`folder-${subject.subject}`);
+
+        try {
+            const response = await api.post("/material/approve-many", {
+                items: items.map((item) => ({ type: item.section.slug, id: item.id })),
+            });
+
+            const failed = response.data.failed ?? [];
+
+            // A version that cannot publish yet is the normal case here, not
+            // a crash - it means a module still has nothing on it. Named, so
+            // the manager knows which and why rather than just seeing a
+            // number that did not go down all the way.
+            if (failed.length > 0) {
+                alert(
+                    `${response.data.message}\n\n`
+                    + failed.map((f) => `· ${f.title}: ${f.reason}`).join("\n\n")
+                );
+            }
+
+            setOpenItem(null);
+            await load();
+            onChanged?.();
+        } catch (err) {
+            const errors = err.response?.data?.errors;
+            alert(errors
+                ? Object.values(errors).flat().join("\n")
+                : (err.response?.data?.message ?? "Could not approve those."));
         } finally {
             setBusy(null);
         }
@@ -165,23 +224,41 @@ function MaterialQueue({ onChanged }) {
                         return (
                             <div key={subject.subject}
                                  className="rounded-3xl border border-white/10 bg-white/[0.03] overflow-hidden">
-                                <button
-                                    onClick={() => toggle(subject.subject)}
-                                    className="w-full flex items-center gap-3 p-5 text-left hover:bg-white/[0.02] transition">
-                                    {shut
-                                        ? <Folder size={20} className="text-[#0097a7] shrink-0" />
-                                        : <FolderOpen size={20} className="text-[#0097a7] shrink-0" />}
+                                {/* A row rather than one big button: approving
+                                    the folder is a second action, and a button
+                                    cannot be nested inside another one. */}
+                                <div className="flex items-center gap-3 p-5">
+                                    <button
+                                        onClick={() => toggle(subject.subject)}
+                                        className="flex items-center gap-3 flex-1 min-w-0 text-left">
+                                        {shut
+                                            ? <Folder size={20} className="text-[#0097a7] shrink-0" />
+                                            : <FolderOpen size={20} className="text-[#0097a7] shrink-0" />}
 
-                                    <h2 className="text-xl font-bold min-w-0 truncate">{subject.subject}</h2>
+                                        <h2 className="text-xl font-bold min-w-0 truncate">{subject.subject}</h2>
 
-                                    <span className="text-xs px-3 py-1 rounded-full bg-yellow-400/20 text-yellow-300 shrink-0">
-                                        {subject.count} pending
-                                    </span>
+                                        <span className="text-xs px-3 py-1 rounded-full bg-yellow-400/20 text-yellow-300 shrink-0">
+                                            {subject.count} pending
+                                        </span>
 
-                                    <ChevronRight size={16} className={`text-gray-600 shrink-0 ml-auto transition-transform ${
-                                        shut ? "" : "rotate-90"
-                                    }`} />
-                                </button>
+                                        <ChevronRight size={16} className={`text-gray-600 shrink-0 transition-transform ${
+                                            shut ? "" : "rotate-90"
+                                        }`} />
+                                    </button>
+
+                                    {/* Outlined, not filled: it approves a
+                                        folder of things unread, so it should
+                                        not be the most inviting thing here. */}
+                                    <button
+                                        onClick={() => approveFolder(subject)}
+                                        disabled={busy === `folder-${subject.subject}`}
+                                        className="flex items-center gap-1.5 px-4 py-2 rounded-xl border border-green-400/30 text-green-300 text-xs hover:bg-green-400/10 transition disabled:opacity-40 shrink-0">
+                                        <CheckCheck size={14} />
+                                        {busy === `folder-${subject.subject}`
+                                            ? "Approving..."
+                                            : `Approve all ${subject.count}`}
+                                    </button>
+                                </div>
 
                                 {!shut && (
                                     <div className="px-5 pb-5 space-y-5">

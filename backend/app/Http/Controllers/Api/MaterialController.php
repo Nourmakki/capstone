@@ -10,9 +10,13 @@ use App\Jobs\RebuildAssistantIndex;
 use App\Models\Roadmap;
 use App\Models\RoadmapVersion;
 use App\Models\Tutorial;
+use App\Models\User;
 use App\Models\VersionNode;
 use App\Services\VersionPublishRules;
+use Illuminate\Database\Eloquent\ModelNotFoundException;
 use Illuminate\Http\Request;
+use Illuminate\Validation\Rule;
+use Illuminate\Validation\ValidationException;
 
 class MaterialController extends Controller
 {
@@ -242,6 +246,102 @@ class MaterialController extends Controller
             'notes' => ['nullable', 'string', 'max:2000'],
         ]);
 
+        $this->applyApproval($item, $request->user(), $data['notes'] ?? null);
+
+        // What students can see has changed, so the assistant's index is now
+        // one approval out of date. Queued, so the manager does not wait.
+        RebuildAssistantIndex::dispatch();
+
+        return response()->json(['message' => 'Approved.']);
+    }
+
+    /**
+     * Approve a folder's worth of items in one press.
+     *
+     * The items are named explicitly rather than re-derived from a folder
+     * name here: the manager is approving what the screen showed them, and a
+     * subject re-queried server-side could have gained an item since the page
+     * loaded that nobody has looked at.
+     *
+     * Ordered before anything is written, because approving is not
+     * commutative - a version is checked against its roadmap being approved,
+     * and lifting a module's coming-soon mark depends on its material. The
+     * page lists them in this order too, but correctness should not rest on
+     * the client having sorted them.
+     *
+     * Not a transaction, deliberately. One version failing the publish gate
+     * is a normal outcome - it means a module still has no material - and
+     * rolling back the fourteen items that were fine would make the manager
+     * do them all again to find out which one it was. Everything that can be
+     * approved is, and what could not is named back.
+     */
+    public function approveMany(Request $request)
+    {
+        $data = $request->validate([
+            'items'        => ['required', 'array', 'min:1', 'max:100'],
+            'items.*.type' => ['required', 'string', Rule::in(array_keys(self::TYPES))],
+            'items.*.id'   => ['required', 'integer'],
+            'notes'        => ['nullable', 'string', 'max:2000'],
+        ]);
+
+        $order = array_flip(array_keys(self::TYPES));
+
+        $items = collect($data['items'])
+            ->sortBy(fn ($entry) => $order[$entry['type']])
+            ->values();
+
+        $approved = 0;
+        $failed   = [];
+
+        foreach ($items as $entry) {
+            try {
+                $item = $this->find($entry['type'], $entry['id']);
+            } catch (ModelNotFoundException) {
+                // Already gone, or decided on in another tab. Not an error
+                // worth stopping for - the outcome asked for is the one that
+                // already holds.
+                continue;
+            }
+
+            try {
+                $this->applyApproval($item, $request->user(), $data['notes'] ?? null);
+                $approved++;
+            } catch (ValidationException $e) {
+                $failed[] = [
+                    'type'   => $entry['type'],
+                    'id'     => $entry['id'],
+                    'title'  => $item->title ?? ('#' . $item->id),
+                    'reason' => collect($e->errors())->flatten()->first(),
+                ];
+            }
+        }
+
+        // Once, not per item: a folder of fifteen would otherwise queue
+        // fifteen rebuilds of the same index.
+        if ($approved > 0) {
+            RebuildAssistantIndex::dispatch();
+        }
+
+        return response()->json([
+            'message'  => $approved . ' approved'
+                . ($failed === [] ? '.' : ', ' . count($failed) . ' could not be.'),
+            'approved' => $approved,
+            'failed'   => $failed,
+        ]);
+    }
+
+    /**
+     * Approve one item and everything that follows from it.
+     *
+     * Shared by the single button and the folder one, so the two cannot come
+     * to mean different things - publishing a version and lifting a module's
+     * coming-soon mark are the parts that would quietly go missing from a
+     * second copy.
+     *
+     * @throws ValidationException when a version is not fit to publish
+     */
+    private function applyApproval(mixed $item, ?User $reviewer, ?string $notes): void
+    {
         // Approving a version publishes it, so the readiness check has to run
         // here too - otherwise the rule on publishVersion() is one the approve
         // button walks straight past. Before approveBy(), so a version that
@@ -250,7 +350,7 @@ class MaterialController extends Controller
             (new VersionPublishRules)->assertReadyToPublish($item);
         }
 
-        $item->approveBy($request->user(), $data['notes'] ?? null);
+        $item->approveBy($reviewer, $notes);
 
         // Approving a version is what makes it live, and only one version
         // of a roadmap may be published at a time.
@@ -268,12 +368,6 @@ class MaterialController extends Controller
         // only once the module has all three - a tutorial alone is not a
         // module a student can work through.
         $this->liftComingSoon($item);
-
-        // What students can see has changed, so the assistant's index is now
-        // one approval out of date. Queued, so the manager does not wait.
-        RebuildAssistantIndex::dispatch();
-
-        return response()->json(['message' => 'Approved.']);
     }
 
     /**

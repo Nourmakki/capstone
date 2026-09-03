@@ -241,6 +241,11 @@ Route::middleware('auth:sanctum')->group(function () {
             Route::get('/stats', [MaterialController::class, 'stats']);
             Route::get('/pending', [MaterialController::class, 'pending']);
             Route::get('/history', [MaterialController::class, 'history']);
+
+            // A folder at a time. Above /{type}/{id}/approve, which would
+            // otherwise read "approve-many" as a type.
+            Route::post('/approve-many', [MaterialController::class, 'approveMany']);
+
             Route::post('/{type}/{id}/approve', [MaterialController::class, 'approve']);
             Route::post('/{type}/{id}/reject', [MaterialController::class, 'reject']);
         });

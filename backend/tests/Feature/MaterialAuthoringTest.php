@@ -559,6 +559,94 @@ class MaterialAuthoringTest extends TestCase
             ->assertJsonPath('quizzes.0.module', 'Basics');
     }
 
+    /**
+     * The folder button approves a batch in one request.
+     *
+     * The roadmap has to be approved before the version that belongs to it,
+     * whatever order they arrive in - so they are sent deliberately backwards
+     * here, which is also the order the page would send them in if somebody
+     * reordered the list.
+     */
+    public function test_approving_many_approves_them_in_dependency_order(): void
+    {
+        $roadmap = Roadmap::where('title', 'Test Roadmap')->sole();
+        $roadmap->update(['review_status' => 'pending']);
+
+        $version = $roadmap->versions()->sole();
+        $version->update(['review_status' => 'pending']);
+
+        // Coming-soon, as a freshly built module is: it has no material yet,
+        // and that mark is what exempts it from the publish gate.
+        $this->module->update(['coming_soon' => true]);
+
+        $this->actingAs($this->manager, 'sanctum')
+            ->postJson('/api/material/approve-many', [
+                'items' => [
+                    ['type' => 'roadmap-versions', 'id' => $version->id],
+                    ['type' => 'roadmaps', 'id' => $roadmap->id],
+                ],
+            ])
+            ->assertOk()
+            ->assertJsonPath('approved', 2)
+            ->assertJsonPath('failed', []);
+
+        $this->assertSame('approved', $roadmap->fresh()->review_status);
+        $this->assertSame('approved', $version->fresh()->review_status);
+        $this->assertSame($this->manager->id, $roadmap->fresh()->reviewed_by);
+
+        // Approving a version is what makes it live.
+        $this->assertSame('Published', $version->fresh()->status);
+    }
+
+    /**
+     * One item failing does not cost the manager the rest of the folder.
+     *
+     * A version whose modules have no material cannot publish, which is a
+     * normal thing to hit here. Rolling the batch back would mean pressing
+     * the button again to find out which one it was.
+     */
+    public function test_approving_many_keeps_what_it_could_and_names_what_it_could_not(): void
+    {
+        $roadmap = Roadmap::where('title', 'Test Roadmap')->sole();
+        $roadmap->update(['review_status' => 'pending']);
+
+        // Its one module has no approved material and is not coming-soon, so
+        // the publish gate refuses the version.
+        $version = $roadmap->versions()->sole();
+        $version->update(['review_status' => 'pending']);
+        $this->module->update(['coming_soon' => false]);
+
+        $this->actingAs($this->manager, 'sanctum')
+            ->postJson('/api/material/approve-many', [
+                'items' => [
+                    ['type' => 'roadmaps', 'id' => $roadmap->id],
+                    ['type' => 'roadmap-versions', 'id' => $version->id],
+                ],
+            ])
+            ->assertOk()
+            ->assertJsonPath('approved', 1)
+            ->assertJsonCount(1, 'failed')
+            ->assertJsonPath('failed.0.type', 'roadmap-versions');
+
+        // The one that could be approved was, and stayed approved.
+        $this->assertSame('approved', $roadmap->fresh()->review_status);
+        $this->assertSame('pending', $version->fresh()->review_status);
+    }
+
+    public function test_a_student_may_not_approve_a_folder(): void
+    {
+        $roadmap = Roadmap::where('title', 'Test Roadmap')->sole();
+        $roadmap->update(['review_status' => 'pending']);
+
+        $this->actingAs($this->makeStudent(), 'sanctum')
+            ->postJson('/api/material/approve-many', [
+                'items' => [['type' => 'roadmaps', 'id' => $roadmap->id]],
+            ])
+            ->assertStatus(403);
+
+        $this->assertSame('pending', $roadmap->fresh()->review_status);
+    }
+
     /** A roadmap three deep still files under the subject at the top. */
     public function test_a_nested_roadmap_files_under_its_top_level_subject(): void
     {
