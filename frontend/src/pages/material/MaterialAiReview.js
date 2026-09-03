@@ -93,6 +93,21 @@ function MaterialAiReview({ onChanged }) {
     const updateTrendEdit     = updateEdit(setTrendEdits);
     const updatePlacementEdit = updateEdit(setPlacementEdits);
 
+    /**
+     * Drop one proposed module.
+     *
+     * Placement is regenerated after every node edit already
+     * (`regenerate_after_edit: true`), so a module removed here never leaves
+     * a dangling reference behind - the next stage is written fresh from
+     * whatever is left in this list.
+     *
+     * Stops at one remaining: an empty list drops the count this section is
+     * keyed on to zero, which hides the section - Save and Cancel included -
+     * and strands the edit with no way to leave it.
+     */
+    const deleteNodeEdit = (index) =>
+        setNodeEdits((prev) => (prev.length <= 1 ? prev : prev.filter((_, i) => i !== index)));
+
     /** Add or drop one module from one of a placement's three id lists. */
     const togglePlacementLink = (index, field, nodeId) => {
         setPlacementEdits((prev) => prev.map((p, i) => {
@@ -687,7 +702,7 @@ function MaterialAiReview({ onChanged }) {
                                     </Section>
 
                                     <Section icon={<Plus size={18} className="text-green-400" />}
-                                             title="Proposed new modules" count={data.node_suggestions?.length}>
+                                             title="Proposed new modules" count={(nodeEdits ?? data.node_suggestions)?.length}>
                                         {/* Editable in place. A manager reading a
                                             proposal usually wants to change a word
                                             in a title or soften a description, and
@@ -714,6 +729,16 @@ function MaterialAiReview({ onChanged }) {
                                                                 <option value="intermediate">intermediate</option>
                                                                 <option value="advanced">advanced</option>
                                                             </select>
+
+                                                            <button type="button"
+                                                                onClick={() => deleteNodeEdit(i)}
+                                                                disabled={nodeEdits.length <= 1}
+                                                                title={nodeEdits.length <= 1
+                                                                    ? "At least one proposed module is required"
+                                                                    : "Remove this module"}
+                                                                className="p-2 rounded-lg border border-red-400/20 text-red-400 hover:bg-red-400/10 transition shrink-0 disabled:opacity-30 disabled:hover:bg-transparent">
+                                                                <Trash2 size={16} />
+                                                            </button>
                                                         </div>
 
                                                         <textarea

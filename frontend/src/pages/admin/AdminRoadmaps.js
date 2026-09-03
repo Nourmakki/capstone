@@ -3,7 +3,7 @@ import api from "../../api";
 import ModuleMaterial from "../../components/ModuleMaterial";
 import {
     Upload, Network, AlertTriangle, Sparkles, Check, X, ChevronRight,
-    Inbox, GitBranch, Layers, ArrowLeft, RefreshCw,
+    Inbox, GitBranch, Layers, ArrowLeft, RefreshCw, Trash2, Plus, Pencil,
 } from "lucide-react";
 
 const STATUS_STYLE = {
@@ -39,6 +39,13 @@ function AdminRoadmaps({ onChanged }) {
     // Which run is mid-decision, and which way. Per run rather than a single
     // flag, so one long approval does not blank the buttons on every row.
     const [working, setWorking] = useState(null);
+
+    // The roadmap package being hand-edited, or null. Holds the whole
+    // GeneratedPathRoadmapModel - her edit contract wants the complete
+    // package back, not a patch, so add/delete build a new copy of it
+    // rather than sending the one node that changed.
+    const [packageEdits, setPackageEdits] = useState(null);
+    const [savingPackage, setSavingPackage] = useState(false);
 
     // --- browsing ----------------------------------------------------
     const [roadmaps, setRoadmaps] = useState([]);
@@ -104,11 +111,13 @@ function AdminRoadmaps({ onChanged }) {
         if (openRun === run.id) {
             setOpenRun(null);
             setProposal(null);
+            setPackageEdits(null);
             return;
         }
 
         setOpenRun(run.id);
         setProposal(null);
+        setPackageEdits(null);
         setLoadingProposal(true);
 
         try {
@@ -133,6 +142,7 @@ function AdminRoadmaps({ onChanged }) {
      */
     const resumeRun = async (run, action) => {
         setWorking({ id: run.id, action });
+        setPackageEdits(null);
 
         try {
             await api.post(`/roadmap-builder-runs/${run.id}/resume`, { action });
@@ -170,6 +180,198 @@ function AdminRoadmaps({ onChanged }) {
             fail(err);
         } finally {
             setBusy(false);
+        }
+    };
+
+    // -----------------------------------------------------------------
+    // Hand-editing the roadmap the run is deciding on
+    //
+    // Her edit contract is extra="forbid" on every model in the package, so
+    // these rebuild each object field by field rather than spreading what
+    // she sent - the same rule the trends editor follows, for the same
+    // reason: a field she added to the response but not to the request model
+    // would get the whole edit refused.
+    // -----------------------------------------------------------------
+
+    const sanitizeNode = (n) => {
+        const node = {
+            node_id: n.node_id,
+            title: n.title,
+            description: n.description,
+            order: n.order,
+            prerequisite_node_ids: n.prerequisite_node_ids ?? [],
+            learning_outcomes: n.learning_outcomes ?? [],
+            type: n.type,
+        };
+
+        if (n.type === "choice") {
+            node.choices = (n.choices ?? []).map((c) => ({
+                choice_id: c.choice_id,
+                title: c.title,
+                description: c.description,
+                separate_roadmap: c.separate_roadmap,
+                recommended: c.recommended,
+                recommendation_reason: c.recommendation_reason ?? null,
+            }));
+        }
+
+        return node;
+    };
+
+    const sanitizeResult = (r) => ({
+        roadmap_topic: r.roadmap_topic,
+        title: r.title,
+        description: r.description,
+        nodes: (r.nodes ?? []).map(sanitizeNode),
+        freshness_summary: r.freshness_summary,
+    });
+
+    const sanitizePackage = (pkg) => ({
+        path_id: pkg.path_id,
+        path_title: pkg.path_title,
+        roadmap_result: sanitizeResult(pkg.roadmap_result),
+        child_roadmaps: (pkg.child_roadmaps ?? []).map((c) => ({
+            parent_node_id: c.parent_node_id,
+            choice_id: c.choice_id,
+            choice_title: c.choice_title,
+            roadmap_result: sanitizeResult(c.roadmap_result),
+        })),
+    });
+
+    /**
+     * Remove one node from a node list, renumbering what is left.
+     *
+     * Her validator wants node_id and order running 1..N with no gaps, so a
+     * deletion in the middle has to shift everything after it down by one -
+     * and any prerequisite that pointed at the deleted node has to go too,
+     * or it references an id that no longer exists.
+     */
+    const withoutNode = (nodes, nodeId) => {
+        const kept = nodes.filter((n) => n.node_id !== nodeId);
+        const idMap = new Map(kept.map((n, i) => [n.node_id, i + 1]));
+
+        return {
+            idMap,
+            nodes: kept.map((n, i) => ({
+                ...n,
+                node_id: i + 1,
+                order: i + 1,
+                prerequisite_node_ids: n.prerequisite_node_ids
+                    .filter((pid) => idMap.has(pid))
+                    .map((pid) => idMap.get(pid)),
+            })),
+        };
+    };
+
+    const startEditingPackage = (pkg) => setPackageEdits(sanitizePackage(pkg));
+    const cancelEditingPackage = () => setPackageEdits(null);
+
+    /**
+     * Delete a node from the main roadmap.
+     *
+     * A choice node with a "becomes its own roadmap" choice carries a whole
+     * child roadmap keyed to it - deleting the node has to take that child
+     * with it, and warns first since it is losing more than one card's
+     * worth of work.
+     */
+    const deleteTopLevelNode = (nodeId) => {
+        setPackageEdits((pkg) => {
+            const node = pkg.roadmap_result.nodes.find((n) => n.node_id === nodeId);
+            const branches = node?.type === "choice"
+                ? (node.choices ?? []).filter((c) => c.separate_roadmap)
+                : [];
+
+            if (branches.length > 0 && !window.confirm(
+                `"${node.title}" branches into its own roadmap for `
+                + `${branches.map((c) => c.title).join(", ")}.\n\n`
+                + "Deleting it removes that roadmap from this proposal too. Continue?"
+            )) return pkg;
+
+            const { idMap, nodes } = withoutNode(pkg.roadmap_result.nodes, nodeId);
+
+            return {
+                ...pkg,
+                roadmap_result: { ...pkg.roadmap_result, nodes },
+                child_roadmaps: pkg.child_roadmaps
+                    .filter((c) => c.parent_node_id !== nodeId)
+                    .map((c) => ({ ...c, parent_node_id: idMap.get(c.parent_node_id) })),
+            };
+        });
+    };
+
+    /** Delete a node from one child roadmap. Self-contained: a choice inside
+     *  a child cannot itself branch into a further child roadmap, so there
+     *  is nothing downstream to clean up. */
+    const deleteChildNode = (childIndex, nodeId) => {
+        setPackageEdits((pkg) => ({
+            ...pkg,
+            child_roadmaps: pkg.child_roadmaps.map((c, i) => {
+                if (i !== childIndex) return c;
+                const { nodes } = withoutNode(c.roadmap_result.nodes, nodeId);
+                return { ...c, roadmap_result: { ...c.roadmap_result, nodes } };
+            }),
+        }));
+    };
+
+    /**
+     * Append a new module to the main roadmap or a child.
+     *
+     * Always added last, as a standard module: its order is the new
+     * highest, so every existing node is a valid prerequisite for it with no
+     * ordering check needed. A choice node needs at least two choices, one
+     * of them marked recommended, and a reason for that choice - enough of
+     * its own form to be a separate feature, so this covers the module type
+     * a manager actually asked for here.
+     */
+    const addNode = (draft, childIndex = null) => {
+        setPackageEdits((pkg) => {
+            const applyTo = (result) => {
+                const n = result.nodes.length + 1;
+                return {
+                    ...result,
+                    nodes: [...result.nodes, {
+                        node_id: n,
+                        order: n,
+                        type: "standard",
+                        title: draft.title,
+                        description: draft.description,
+                        prerequisite_node_ids: draft.prerequisites,
+                        learning_outcomes: draft.outcomes,
+                    }],
+                };
+            };
+
+            if (childIndex === null) {
+                return { ...pkg, roadmap_result: applyTo(pkg.roadmap_result) };
+            }
+
+            return {
+                ...pkg,
+                child_roadmaps: pkg.child_roadmaps.map((c, i) =>
+                    i !== childIndex ? c : { ...c, roadmap_result: applyTo(c.roadmap_result) }),
+            };
+        });
+    };
+
+    const savePackageEdits = async (run) => {
+        setSavingPackage(true);
+
+        try {
+            await api.post(`/roadmap-builder-runs/${run.id}/resume`, {
+                action: "edit",
+                stage: "roadmap",
+                data: sanitizePackage(packageEdits),
+            });
+
+            setPackageEdits(null);
+            await loadRuns();
+
+            const response = await api.get(`/roadmap-builder-runs/${run.id}`);
+            setProposal(response.data);
+        } catch (err) {
+            fail(err);
+        } finally {
+            setSavingPackage(false);
         }
     };
 
@@ -270,8 +472,19 @@ function AdminRoadmaps({ onChanged }) {
 
     const parentIsSubject = parent && !parent.parent_roadmap_id;
 
-    /** One roadmap the builder wrote: its modules, in order. */
-    const ProposedRoadmap = ({ result, heading }) => (
+    /**
+     * One roadmap the builder wrote: its modules, in order.
+     *
+     * `onDeleteNode`/`onAddNode` are only passed while this package is being
+     * hand-edited - their presence is what turns the delete buttons and the
+     * add-module form on, rather than a separate flag the two could drift
+     * out of sync with.
+     */
+    const ProposedRoadmap = ({ result, heading, onDeleteNode, onAddNode }) => {
+        const editable = !!onDeleteNode;
+        const [adding, setAdding] = useState(false);
+
+        return (
         <div className="rounded-2xl border border-white/10 bg-black/20 p-4">
             <h5 className="font-semibold text-sm">{heading ?? result.title}</h5>
             <p className="text-xs text-gray-400 mt-1">{result.description}</p>
@@ -287,6 +500,14 @@ function AdminRoadmaps({ onChanged }) {
                                 <span className="text-xs px-2 py-0.5 rounded-full bg-[#0097a7]/10 text-[#00b0c2]">
                                     {n.choices?.length ?? 0} to choose from
                                 </span>
+                            )}
+
+                            {editable && (
+                                <button type="button" onClick={() => onDeleteNode(n.node_id)}
+                                    title="Delete this module"
+                                    className="ml-auto text-red-400/70 hover:text-red-400 transition shrink-0">
+                                    <Trash2 size={14} />
+                                </button>
                             )}
                         </div>
 
@@ -334,8 +555,22 @@ function AdminRoadmaps({ onChanged }) {
                     {result.freshness_summary}
                 </p>
             )}
+
+            {editable && (adding ? (
+                <AddNodeForm
+                    existingNodes={result.nodes}
+                    onCancel={() => setAdding(false)}
+                    onAdd={(draft) => { onAddNode(draft); setAdding(false); }}
+                />
+            ) : (
+                <button type="button" onClick={() => setAdding(true)}
+                    className="mt-3 flex items-center gap-1.5 text-xs text-[#00b0c2] hover:text-[#0097a7] transition">
+                    <Plus size={12} /> Add a module
+                </button>
+            ))}
         </div>
-    );
+        );
+    };
 
     /**
      * A roadmap already accepted, in one line.
@@ -367,7 +602,7 @@ function AdminRoadmaps({ onChanged }) {
     };
 
     /** Whatever the run is currently asking a manager to decide about. */
-    const Proposal = ({ detail }) => {
+    const Proposal = ({ detail, run }) => {
         const data = detail?.data;
 
         if (!data) {
@@ -441,21 +676,63 @@ function AdminRoadmaps({ onChanged }) {
                                     roadmap {data.current_roadmap_number} of {data.total_roadmaps}
                                 </span>
                             )}
+
+                            {/* Editing only makes sense while a decision is
+                                still open - once the run has moved on, this
+                                package is history, not the one waiting. */}
+                            {run?.status === "awaiting_review" && !packageEdits && (
+                                <button type="button" onClick={() => startEditingPackage(pkg)}
+                                    className="ml-auto flex items-center gap-1.5 text-xs px-3 py-1 rounded-full border border-[#0097a7]/30 text-[#0097a7] hover:bg-[#0097a7]/10 transition">
+                                    <Pencil size={11} /> Add or delete a module
+                                </button>
+                            )}
                         </div>
 
-                        <div className="space-y-3">
-                            <ProposedRoadmap result={pkg.roadmap_result} />
-
-                            {/* A choice that becomes its own roadmap arrives
-                                with that roadmap already written. */}
-                            {(pkg.child_roadmaps ?? []).map((child) => (
+                        {packageEdits ? (
+                            <div className="space-y-3">
                                 <ProposedRoadmap
-                                    key={`${child.parent_node_id}-${child.choice_id}`}
-                                    result={child.roadmap_result}
-                                    heading={`${child.choice_title} — its own roadmap`}
+                                    result={packageEdits.roadmap_result}
+                                    onDeleteNode={deleteTopLevelNode}
+                                    onAddNode={(draft) => addNode(draft)}
                                 />
-                            ))}
-                        </div>
+
+                                {(packageEdits.child_roadmaps ?? []).map((child, i) => (
+                                    <ProposedRoadmap
+                                        key={`${child.parent_node_id}-${child.choice_id}-${i}`}
+                                        result={child.roadmap_result}
+                                        heading={`${child.choice_title} — its own roadmap`}
+                                        onDeleteNode={(nodeId) => deleteChildNode(i, nodeId)}
+                                        onAddNode={(draft) => addNode(draft, i)}
+                                    />
+                                ))}
+
+                                <div className="flex flex-wrap gap-3 pt-1">
+                                    <button type="button" onClick={() => savePackageEdits(run)} disabled={savingPackage}
+                                        className="px-5 py-2.5 rounded-xl bg-[#0097a7] text-black font-semibold text-sm hover:scale-[1.02] transition disabled:opacity-50">
+                                        {savingPackage ? "Saving..." : "Save changes"}
+                                    </button>
+
+                                    <button type="button" onClick={cancelEditingPackage} disabled={savingPackage}
+                                        className="px-5 py-2.5 rounded-xl border border-white/10 text-gray-300 text-sm disabled:opacity-50">
+                                        Cancel
+                                    </button>
+                                </div>
+                            </div>
+                        ) : (
+                            <div className="space-y-3">
+                                <ProposedRoadmap result={pkg.roadmap_result} />
+
+                                {/* A choice that becomes its own roadmap arrives
+                                    with that roadmap already written. */}
+                                {(pkg.child_roadmaps ?? []).map((child) => (
+                                    <ProposedRoadmap
+                                        key={`${child.parent_node_id}-${child.choice_id}`}
+                                        result={child.roadmap_result}
+                                        heading={`${child.choice_title} — its own roadmap`}
+                                    />
+                                ))}
+                            </div>
+                        )}
                     </div>
                 )}
             </div>
@@ -616,7 +893,7 @@ function AdminRoadmaps({ onChanged }) {
                                 <div className="mt-4 pt-4 border-t border-white/10">
                                     {loadingProposal
                                         ? <p className="text-xs text-gray-500">Reading the proposal...</p>
-                                        : <Proposal detail={proposal} />}
+                                        : <Proposal detail={proposal} run={run} />}
                                 </div>
                             )}
                             </div>
@@ -878,6 +1155,92 @@ function AdminRoadmaps({ onChanged }) {
                     <p className="text-sm">Nothing here yet - name a subject above to start.</p>
                 </div>
             )}
+        </div>
+    );
+}
+
+/**
+ * A new module, added while hand-editing a proposed roadmap.
+ *
+ * Standard only - a choice node needs at least two choices, one marked
+ * recommended with a reason, which is a form of its own. Always appended
+ * last, so every existing module is a valid thing to put it after: nothing
+ * here can come before a node that has not been added yet.
+ */
+function AddNodeForm({ existingNodes, onAdd, onCancel }) {
+    const [title, setTitle] = useState("");
+    const [description, setDescription] = useState("");
+    const [outcomes, setOutcomes] = useState("");
+    const [prerequisites, setPrerequisites] = useState([]);
+
+    const togglePrerequisite = (id) => setPrerequisites((prev) =>
+        prev.includes(id) ? prev.filter((p) => p !== id) : [...prev, id]);
+
+    const outcomeList = outcomes.split("\n").map((s) => s.trim()).filter(Boolean);
+    const canAdd = title.trim().length > 0 && description.trim().length > 0 && outcomeList.length > 0;
+
+    return (
+        <div className="mt-3 rounded-xl border border-[#0097a7]/20 bg-[#0097a7]/5 p-3 space-y-2">
+            <input
+                value={title}
+                onChange={(e) => setTitle(e.target.value)}
+                placeholder="Module title"
+                className="w-full p-2 rounded-lg bg-black/40 border border-white/10 text-white text-sm"
+            />
+
+            <textarea
+                value={description}
+                onChange={(e) => setDescription(e.target.value)}
+                rows={2}
+                placeholder="Description"
+                className="w-full p-2 rounded-lg bg-black/40 border border-white/10 text-white text-sm"
+            />
+
+            <textarea
+                value={outcomes}
+                onChange={(e) => setOutcomes(e.target.value)}
+                rows={2}
+                placeholder="Learning outcomes, one per line"
+                className="w-full p-2 rounded-lg bg-black/40 border border-white/10 text-white text-sm"
+            />
+
+            {existingNodes.length > 0 && (
+                <div>
+                    <span className="text-xs text-gray-500">Comes after</span>
+
+                    <div className="flex flex-wrap gap-2 mt-1.5">
+                        {existingNodes.map((n) => (
+                            <button key={n.node_id} type="button"
+                                onClick={() => togglePrerequisite(n.node_id)}
+                                className={`text-xs px-3 py-1 rounded-full border transition ${
+                                    prerequisites.includes(n.node_id)
+                                        ? "border-[#0097a7]/30 bg-[#0097a7]/10 text-[#00b0c2]"
+                                        : "border-white/10 text-gray-500 hover:border-white/20"
+                                }`}>
+                                {n.title}
+                            </button>
+                        ))}
+                    </div>
+                </div>
+            )}
+
+            <div className="flex gap-2 pt-1">
+                <button type="button" disabled={!canAdd}
+                    onClick={() => onAdd({
+                        title: title.trim(),
+                        description: description.trim(),
+                        outcomes: outcomeList,
+                        prerequisites,
+                    })}
+                    className="px-4 py-2 rounded-lg bg-[#0097a7] text-black text-xs font-semibold disabled:bg-gray-700 disabled:text-gray-400 transition">
+                    Add module
+                </button>
+
+                <button type="button" onClick={onCancel}
+                    className="px-4 py-2 rounded-lg border border-white/10 text-gray-300 text-xs">
+                    Cancel
+                </button>
+            </div>
         </div>
     );
 }
