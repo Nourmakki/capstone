@@ -8,10 +8,10 @@ use App\Models\VersionNode;
 use App\Services\AiLearningCommitService;
 use App\Services\AiWorkflowService;
 use App\Services\LearningRunLauncher;
+use Illuminate\Http\Client\ConnectionException;
 use Illuminate\Http\JsonResponse;
 use Illuminate\Http\Request;
 use RuntimeException;
-use Throwable;
 
 class LearningWorkflowController extends Controller
 {
@@ -166,7 +166,10 @@ class LearningWorkflowController extends Controller
     {
         try {
             return $callback();
-        } catch (Throwable $e) {
+        } catch (ConnectionException $e) {
+            // Only a refused connection is an outage. Catching everything
+            // here reported our own errors as her service being down, and
+            // sent people to look at a service that was working.
             report($e);
 
             return response()->json([

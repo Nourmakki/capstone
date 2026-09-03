@@ -7,9 +7,9 @@ use App\Http\Requests\ResumeAiWorkflowRequest;
 use App\Models\RoadmapAiWorkflow;
 use App\Models\RoadmapVersion;
 use App\Services\AiWorkflowService;
+use Illuminate\Http\Client\ConnectionException;
 use Illuminate\Http\JsonResponse;
 use Illuminate\Http\Request;
-use Throwable;
 
 class AiWorkflowController extends Controller
 {
@@ -187,12 +187,23 @@ class AiWorkflowController extends Controller
     /**
      * The AI service is a separate process that is often simply not running.
      * Without this, a refused connection surfaces as a raw cURL stack trace.
+     *
+     * Report an unreachable AI service as such - and nothing else as that.
+     *
+     * This caught every Throwable and called all of them "the AI service is
+     * not reachable". A manager committing a proposal hit a database error on
+     * our own side and was told her partner's Python service was down; she
+     * went looking at a service that was answering every request with a 200,
+     * and the real fault - an unmigrated table - stayed hidden.
+     *
+     * Only a failure to connect is an outage. Anything else is our bug and
+     * should say so, loudly, where it happened.
      */
     private function proxy(callable $callback): JsonResponse
     {
         try {
             return $callback();
-        } catch (Throwable $e) {
+        } catch (ConnectionException $e) {
             report($e);
 
             return response()->json([
