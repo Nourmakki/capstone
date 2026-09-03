@@ -1424,7 +1424,7 @@ For a successful selection return:
 
 {
   "node_id": 1,
-  "status": "ready_for_commit",
+  "status": "ready",
   "tutorial": {
     "resource_type": "video",
     "resource_id": "exact_resource_id",
