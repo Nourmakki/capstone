@@ -4,7 +4,7 @@ import { firstRoadmapIn } from "../../components/RoadmapPicker";
 import ModuleMaterialEditor from "../../components/ModuleMaterialEditor";
 import {
     Sparkles, Video, Brain, Code2, BookOpen, Check, X, Pencil,
-    RefreshCw, AlertTriangle, Inbox, ChevronRight, Play, ExternalLink,
+    RefreshCw, AlertTriangle, Inbox, ChevronRight, ExternalLink,
     Layers, Wand2,
 } from "lucide-react";
 
@@ -40,6 +40,10 @@ function MaterialLearningReview({ onChanged }) {
     const [pendingTotal, setPendingTotal] = useState(0);
     const [openGroup, setOpenGroup] = useState(null);
     const [generating, setGenerating] = useState(null);
+
+    // Folded away until asked for. The header carries the count, so the page
+    // still says how much is waiting without unrolling all of it.
+    const [awaitingOpen, setAwaitingOpen] = useState(false);
 
     const loadRuns = useCallback(async () => {
         try {
@@ -149,39 +153,6 @@ function MaterialLearningReview({ onChanged }) {
     };
 
     /**
-     * Generation takes minutes, so this is the one call worth warning about
-     * before it starts.
-     */
-    const startRun = async () => {
-        if (!moduleId) return;
-
-        const module = modules.find((m) => m.version_node_id === moduleId);
-
-        if (!window.confirm(
-            `Generate learning material for "${module?.title}"?\n\n`
-            + "The AI writes a tutorial, a quiz, a project and external "
-            + "resources. This takes a few minutes."
-        )) return;
-
-        setBusy(true);
-        setServiceDown(false);
-
-        try {
-            await api.post(`/version-nodes/${moduleId}/learning-runs`);
-            await Promise.all([loadRuns(), loadPending()]);
-            onChanged?.();
-        } catch (err) {
-            if (err.response?.status === 503) {
-                setServiceDown(true);
-            } else {
-                alert(err.response?.data?.message ?? "Could not start generation.");
-            }
-        } finally {
-            setBusy(false);
-        }
-    };
-
-    /**
      * Her schema forbids extra keys, and each action allows a different set:
      * approve takes nothing, reject takes feedback, regenerate takes a stage
      * and optional feedback.
@@ -270,22 +241,120 @@ function MaterialLearningReview({ onChanged }) {
                 Nothing reaches students until you approve it.
             </p>
 
-            {/* Awaiting material.
-                The roadmap builder writes a whole subject of empty modules
-                and starts nothing, so this is the worklist it leaves behind.
-                Above the picker below because it is the common case: these
-                are the modules that need writing, already named, rather than
-                a module to be hunted down through three dropdowns. */}
+            {/* Fixing what a module already has, by hand. First on the
+                page: it is the one part always worth showing, since it works
+                whatever else is or is not waiting.
+
+                The generate form that used to stand here is gone - generation
+                is started from the awaiting list below, one module at a time,
+                which is the same call with the module already named. Its
+                dropdowns chose the module for this editor too, so the editor
+                keeps a picker of its own rather than losing the only way to
+                author a quiz question by hand. */}
+            <div className="rounded-3xl border border-white/10 bg-white/[0.03] p-6 mb-10">
+                <div className="flex items-center gap-3 mb-2">
+                    <Pencil size={20} className="text-[#0097a7]" />
+                    <h2 className="text-2xl font-bold">Edit a module's material</h2>
+                </div>
+
+                <p className="text-sm text-gray-400 mb-5">
+                    Correct what the AI wrote, or add a tutorial, quiz question
+                    or project by hand.
+                </p>
+
+                <div className="grid md:grid-cols-3 gap-4">
+                    <select value={roadmapId ?? ""}
+                        onChange={(e) => setRoadmapId(Number(e.target.value))}
+                        className="p-3 rounded-xl bg-black/30 border border-white/10 text-white">
+                        {/* A dropdown nests with optgroup rather than a second
+                            row, so a roadmap reads as belonging to its subject
+                            instead of sitting beside it as a peer.
+
+                            The subject is the group label and nothing more: it
+                            is a heading over Frontend and Backend with no
+                            modules of its own. optgroup cannot nest, so the
+                            third level is indented instead. */}
+                        {roadmaps
+                            .filter((r) => !r.parent_roadmap_id)
+                            .map((subject) => {
+                                const paths = roadmaps.filter(
+                                    (r) => r.parent_roadmap_id === subject.id
+                                );
+
+                                if (paths.length === 0) return null;
+
+                                return (
+                                    <optgroup key={subject.id} label={subject.title}>
+                                        {paths.flatMap((path) => [
+                                            <option key={path.id} value={path.id}>
+                                                {path.title}
+                                            </option>,
+
+                                            ...roadmaps
+                                                .filter((r) => r.parent_roadmap_id === path.id)
+                                                .map((child) => (
+                                                    <option key={child.id} value={child.id}>
+                                                        {"  — "}{child.title}
+                                                    </option>
+                                                )),
+                                        ])}
+                                    </optgroup>
+                                );
+                            })}
+                    </select>
+
+                    <select value={versionId ?? ""}
+                        onChange={(e) => setVersionId(Number(e.target.value))}
+                        className="p-3 rounded-xl bg-black/30 border border-white/10 text-white">
+                        {versions.map((v) => (
+                            <option key={v.id} value={v.id}>
+                                v{v.version_number}{v.title ? ` · ${v.title}` : ""} ({v.status})
+                            </option>
+                        ))}
+                    </select>
+
+                    <select value={moduleId ?? ""}
+                        onChange={(e) => setModuleId(Number(e.target.value))}
+                        className="p-3 rounded-xl bg-black/30 border border-white/10 text-white">
+                        {modules.length === 0 && <option value="">No modules</option>}
+                        {modules.map((m) => (
+                            <option key={m.version_node_id} value={m.version_node_id}>
+                                {m.title}
+                            </option>
+                        ))}
+                    </select>
+                </div>
+
+                {moduleId && (
+                    <div className="mt-6 pt-6 border-t border-white/10">
+                        <ModuleMaterialEditor versionNodeId={moduleId} onChanged={onChanged} />
+                    </div>
+                )}
+            </div>
+
+            {/* Awaiting material: the worklist the roadmap builder leaves
+                behind, since it writes a subject of empty modules and starts
+                nothing. Folded away by default - seventy-odd modules is a
+                wall of a thing to scroll past, and the count in the header
+                says how many are waiting without opening any of it. */}
             {pendingTotal > 0 && (
-                <div className="rounded-3xl border border-yellow-400/20 bg-yellow-400/[0.03] p-6 mb-10">
-                    <div className="flex items-center gap-3 mb-2 flex-wrap">
-                        <Layers size={20} className="text-yellow-400" />
+                <div className="rounded-3xl border border-yellow-400/20 bg-yellow-400/[0.03] mb-10 overflow-hidden">
+                    <button
+                        onClick={() => setAwaitingOpen((was) => !was)}
+                        className="w-full flex items-center gap-3 p-6 text-left hover:bg-white/[0.02] transition flex-wrap">
+                        <Layers size={20} className="text-yellow-400 shrink-0" />
                         <h2 className="text-2xl font-bold">Awaiting material</h2>
                         <span className="text-xs px-3 py-1 rounded-full bg-yellow-400/10 text-yellow-300">
                             {pendingTotal} {pendingTotal === 1 ? "module" : "modules"}
                         </span>
-                    </div>
 
+                        <ChevronRight size={18} className={`text-gray-600 shrink-0 ml-auto transition-transform ${
+                            awaitingOpen ? "rotate-90" : ""
+                        }`} />
+                    </button>
+
+                    {awaitingOpen && (
+                        <div className="px-6 pb-6">
                     <p className="text-sm text-gray-400 mb-6">
                         Modules with nothing on them yet. Generate them one at a
                         time - each takes a few minutes, and starting many at once
@@ -365,104 +434,8 @@ function MaterialLearningReview({ onChanged }) {
                             when this run has started.
                         </p>
                     )}
-                </div>
-            )}
-
-            {/* Start a run */}
-            <div className="rounded-3xl border border-white/10 bg-white/[0.03] p-6 mb-10">
-                <h2 className="text-2xl font-bold mb-6 flex items-center gap-2">
-                    <Play size={20} /> Generate for a module
-                </h2>
-
-                <div className="grid md:grid-cols-3 gap-4">
-                    <select value={roadmapId ?? ""}
-                        onChange={(e) => setRoadmapId(Number(e.target.value))}
-                        className="p-3 rounded-xl bg-black/30 border border-white/10 text-white">
-                        {/* A dropdown nests with optgroup rather than a second
-                            row, so a roadmap reads as belonging to its subject
-                            instead of sitting beside it as a peer.
-
-                            The subject is the group label and nothing more: it
-                            is a heading over Frontend and Backend with no
-                            modules of its own, so offering it here asked the
-                            AI to write material for a title. optgroup cannot
-                            nest, so the third level is indented instead. */}
-                        {roadmaps
-                            .filter((r) => !r.parent_roadmap_id)
-                            .map((subject) => {
-                                const paths = roadmaps.filter(
-                                    (r) => r.parent_roadmap_id === subject.id
-                                );
-
-                                if (paths.length === 0) return null;
-
-                                return (
-                                    <optgroup key={subject.id} label={subject.title}>
-                                        {paths.flatMap((path) => [
-                                            <option key={path.id} value={path.id}>
-                                                {path.title}
-                                            </option>,
-
-                                            ...roadmaps
-                                                .filter((r) => r.parent_roadmap_id === path.id)
-                                                .map((child) => (
-                                                    <option key={child.id} value={child.id}>
-                                                        {"  — "}{child.title}
-                                                    </option>
-                                                )),
-                                        ])}
-                                    </optgroup>
-                                );
-                            })}
-                    </select>
-
-                    <select value={versionId ?? ""}
-                        onChange={(e) => setVersionId(Number(e.target.value))}
-                        className="p-3 rounded-xl bg-black/30 border border-white/10 text-white">
-                        {versions.map((v) => (
-                            <option key={v.id} value={v.id}>
-                                v{v.version_number}{v.title ? ` · ${v.title}` : ""} ({v.status})
-                            </option>
-                        ))}
-                    </select>
-
-                    <select value={moduleId ?? ""}
-                        onChange={(e) => setModuleId(Number(e.target.value))}
-                        className="p-3 rounded-xl bg-black/30 border border-white/10 text-white">
-                        {modules.length === 0 && <option value="">No modules</option>}
-                        {modules.map((m) => (
-                            <option key={m.version_node_id} value={m.version_node_id}>
-                                {m.title}
-                            </option>
-                        ))}
-                    </select>
-                </div>
-
-                <button onClick={startRun} disabled={busy || !moduleId}
-                    className={`mt-6 font-bold px-8 py-3 rounded-xl transition ${
-                        busy || !moduleId
-                            ? "bg-gray-700 text-gray-400 cursor-not-allowed"
-                            : "bg-[#0097a7] text-black hover:scale-105"
-                    }`}>
-                    {busy ? "Working..." : "Generate Material"}
-                </button>
-            </div>
-
-            {/* What that module already has, correctable in place.
-                Generating material and fixing it used to be two screens with
-                a set of dropdowns each, so correcting what a run had just
-                written meant finding the same module a second time. The
-                module is already chosen above; this is what is on it. */}
-            {moduleId && (
-                <div className="rounded-3xl border border-white/10 bg-white/[0.03] p-8 mb-8">
-                    <div className="flex items-center gap-3 mb-6">
-                        <Pencil size={20} className="text-[#0097a7]" />
-                        <h2 className="text-2xl font-bold">
-                            What {modules.find((m) => m.version_node_id === moduleId)?.title ?? "this module"} has now
-                        </h2>
-                    </div>
-
-                    <ModuleMaterialEditor versionNodeId={moduleId} onChanged={onChanged} />
+                        </div>
+                    )}
                 </div>
             )}
 
