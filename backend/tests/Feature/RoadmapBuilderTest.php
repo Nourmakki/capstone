@@ -249,6 +249,50 @@ class RoadmapBuilderTest extends TestCase
     }
 
     /**
+     * A failed run is not offered as something to review.
+     *
+     * It produced nothing: there is no material to read, approve or commit,
+     * and it cannot be resumed. What it leaves behind is a module with no
+     * material, and that already shows up on the awaiting list - which says
+     * what to do about it rather than only that something once went wrong.
+     */
+    public function test_a_failed_run_leaves_the_review_list_and_the_module_stays_pending(): void
+    {
+        $run = $this->startRun();
+
+        Http::fake([self::THREAD => Http::response($this->readyBody(), 200)]);
+        Queue::fake();
+
+        $manager = $this->makeManager();
+
+        $this->actingAs($manager, 'sanctum')
+            ->postJson("/api/roadmap-builder-runs/{$run->id}/commit")
+            ->assertOk();
+
+        $module = VersionNode::whereHas('node', fn ($q) => $q->where('title', 'Web Fundamentals'))
+            ->firstOrFail();
+
+        \App\Models\NodeLearningWorkflow::create([
+            'version_node_id' => $module->id,
+            'thread_id'       => 'learn-failed',
+            'status'          => 'failed',
+        ]);
+
+        $this->actingAs($manager, 'sanctum')
+            ->getJson('/api/learning-runs')
+            ->assertOk()
+            ->assertJsonCount(0, 'runs');
+
+        // And the module it failed on is still waiting to be written.
+        $titles = collect(
+            $this->actingAs($manager, 'sanctum')
+                ->getJson('/api/modules-awaiting-material')->json('groups')
+        )->flatMap(fn ($g) => collect($g['modules'])->pluck('title'))->all();
+
+        $this->assertContains('Web Fundamentals', $titles);
+    }
+
+    /**
      * A module drops off the list once its run is under way.
      *
      * Otherwise it stays there looking unstarted, and the obvious thing to do

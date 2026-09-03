@@ -21,9 +21,23 @@ class LearningWorkflowController extends Controller
     ) {
     }
 
+    /**
+     * Runs a manager can still do something with.
+     *
+     * A failed run is not one of them: it produced nothing, there is nothing
+     * to read, approve or commit, and it cannot be resumed. Left in the list
+     * it was a row that answered no question, and the ones from a bad
+     * afternoon sat at the top for ever.
+     *
+     * Nothing is hidden by dropping them. A run that failed left its module
+     * with no material, so the module is back on the Awaiting material list
+     * above - which is the actionable version of the same fact, and says what
+     * to do about it rather than only that something once went wrong.
+     */
     public function index(): JsonResponse
     {
         $runs = NodeLearningWorkflow::with('versionNode.node', 'versionNode.roadmapVersion.roadmap')
+            ->where('status', '!=', 'failed')
             ->orderByDesc('created_at')
             ->get()
             ->map(fn ($w) => [
