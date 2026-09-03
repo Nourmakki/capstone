@@ -5,6 +5,7 @@ namespace Tests\Feature;
 use App\Models\Project;
 use App\Models\Quiz;
 use App\Models\QuizQuestion;
+use App\Models\Roadmap;
 use App\Models\User;
 use App\Models\VersionNode;
 use Illuminate\Foundation\Testing\RefreshDatabase;
@@ -532,5 +533,51 @@ class MaterialAuthoringTest extends TestCase
             ->getJson('/api/material/pending')
             ->assertStatus(200)
             ->assertJsonPath('quizzes.0.change_note', '1 question edited.');
+    }
+
+    /**
+     * Every pending item says where it belongs, so the queue can file it.
+     *
+     * Without this the queue is six flat lists by type, and a committed
+     * subject arrives as seventeen rows with nothing saying they are one
+     * tree. The subject is what the folders are keyed on.
+     */
+    public function test_the_queue_says_where_each_item_belongs(): void
+    {
+        $this->approvedQuiz();
+
+        $this->putQuiz(Quiz::sole(), 'Basics Quiz', [
+            $this->fourOptions('Reworded', 'Networking', QuizQuestion::sole()->id),
+        ])->assertStatus(200);
+
+        $this->actingAs($this->manager, 'sanctum')
+            ->getJson('/api/material/pending')
+            ->assertStatus(200)
+            // Walked up from the module's roadmap to the subject above it.
+            ->assertJsonPath('quizzes.0.subject', 'Test Subject')
+            ->assertJsonPath('quizzes.0.roadmap', 'Test Roadmap')
+            ->assertJsonPath('quizzes.0.module', 'Basics');
+    }
+
+    /** A roadmap three deep still files under the subject at the top. */
+    public function test_a_nested_roadmap_files_under_its_top_level_subject(): void
+    {
+        $subject = Roadmap::whereNull('parent_roadmap_id')->sole();
+        $path    = Roadmap::where('title', 'Test Roadmap')->sole();
+
+        // subject -> Test Roadmap -> React, the depth the builder produces.
+        Roadmap::create([
+            'title'             => 'React',
+            'description'       => 'Two levels below the subject.',
+            'review_status'     => 'pending',
+            'parent_roadmap_id' => $path->id,
+        ]);
+
+        $this->actingAs($this->manager, 'sanctum')
+            ->getJson('/api/material/pending')
+            ->assertStatus(200)
+            ->assertJsonPath('roadmaps.0.title', 'React')
+            ->assertJsonPath('roadmaps.0.subject', $subject->title)
+            ->assertJsonPath('roadmaps.0.roadmap', 'React');
     }
 }

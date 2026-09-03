@@ -48,23 +48,77 @@ class MaterialController extends Controller
     }
 
     /**
-     * Everything awaiting review, grouped by type.
+     * The subject a roadmap sits under, whatever its depth.
+     *
+     * Roadmaps nest up to three deep - Mobile Development holds Android
+     * Development holds Kotlin - and the queue files everything under the
+     * subject at the top, so one committed build reads as one folder rather
+     * than as seventeen unrelated rows. A subject passed in is its own
+     * answer; walking stops there.
+     */
+    private function subjectOf(?Roadmap $roadmap): ?string
+    {
+        if (! $roadmap) {
+            return null;
+        }
+
+        // Bounded rather than while(true): a parent cycle in the data would
+        // otherwise hang the request, and three is the depth the builder can
+        // produce.
+        for ($i = 0; $i < 5 && $roadmap->parent; $i++) {
+            $roadmap = $roadmap->parent;
+        }
+
+        return $roadmap->title;
+    }
+
+    /**
+     * Where a piece of material lives: its module, roadmap and subject.
+     *
+     * One helper for all four material types, because they hang off a
+     * version node the same way and four copies of this would drift.
+     */
+    private function placeOf($item): array
+    {
+        $node    = $item->versionNode;
+        $roadmap = $node->roadmapVersion->roadmap ?? null;
+
+        return [
+            'subject' => $this->subjectOf($roadmap),
+            'roadmap' => $roadmap->title ?? null,
+            'module'  => $node->node->title ?? null,
+        ];
+    }
+
+    /**
+     * Everything awaiting review, with where it belongs.
+     *
+     * Still keyed by type - that is what decides which endpoint approves an
+     * item - but every entry now carries the subject, roadmap and module it
+     * came from, so the queue can file them into folders. A manager reviewing
+     * a newly built subject is looking at one tree, not a flat list of
+     * roadmaps, versions and material that happen to be pending together.
      */
     public function pending()
     {
         return response()->json([
             'roadmaps' => Roadmap::pendingReview()
+                ->with('parent.parent.parent')
                 ->orderBy('created_at')
                 ->get()
                 ->map(fn ($r) => [
                     'id'          => $r->id,
                     'title'       => $r->title,
                     'description' => $r->description,
+                    // A subject awaiting review is its own folder; anything
+                    // deeper files under the subject above it.
+                    'subject'     => $this->subjectOf($r),
+                    'roadmap'     => $r->title,
                     'created_at'  => $r->created_at,
                 ]),
 
             'roadmap_versions' => RoadmapVersion::pendingReview()
-                ->with('roadmap')
+                ->with('roadmap.parent.parent.parent')
                 ->withCount('versionNodes')
                 ->orderBy('created_at')
                 ->get()
@@ -74,11 +128,13 @@ class MaterialController extends Controller
                     'description'    => $v->version_nodes_count . ' modules · currently ' . $v->status,
                     'roadmap_id'     => $v->roadmap_id,
                     'version_number' => $v->version_number,
+                    'subject'        => $this->subjectOf($v->roadmap),
+                    'roadmap'        => $v->roadmap->title ?? null,
                     'created_at'     => $v->created_at,
                 ]),
 
             'tutorials' => Tutorial::pendingReview()
-                ->with('versionNode.node')
+                ->with('versionNode.node', 'versionNode.roadmapVersion.roadmap.parent.parent.parent')
                 ->orderBy('created_at')
                 ->get()
                 ->map(fn ($t) => [
@@ -90,10 +146,10 @@ class MaterialController extends Controller
                     'topic'       => $t->versionNode->node->title ?? null,
                     'change_note' => $t->change_note,
                     'created_at'  => $t->created_at,
-                ]),
+                ] + $this->placeOf($t)),
 
             'external_resources' => ExternalResources::pendingReview()
-                ->with('versionNode.node')
+                ->with('versionNode.node', 'versionNode.roadmapVersion.roadmap.parent.parent.parent')
                 ->orderBy('created_at')
                 ->get()
                 ->map(fn ($r) => [
@@ -103,10 +159,10 @@ class MaterialController extends Controller
                     'url'         => $r->url,
                     'topic'       => $r->versionNode->node->title ?? null,
                     'created_at'  => $r->created_at,
-                ]),
+                ] + $this->placeOf($r)),
 
             'quizzes' => Quiz::pendingReview()
-                ->with('versionNode.node', 'questions')
+                ->with('versionNode.node', 'questions', 'versionNode.roadmapVersion.roadmap.parent.parent.parent')
                 ->orderBy('created_at')
                 ->get()
                 ->map(fn ($q) => [
@@ -123,10 +179,10 @@ class MaterialController extends Controller
                     ]),
                     'change_note' => $q->change_note,
                     'created_at'  => $q->created_at,
-                ]),
+                ] + $this->placeOf($q)),
 
             'projects' => Project::pendingReview()
-                ->with('versionNode.node')
+                ->with('versionNode.node', 'versionNode.roadmapVersion.roadmap.parent.parent.parent')
                 ->orderBy('created_at')
                 ->get()
                 ->map(fn ($p) => [
@@ -138,7 +194,7 @@ class MaterialController extends Controller
                     'topic'       => $p->versionNode->node->title ?? null,
                     'change_note' => $p->change_note,
                     'created_at'  => $p->created_at,
-                ]),
+                ] + $this->placeOf($p)),
         ]);
     }
 
