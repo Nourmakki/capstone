@@ -39,6 +39,9 @@ class AiLearningCommitService
         'github_repository'      => 'article',
     ];
 
+    /**
+     * @throws RuntimeException when the run carries nothing this can write
+     */
     public function commit(NodeLearningWorkflow $workflow, array $data): array
     {
         $versionNode = $workflow->versionNode;
@@ -56,12 +59,73 @@ class AiLearningCommitService
             ];
         });
 
+        // A commit that wrote nothing is a failure, and it used to be reported
+        // as a success: every mapper below returns 0 for a shape it does not
+        // recognise, so a payload that had changed - a renamed status, a
+        // missing key - committed four zeros, marked the run done, and
+        // answered "Material added to the module". The manager then went
+        // looking for material that was never written, with the run now
+        // marked committed so it could not be retried.
+        //
+        // Said out loud instead, with what the run actually contained, and
+        // the run left uncommitted so it can be committed again once the
+        // cause is fixed.
+        if (array_sum($created) === 0) {
+            throw new RuntimeException(
+                'Nothing could be taken from this run: ' . $this->explainEmpty($data)
+                . ' The run has been left open, so it can be committed again once that is resolved.'
+            );
+        }
+
         $workflow->update([
             'status'       => 'committed',
             'committed_at' => now(),
         ]);
 
         return $created;
+    }
+
+    /**
+     * Why a run yielded nothing, in terms of what it held.
+     *
+     * Guessing is worse than useless here - the manager needs to know whether
+     * the AI produced nothing or whether we failed to read what it produced.
+     */
+    private function explainEmpty(array $data): string
+    {
+        if ($data === []) {
+            return 'it carried no results at all.';
+        }
+
+        $notes = [];
+
+        $tutorial = $data['tutorial_result'] ?? null;
+
+        if (! $tutorial) {
+            $notes[] = 'no tutorial result';
+        } elseif (($tutorial['status'] ?? null) !== 'ready') {
+            // The one status this service reads. Her schema allows "ready" and
+            // "learning_failed"; anything else means her wording moved.
+            $notes[] = 'the tutorial reports status "' . ($tutorial['status'] ?? 'none') . '"';
+        } elseif (empty($tutorial['tutorial'])) {
+            $notes[] = 'the tutorial result holds no video';
+        }
+
+        if (empty($data['quiz_result']['questions'] ?? [])) {
+            $notes[] = 'no quiz questions';
+        }
+
+        if (empty($data['project_result']['title'] ?? null)) {
+            $notes[] = 'no project';
+        }
+
+        if (empty($data['external_resources_result']['resources'] ?? [])) {
+            $notes[] = 'no external resources';
+        }
+
+        return $notes === []
+            ? 'its results were present but empty.'
+            : implode(', ', $notes) . '.';
     }
 
     private function commitTutorial(VersionNode $versionNode, ?array $result): int

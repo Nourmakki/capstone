@@ -198,10 +198,29 @@ function MaterialLearningReview({ onChanged }) {
             const response = await api.post(`/learning-runs/${selected.id}/commit`);
             const c = response.data.created;
 
+            // Named parts rather than a row of counts, and anything the run
+            // did not carry is called out - a run can legitimately arrive
+            // without a tutorial, and "0 tutorial" buried in a list was easy
+            // to read straight past.
+            const parts = [
+                [c.tutorial, "tutorial", "tutorials"],
+                [c.quiz, "quiz question", "quiz questions"],
+                [c.project, "project", "projects"],
+                [c.resources, "resource", "resources"],
+            ];
+
+            const written = parts.filter(([n]) => n > 0)
+                .map(([n, one, many]) => `${n} ${n === 1 ? one : many}`);
+
+            const missing = parts.filter(([n]) => n === 0)
+                .map(([, , many]) => many);
+
             alert(
                 `${response.data.message}\n\n`
-                + `${c.tutorial} tutorial, ${c.quiz} quiz questions, `
-                + `${c.project} project, ${c.resources} resources.`
+                + `Written: ${written.join(", ")}.`
+                + (missing.length ? `\nThis run carried no ${missing.join(", ")}.` : "")
+                + "\n\nIt is pending, so students cannot see it yet - approve it "
+                + "in the Content Queue, under this module's roadmap."
             );
 
             await Promise.all([loadRuns(), loadPending()]);
