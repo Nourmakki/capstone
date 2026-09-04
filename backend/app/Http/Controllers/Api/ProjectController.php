@@ -4,6 +4,7 @@ namespace App\Http\Controllers\Api;
 
 use App\Http\Controllers\Controller;
 use App\Http\Requests\SubmitProjectRequest;
+use App\Jobs\AssessSubmission;
 use App\Models\HumanReviewRequest;
 use App\Models\Project;
 use App\Models\Student;
@@ -65,8 +66,15 @@ class ProjectController extends Controller
             'status'      => 'submitted',
         ]);
 
+        // Handing work in is what starts the grading. Queued, because her
+        // assessment clones the repository and reads the files before it
+        // answers - up to ten minutes, which is not a thing to make a student
+        // wait through. Dispatched after the row is written, so a queue that
+        // is not running leaves the submission intact and merely ungraded.
+        AssessSubmission::dispatch($submission->id);
+
         return response()->json([
-            'message'    => 'Project submitted.',
+            'message'    => 'Project submitted. It is being graded.',
             'submission' => $this->submissionPayload($submission),
         ], 201);
     }

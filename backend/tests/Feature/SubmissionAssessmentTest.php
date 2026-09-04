@@ -2,6 +2,7 @@
 
 namespace Tests\Feature;
 
+use App\Jobs\AssessSubmission;
 use App\Models\NodeLearningWorkflow;
 use App\Models\Project;
 use App\Models\Submission;
@@ -9,6 +10,7 @@ use App\Models\VersionNode;
 use Illuminate\Foundation\Testing\RefreshDatabase;
 use Illuminate\Http\UploadedFile;
 use Illuminate\Support\Facades\Http;
+use Illuminate\Support\Facades\Queue;
 use Illuminate\Support\Facades\Storage;
 use Tests\Concerns\BuildsPlatform;
 use Tests\TestCase;
@@ -359,6 +361,100 @@ class SubmissionAssessmentTest extends TestCase
         $this->actingAs($this->makeProfessor(), 'sanctum')
             ->getJson("/api/submissions/{$submission->id}/assessment")
             ->assertStatus(404);
+    }
+
+    // -----------------------------------------------------------------
+    // Handing work in is what starts the grading
+    // -----------------------------------------------------------------
+
+    /**
+     * A student submitting is the trigger.
+     *
+     * Before this, assessment only ran when a professor pressed a button, so
+     * a submission sat ungraded until somebody remembered it - and nobody
+     * did: four submissions, none with a score.
+     */
+    public function test_submitting_a_project_queues_its_assessment(): void
+    {
+        Queue::fake();
+
+        $existing = $this->makeSubmission();
+        $project  = $existing->project;
+        $student  = \App\Models\User::whereHas('student', fn ($q) => $q->whereKey($existing->student_id))->firstOrFail();
+
+        $response = $this->actingAs($student, 'sanctum')
+            ->postJson("/api/projects/{$project->id}/submit", [
+                'github_url' => 'https://github.com/someone/new-work',
+            ])
+            ->assertCreated();
+
+        $submitted = Submission::findOrFail($response->json('submission.id'));
+
+        Queue::assertPushed(
+            AssessSubmission::class,
+            fn ($job) => $job->submissionId === $submitted->id
+        );
+    }
+
+    /**
+     * Grading is queued, never done inside the request.
+     *
+     * Her assessment clones the repository and reads the files - up to ten
+     * minutes - and a student must not sit through that to find out their
+     * work was received.
+     */
+    public function test_submitting_does_not_call_the_ai_service_inline(): void
+    {
+        Queue::fake();
+        Http::preventStrayRequests();
+
+        $existing = $this->makeSubmission();
+        $student  = \App\Models\User::whereHas('student', fn ($q) => $q->whereKey($existing->student_id))->firstOrFail();
+
+        // preventStrayRequests turns any outbound call into a failure, so
+        // this passing is the assertion.
+        $this->actingAs($student, 'sanctum')
+            ->postJson("/api/projects/{$existing->project->id}/submit", [
+                'github_url' => 'https://github.com/someone/new-work',
+            ])
+            ->assertCreated();
+    }
+
+    /**
+     * A module with no learning material has nothing to grade against, and
+     * that must not cost the student their submission.
+     */
+    public function test_a_submission_survives_an_assessment_it_cannot_run(): void
+    {
+        Http::preventStrayRequests();
+
+        // No learning run on this module, so the service refuses before it
+        // reaches the network.
+        $submission = $this->makeSubmission(withWorkflow: false);
+
+        (new AssessSubmission($submission->id))
+            ->handle(app(\App\Services\AiSubmissionAssessmentService::class));
+
+        $submission->refresh();
+
+        $this->assertSame('submitted', $submission->status);
+        $this->assertNull($submission->ai_score);
+    }
+
+    /** A submission a professor already marked is left alone. */
+    public function test_a_human_reviewed_submission_is_not_regraded(): void
+    {
+        Http::preventStrayRequests();
+
+        $submission = $this->makeSubmission(['status' => 'human_reviewed', 'score' => 91]);
+
+        (new AssessSubmission($submission->id))
+            ->handle(app(\App\Services\AiSubmissionAssessmentService::class));
+
+        $submission->refresh();
+
+        $this->assertSame('human_reviewed', $submission->status);
+        $this->assertSame(91, $submission->score);
     }
 
     /** Pull the multipart fields back out of a faked request. */
