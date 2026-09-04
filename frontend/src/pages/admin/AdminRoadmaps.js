@@ -47,6 +47,11 @@ function AdminRoadmaps({ onChanged }) {
     const [packageEdits, setPackageEdits] = useState(null);
     const [savingPackage, setSavingPackage] = useState(false);
 
+    // The scope being hand-edited - which roadmaps belong under the subject.
+    // Held apart from packageEdits because the two are different stages and
+    // are never open at the same time.
+    const [scopeEdits, setScopeEdits] = useState(null);
+
     // --- browsing ----------------------------------------------------
     const [roadmaps, setRoadmaps] = useState([]);
     const [selectedId, setSelectedId] = useState(null);
@@ -112,12 +117,14 @@ function AdminRoadmaps({ onChanged }) {
             setOpenRun(null);
             setProposal(null);
             setPackageEdits(null);
+            setScopeEdits(null);
             return;
         }
 
         setOpenRun(run.id);
         setProposal(null);
         setPackageEdits(null);
+        setScopeEdits(null);
         setLoadingProposal(true);
 
         try {
@@ -143,6 +150,7 @@ function AdminRoadmaps({ onChanged }) {
     const resumeRun = async (run, action) => {
         setWorking({ id: run.id, action });
         setPackageEdits(null);
+        setScopeEdits(null);
 
         try {
             await api.post(`/roadmap-builder-runs/${run.id}/resume`, { action });
@@ -404,6 +412,136 @@ function AdminRoadmaps({ onChanged }) {
     };
 
     // -----------------------------------------------------------------
+    // Hand-editing the scope: which roadmaps belong under the subject
+    // -----------------------------------------------------------------
+
+    /**
+     * Her scope model, rebuilt field by field like the package one.
+     *
+     * is_broad_topic is derived rather than carried over. Her validator ties
+     * it to the count - broad demands two paths or more, not broad demands
+     * exactly one - so keeping the flag she sent would make deleting down to
+     * one path, or adding a second, produce a payload she refuses. Deriving
+     * it also matches what the flag means: a subject with one roadmap under
+     * it is a roadmap, not a heading.
+     */
+    const sanitizeScope = (scope) => ({
+        input_topic: scope.input_topic,
+        is_broad_topic: (scope.paths ?? []).length > 1,
+        scope_summary: scope.scope_summary,
+        // Renumbered on the way out: her ids have to run 1..N with no gaps,
+        // which a delete anywhere but the end would otherwise break.
+        paths: (scope.paths ?? []).map((p, i) => ({
+            path_id: i + 1,
+            title: p.title,
+            description: p.description,
+        })),
+    });
+
+    const startEditingScope = (scope) => setScopeEdits(sanitizeScope(scope));
+    const cancelEditingScope = () => setScopeEdits(null);
+
+    const addPath = (draft) => setScopeEdits((scope) => ({
+        ...scope,
+        paths: [...scope.paths, {
+            path_id: scope.paths.length + 1,
+            title: draft.title,
+            description: draft.description,
+        }],
+    }));
+
+    const editPath = (pathId, draft) => setScopeEdits((scope) => ({
+        ...scope,
+        paths: scope.paths.map((p) => (p.path_id !== pathId ? p : {
+            ...p,
+            title: draft.title,
+            description: draft.description,
+        })),
+    }));
+
+    /** Renumbered on removal, since her ids must stay 1..N. */
+    const deletePath = (pathId) => setScopeEdits((scope) => {
+        if (scope.paths.length <= 1) {
+            alert("A subject needs at least one roadmap under it.");
+            return scope;
+        }
+
+        return {
+            ...scope,
+            paths: scope.paths
+                .filter((p) => p.path_id !== pathId)
+                .map((p, i) => ({ ...p, path_id: i + 1 })),
+        };
+    });
+
+    const saveScopeEdits = async (run) => {
+        setSavingPackage(true);
+
+        try {
+            await api.post(`/roadmap-builder-runs/${run.id}/resume`, {
+                action: "edit",
+                stage: "scope",
+                data: sanitizeScope(scopeEdits),
+            });
+
+            setScopeEdits(null);
+            await loadRuns();
+
+            const response = await api.get(`/roadmap-builder-runs/${run.id}`);
+            setProposal(response.data);
+        } catch (err) {
+            fail(err);
+        } finally {
+            setSavingPackage(false);
+        }
+    };
+
+    /**
+     * Ask the AI for another go at one stage.
+     *
+     * Her validator requires feedback on a regenerate and refuses data, so
+     * this is the one decision that cannot be sent from a button alone -
+     * without a reason the next attempt has no more to go on than the last.
+     *
+     * Long, like an approve: she rewrites the whole stage before answering.
+     */
+    const regenerate = async (run, stage) => {
+        const reason = window.prompt(
+            stage === "scope"
+                ? "What should be different about the roadmaps proposed?"
+                : "What should be different about this roadmap?"
+        );
+
+        if (reason === null) return;
+
+        if (!reason.trim()) {
+            alert("Tell the AI what to change - a regenerate without a reason repeats itself.");
+            return;
+        }
+
+        setWorking({ id: run.id, action: "regenerate" });
+        setScopeEdits(null);
+        setPackageEdits(null);
+
+        try {
+            await api.post(`/roadmap-builder-runs/${run.id}/resume`, {
+                action: "regenerate",
+                stage,
+                feedback: reason.trim(),
+            });
+
+            await loadRuns();
+
+            const response = await api.get(`/roadmap-builder-runs/${run.id}`);
+            setProposal(response.data);
+        } catch (err) {
+            fail(err);
+        } finally {
+            setWorking(null);
+        }
+    };
+
+    // -----------------------------------------------------------------
     // Browsing what exists
     // -----------------------------------------------------------------
 
@@ -540,23 +678,81 @@ function AdminRoadmaps({ onChanged }) {
         // Stage one: which roadmaps belong under the subject.
         if (detail.review_stage === "scope_review" && data.scope_result) {
             const scope = data.scope_result;
+            const editing = scopeEdits;
+            const shown = editing ?? scope;
+            const open = run?.status === "awaiting_review";
 
             return (
                 <div>
-                    <h4 className="text-sm font-semibold mb-1">
-                        Proposed roadmaps under {scope.input_topic}
-                    </h4>
+                    <div className="flex items-center gap-2 mb-1 flex-wrap">
+                        <h4 className="text-sm font-semibold">
+                            Proposed roadmaps under {scope.input_topic}
+                        </h4>
+
+                        {open && !editing && (
+                            <span className="ml-auto flex items-center gap-2">
+                                <button type="button" onClick={() => startEditingScope(scope)}
+                                    className="flex items-center gap-1.5 text-xs px-3 py-1 rounded-full border border-[#0097a7]/30 text-[#0097a7] hover:bg-[#0097a7]/10 transition">
+                                    <Pencil size={11} /> Edit these roadmaps
+                                </button>
+
+                                <button type="button" onClick={() => regenerate(run, "scope")}
+                                    disabled={!!working}
+                                    className="flex items-center gap-1.5 text-xs px-3 py-1 rounded-full border border-white/10 text-gray-400 hover:border-white/20 transition disabled:opacity-40">
+                                    <RefreshCw size={11} /> Ask for different ones
+                                </button>
+                            </span>
+                        )}
+                    </div>
+
                     <p className="text-xs text-gray-500 mb-3">{scope.scope_summary}</p>
 
                     <div className="space-y-2">
-                        {(scope.paths ?? []).map((p) => (
+                        {(shown.paths ?? []).map((p) => (
                             <div key={p.path_id}
                                  className="rounded-xl border border-white/10 bg-black/20 p-3">
-                                <span className="text-sm font-medium">{p.title}</span>
-                                <p className="text-xs text-gray-500 mt-1">{p.description}</p>
+                                {editing ? (
+                                    <EditPathForm
+                                        path={p}
+                                        canDelete={shown.paths.length > 1}
+                                        onSave={(draft) => editPath(p.path_id, draft)}
+                                        onDelete={() => deletePath(p.path_id)}
+                                    />
+                                ) : (
+                                    <>
+                                        <span className="text-sm font-medium">{p.title}</span>
+                                        <p className="text-xs text-gray-500 mt-1">{p.description}</p>
+                                    </>
+                                )}
                             </div>
                         ))}
                     </div>
+
+                    {editing && (
+                        <>
+                            <AddPathForm onAdd={addPath} />
+
+                            {/* Her scope model ties this to the count, so it
+                                follows the list rather than being a choice. */}
+                            <p className="text-xs text-gray-600 mt-3">
+                                {shown.paths.length === 1
+                                    ? "One roadmap, so this is a subject with a single path under it."
+                                    : `${shown.paths.length} roadmaps under this subject.`}
+                            </p>
+
+                            <div className="flex flex-wrap gap-3 mt-3">
+                                <button type="button" onClick={() => saveScopeEdits(run)} disabled={savingPackage}
+                                    className="px-5 py-2.5 rounded-xl bg-[#0097a7] text-black font-semibold text-sm hover:scale-[1.02] transition disabled:opacity-50">
+                                    {savingPackage ? "Saving..." : "Save changes"}
+                                </button>
+
+                                <button type="button" onClick={cancelEditingScope} disabled={savingPackage}
+                                    className="px-5 py-2.5 rounded-xl border border-white/10 text-gray-300 text-sm disabled:opacity-50">
+                                    Cancel
+                                </button>
+                            </div>
+                        </>
+                    )}
                 </div>
             );
         }
@@ -609,10 +805,22 @@ function AdminRoadmaps({ onChanged }) {
                                 still open - once the run has moved on, this
                                 package is history, not the one waiting. */}
                             {run?.status === "awaiting_review" && !packageEdits && (
-                                <button type="button" onClick={() => startEditingPackage(pkg)}
-                                    className="ml-auto flex items-center gap-1.5 text-xs px-3 py-1 rounded-full border border-[#0097a7]/30 text-[#0097a7] hover:bg-[#0097a7]/10 transition">
-                                    <Pencil size={11} /> Edit these modules
-                                </button>
+                                <span className="ml-auto flex items-center gap-2">
+                                    <button type="button" onClick={() => startEditingPackage(pkg)}
+                                        className="flex items-center gap-1.5 text-xs px-3 py-1 rounded-full border border-[#0097a7]/30 text-[#0097a7] hover:bg-[#0097a7]/10 transition">
+                                        <Pencil size={11} /> Edit these modules
+                                    </button>
+
+                                    {/* When the modules are wrong enough that
+                                        rewording them is not the fix. Costs a
+                                        full rewrite of this roadmap, so it sits
+                                        beside editing rather than instead. */}
+                                    <button type="button" onClick={() => regenerate(run, "roadmap")}
+                                        disabled={!!working}
+                                        className="flex items-center gap-1.5 text-xs px-3 py-1 rounded-full border border-white/10 text-gray-400 hover:border-white/20 transition disabled:opacity-40">
+                                        <RefreshCw size={11} /> Write it again
+                                    </button>
+                                </span>
                             )}
                         </div>
 
@@ -1109,6 +1317,117 @@ function AdminRoadmaps({ onChanged }) {
  * and once editing a module writes to the page's state, a single keystroke
  * would re-render the parent and take the focus out of the field.
  */
+/**
+ * One roadmap in the scope, open for rewording or removal.
+ *
+ * Always open rather than behind a pencil: the scope is a handful of lines,
+ * and a manager who has pressed "edit these roadmaps" is there to change
+ * them. The nodes editor hides behind a pencil because a roadmap can hold
+ * twenty modules and twenty open forms is a wall.
+ */
+function EditPathForm({ path, canDelete, onSave, onDelete }) {
+    const [title, setTitle] = useState(path.title);
+    const [description, setDescription] = useState(path.description);
+
+    // Written straight through on change. The scope is small enough that a
+    // save button per row would be more ceremony than the edit is worth, and
+    // the whole scope is only sent when Save changes is pressed anyway.
+    const push = (next) => onSave({
+        title: next.title ?? title,
+        description: next.description ?? description,
+    });
+
+    return (
+        <div className="space-y-2">
+            <div className="flex items-center gap-2">
+                <span className="text-xs text-gray-600">{path.path_id}</span>
+
+                <input
+                    value={title}
+                    onChange={(e) => { setTitle(e.target.value); push({ title: e.target.value }); }}
+                    placeholder="Roadmap title"
+                    className="flex-1 p-2 rounded-lg bg-black/40 border border-white/10 text-white text-sm font-medium"
+                />
+
+                <button type="button"
+                    onClick={onDelete}
+                    disabled={!canDelete}
+                    title={canDelete
+                        ? "Remove this roadmap"
+                        : "A subject needs at least one roadmap under it"}
+                    className="p-2 rounded-lg border border-red-400/20 text-red-400 hover:bg-red-400/10 transition shrink-0 disabled:opacity-30 disabled:hover:bg-transparent">
+                    <Trash2 size={14} />
+                </button>
+            </div>
+
+            <textarea
+                value={description}
+                onChange={(e) => { setDescription(e.target.value); push({ description: e.target.value }); }}
+                rows={2}
+                placeholder="What this roadmap covers"
+                className="w-full p-2 rounded-lg bg-black/40 border border-white/10 text-white text-xs"
+            />
+        </div>
+    );
+}
+
+
+/** A roadmap the AI did not think of, added to the scope. */
+function AddPathForm({ onAdd }) {
+    const [adding, setAdding] = useState(false);
+    const [title, setTitle] = useState("");
+    const [description, setDescription] = useState("");
+
+    const canAdd = title.trim().length > 0 && description.trim().length > 0;
+
+    if (!adding) {
+        return (
+            <button type="button" onClick={() => setAdding(true)}
+                className="mt-3 flex items-center gap-1.5 text-xs text-[#00b0c2] hover:text-[#0097a7] transition">
+                <Plus size={12} /> Add a roadmap
+            </button>
+        );
+    }
+
+    return (
+        <div className="mt-3 rounded-xl border border-[#0097a7]/20 bg-[#0097a7]/5 p-3 space-y-2">
+            <input
+                value={title}
+                onChange={(e) => setTitle(e.target.value)}
+                placeholder="Roadmap title"
+                className="w-full p-2 rounded-lg bg-black/40 border border-white/10 text-white text-sm"
+            />
+
+            <textarea
+                value={description}
+                onChange={(e) => setDescription(e.target.value)}
+                rows={2}
+                placeholder="What this roadmap covers"
+                className="w-full p-2 rounded-lg bg-black/40 border border-white/10 text-white text-xs"
+            />
+
+            <div className="flex gap-2 pt-1">
+                <button type="button" disabled={!canAdd}
+                    onClick={() => {
+                        onAdd({ title: title.trim(), description: description.trim() });
+                        setTitle("");
+                        setDescription("");
+                        setAdding(false);
+                    }}
+                    className="px-4 py-2 rounded-lg bg-[#0097a7] text-black text-xs font-semibold disabled:bg-gray-700 disabled:text-gray-400 transition">
+                    Add roadmap
+                </button>
+
+                <button type="button" onClick={() => setAdding(false)}
+                    className="px-4 py-2 rounded-lg border border-white/10 text-gray-300 text-xs">
+                    Cancel
+                </button>
+            </div>
+        </div>
+    );
+}
+
+
 function ProposedRoadmap({ result, heading, onDeleteNode, onAddNode, onEditNode }) {
     const editable = !!onDeleteNode;
 
