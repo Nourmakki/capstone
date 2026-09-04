@@ -363,8 +363,21 @@ function LearningPage() {
                                     label="Tutorials"
                                     done={detail.tutorials.every((t) => t.completed)}
                                 />
-                                <StatusRow label="Quiz" done={detail.quizzes.length > 0} />
-                                <StatusRow label="Project" done={detail.projects.length > 0} />
+                                {/* Passed and handed in, not "one exists".
+                                    These read the module's contents before,
+                                    so a quiz ticked itself the moment a
+                                    manager approved one and told a student
+                                    they had passed something they had never
+                                    opened. Same test the blockers below use,
+                                    and an empty list is nothing outstanding. */}
+                                <StatusRow
+                                    label="Quiz"
+                                    done={detail.quizzes.every((q) => q.passed)}
+                                />
+                                <StatusRow
+                                    label="Project"
+                                    done={detail.projects.every((p) => p.submitted)}
+                                />
                                 <StatusRow label="Prerequisites" done={detail.is_unlocked} />
                             </div>
 

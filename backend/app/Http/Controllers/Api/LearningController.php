@@ -5,6 +5,7 @@ namespace App\Http\Controllers\Api;
 use App\Http\Controllers\Controller;
 use App\Models\RoadmapVersion;
 use App\Models\Student;
+use App\Models\Submission;
 use App\Models\UserRoadmapProgress;
 use App\Models\VersionEdge;
 use App\Models\VersionNode;
@@ -80,8 +81,8 @@ class LearningController extends Controller
                 'version_number' => $versionNode->roadmapVersion->version_number,
             ],
             'tutorials'          => $this->tutorialsWithProgress($request, $versionNode),
-            'quizzes'            => $versionNode->quizzes,
-            'projects'           => $versionNode->projects,
+            'quizzes'            => $this->quizzesWithProgress($request, $versionNode),
+            'projects'           => $this->projectsWithProgress($request, $versionNode),
             'external_resources' => $versionNode->externalResources,
             'prerequisites'      => $prerequisites,
             'is_completed'       => in_array($versionNode->node_id, $completed, true),
@@ -221,6 +222,61 @@ class LearningController extends Controller
      * Staff have no student record; for them nothing is marked, and the page
      * shows the tutorials without progress rather than failing.
      */
+    /**
+     * Each quiz on this module, and whether this student has passed it.
+     *
+     * The page had nothing to go on and fell back to "a quiz exists", which
+     * ticked the moment a manager approved one - telling a student they had
+     * passed a quiz they had never opened. Passing is the same test
+     * completionBlockers applies, so the tick and the list of what is left
+     * cannot contradict each other.
+     */
+    private function quizzesWithProgress(Request $request, VersionNode $versionNode)
+    {
+        $student = Student::where('user_id', $request->user()->id)->first();
+
+        return $versionNode->quizzes->map(function ($quiz) use ($student) {
+            $best = $student
+                ? Submission::where('quiz_id', $quiz->id)
+                    ->where('student_id', $student->id)
+                    ->max('score')
+                : null;
+
+            return $quiz->toArray() + [
+                'attempted'  => $best !== null,
+                'best_score' => $best,
+                'pass_mark'  => QuizController::PASS_MARK,
+                'passed'     => $best !== null && $best >= QuizController::PASS_MARK,
+            ];
+        });
+    }
+
+    /**
+     * Each project, and whether this student has handed anything in.
+     *
+     * Submitting is the bar, not being graded - completionBlockers asks only
+     * that something was handed in, and a tick that waited for a score would
+     * leave a student unable to finish a module until somebody marked it.
+     */
+    private function projectsWithProgress(Request $request, VersionNode $versionNode)
+    {
+        $student = Student::where('user_id', $request->user()->id)->first();
+
+        return $versionNode->projects->map(function ($project) use ($student) {
+            $submission = $student
+                ? Submission::where('project_id', $project->id)
+                    ->where('student_id', $student->id)
+                    ->latest('id')
+                    ->first()
+                : null;
+
+            return $project->toArray() + [
+                'submitted'   => $submission !== null,
+                'final_score' => $submission?->finalScore(),
+            ];
+        });
+    }
+
     private function tutorialsWithProgress(Request $request, VersionNode $versionNode)
     {
         $student = Student::where('user_id', $request->user()->id)->first();

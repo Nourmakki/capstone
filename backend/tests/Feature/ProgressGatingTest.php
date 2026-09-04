@@ -267,4 +267,110 @@ class ProgressGatingTest extends TestCase
         $this->assertSame(1, CompletedNode::count());
         $this->assertSame(1, UserRoadmapProgress::count());
     }
+
+    // -----------------------------------------------------------------
+    // What the module status panel is told
+    // -----------------------------------------------------------------
+
+    /**
+     * A quiz and a project the student has not touched are not done.
+     *
+     * The page had no per-student state to read for these and fell back to
+     * "the module has one", so a tick appeared the moment a manager approved
+     * a quiz - telling a student they had passed something they had never
+     * opened, while the list of what was left correctly told them to take it.
+     */
+    public function test_an_untouched_quiz_and_project_are_not_marked_done(): void
+    {
+        $user = $this->makeStudent();
+        ['versionNodes' => $nodes] = $this->makeRoadmap(['Basics']);
+
+        Quiz::create([
+            'version_node_id' => $nodes[0]->id,
+            'title'           => 'Basics Quiz',
+            'score'           => 0,
+            'review_status'   => 'approved',
+        ]);
+
+        Project::create([
+            'version_node_id' => $nodes[0]->id,
+            'title'           => 'Build it',
+            'description'     => 'A small build.',
+            'difficulty'      => 'beginner',
+            'review_status'   => 'approved',
+        ]);
+
+        $response = $this->actingAs($user, 'sanctum')
+            ->getJson("/api/version-nodes/{$nodes[0]->id}")
+            ->assertOk();
+
+        $this->assertFalse($response->json('quizzes.0.passed'));
+        $this->assertFalse($response->json('quizzes.0.attempted'));
+        $this->assertFalse($response->json('projects.0.submitted'));
+
+        // And the panel and the blockers agree, which is the whole point.
+        $blockers = implode(' ', $response->json('completion_blockers'));
+        $this->assertStringContainsString('Basics Quiz', $blockers);
+        $this->assertStringContainsString('Build it', $blockers);
+    }
+
+    /** Passing the quiz and handing the project in flips both, and only then. */
+    public function test_a_passed_quiz_and_a_submitted_project_are_marked_done(): void
+    {
+        $user = $this->makeStudent();
+        $student = Student::where('user_id', $user->id)->firstOrFail();
+        ['versionNodes' => $nodes] = $this->makeRoadmap(['Basics']);
+
+        $quiz = Quiz::create([
+            'version_node_id' => $nodes[0]->id,
+            'title'           => 'Basics Quiz',
+            'score'           => 0,
+            'review_status'   => 'approved',
+        ]);
+
+        $project = Project::create([
+            'version_node_id' => $nodes[0]->id,
+            'title'           => 'Build it',
+            'description'     => 'A small build.',
+            'difficulty'      => 'beginner',
+            'review_status'   => 'approved',
+        ]);
+
+        // A failing attempt is an attempt, not a pass.
+        Submission::create([
+            'quiz_id'    => $quiz->id,
+            'student_id' => $student->id,
+            'score'      => 40,
+            'status'     => 'submitted',
+        ]);
+
+        $response = $this->actingAs($user, 'sanctum')
+            ->getJson("/api/version-nodes/{$nodes[0]->id}")
+            ->assertOk();
+
+        $this->assertTrue($response->json('quizzes.0.attempted'));
+        $this->assertFalse($response->json('quizzes.0.passed'), 'Forty per cent is not a pass.');
+
+        Submission::create([
+            'quiz_id'    => $quiz->id,
+            'student_id' => $student->id,
+            'score'      => 90,
+            'status'     => 'submitted',
+        ]);
+
+        Submission::create([
+            'project_id' => $project->id,
+            'student_id' => $student->id,
+            'github_url' => 'https://github.com/sara/build',
+            'status'     => 'submitted',
+        ]);
+
+        $response = $this->actingAs($user, 'sanctum')
+            ->getJson("/api/version-nodes/{$nodes[0]->id}")
+            ->assertOk();
+
+        $this->assertTrue($response->json('quizzes.0.passed'));
+        $this->assertTrue($response->json('projects.0.submitted'));
+        $this->assertSame([], $response->json('completion_blockers'));
+    }
 }
