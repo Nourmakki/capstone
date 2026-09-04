@@ -353,6 +353,34 @@ function AdminRoadmaps({ onChanged }) {
         });
     };
 
+    /**
+     * Reword one module, in the main roadmap or in a child.
+     *
+     * Only the three fields the form offers are replaced. Everything else on
+     * the node - its id, its order, its prerequisites, its choices - is the
+     * shape of the graph, and carrying it through untouched is what keeps
+     * this edit from needing the renumbering that a delete does.
+     */
+    const editNode = (nodeId, draft, childIndex = null) => {
+        const apply = (result) => ({
+            ...result,
+            nodes: result.nodes.map((n) => (n.node_id !== nodeId ? n : {
+                ...n,
+                title: draft.title,
+                description: draft.description,
+                learning_outcomes: draft.outcomes,
+            })),
+        });
+
+        setPackageEdits((pkg) => (childIndex === null
+            ? { ...pkg, roadmap_result: apply(pkg.roadmap_result) }
+            : {
+                ...pkg,
+                child_roadmaps: pkg.child_roadmaps.map((c, i) =>
+                    i !== childIndex ? c : { ...c, roadmap_result: apply(c.roadmap_result) }),
+            }));
+    };
+
     const savePackageEdits = async (run) => {
         setSavingPackage(true);
 
@@ -473,106 +501,6 @@ function AdminRoadmaps({ onChanged }) {
     const parentIsSubject = parent && !parent.parent_roadmap_id;
 
     /**
-     * One roadmap the builder wrote: its modules, in order.
-     *
-     * `onDeleteNode`/`onAddNode` are only passed while this package is being
-     * hand-edited - their presence is what turns the delete buttons and the
-     * add-module form on, rather than a separate flag the two could drift
-     * out of sync with.
-     */
-    const ProposedRoadmap = ({ result, heading, onDeleteNode, onAddNode }) => {
-        const editable = !!onDeleteNode;
-        const [adding, setAdding] = useState(false);
-
-        return (
-        <div className="rounded-2xl border border-white/10 bg-black/20 p-4">
-            <h5 className="font-semibold text-sm">{heading ?? result.title}</h5>
-            <p className="text-xs text-gray-400 mt-1">{result.description}</p>
-
-            <div className="mt-3 space-y-2">
-                {(result.nodes ?? []).map((n) => (
-                    <div key={n.node_id} className="rounded-xl border border-white/5 bg-black/20 p-3">
-                        <div className="flex items-baseline gap-2 flex-wrap">
-                            <span className="text-xs text-gray-600">{n.order}</span>
-                            <span className="text-sm font-medium">{n.title}</span>
-
-                            {n.type === "choice" && (
-                                <span className="text-xs px-2 py-0.5 rounded-full bg-[#0097a7]/10 text-[#00b0c2]">
-                                    {n.choices?.length ?? 0} to choose from
-                                </span>
-                            )}
-
-                            {editable && (
-                                <button type="button" onClick={() => onDeleteNode(n.node_id)}
-                                    title="Delete this module"
-                                    className="ml-auto text-red-400/70 hover:text-red-400 transition shrink-0">
-                                    <Trash2 size={14} />
-                                </button>
-                            )}
-                        </div>
-
-                        <p className="text-xs text-gray-500 mt-1">{n.description}</p>
-
-                        {/* The choices, because a choice node is the shape of
-                            the roadmap and not a detail. */}
-                        {n.type === "choice" && (
-                            <div className="mt-2 space-y-1.5 pl-3 border-l border-white/10">
-                                {n.choices.map((c) => (
-                                    <div key={c.choice_id}>
-                                        <div className="flex items-center gap-2 flex-wrap">
-                                            <span className="text-xs font-medium">{c.title}</span>
-
-                                            {c.recommended && (
-                                                <span className="text-xs px-2 py-0.5 rounded-full bg-[#0097a7]/10 text-[#00b0c2]">
-                                                    recommended
-                                                </span>
-                                            )}
-
-                                            {c.separate_roadmap && (
-                                                <span className="text-xs text-gray-600">
-                                                    becomes its own roadmap
-                                                </span>
-                                            )}
-                                        </div>
-
-                                        <p className="text-xs text-gray-600">{c.description}</p>
-
-                                        {c.recommendation_reason && (
-                                            <p className="text-xs text-gray-600 italic">
-                                                {c.recommendation_reason}
-                                            </p>
-                                        )}
-                                    </div>
-                                ))}
-                            </div>
-                        )}
-                    </div>
-                ))}
-            </div>
-
-            {result.freshness_summary && (
-                <p className="text-xs text-gray-600 mt-3 pt-3 border-t border-white/5">
-                    {result.freshness_summary}
-                </p>
-            )}
-
-            {editable && (adding ? (
-                <AddNodeForm
-                    existingNodes={result.nodes}
-                    onCancel={() => setAdding(false)}
-                    onAdd={(draft) => { onAddNode(draft); setAdding(false); }}
-                />
-            ) : (
-                <button type="button" onClick={() => setAdding(true)}
-                    className="mt-3 flex items-center gap-1.5 text-xs text-[#00b0c2] hover:text-[#0097a7] transition">
-                    <Plus size={12} /> Add a module
-                </button>
-            ))}
-        </div>
-        );
-    };
-
-    /**
      * A roadmap already accepted, in one line.
      *
      * Summarised rather than shown in full: it is context for the decision in
@@ -683,7 +611,7 @@ function AdminRoadmaps({ onChanged }) {
                             {run?.status === "awaiting_review" && !packageEdits && (
                                 <button type="button" onClick={() => startEditingPackage(pkg)}
                                     className="ml-auto flex items-center gap-1.5 text-xs px-3 py-1 rounded-full border border-[#0097a7]/30 text-[#0097a7] hover:bg-[#0097a7]/10 transition">
-                                    <Pencil size={11} /> Add or delete a module
+                                    <Pencil size={11} /> Edit these modules
                                 </button>
                             )}
                         </div>
@@ -694,6 +622,7 @@ function AdminRoadmaps({ onChanged }) {
                                     result={packageEdits.roadmap_result}
                                     onDeleteNode={deleteTopLevelNode}
                                     onAddNode={(draft) => addNode(draft)}
+                                    onEditNode={(nodeId, draft) => editNode(nodeId, draft)}
                                 />
 
                                 {(packageEdits.child_roadmaps ?? []).map((child, i) => (
@@ -703,6 +632,7 @@ function AdminRoadmaps({ onChanged }) {
                                         heading={`${child.choice_title} — its own roadmap`}
                                         onDeleteNode={(nodeId) => deleteChildNode(i, nodeId)}
                                         onAddNode={(draft) => addNode(draft, i)}
+                                        onEditNode={(nodeId, draft) => editNode(nodeId, draft, i)}
                                     />
                                 ))}
 
@@ -1167,6 +1097,204 @@ function AdminRoadmaps({ onChanged }) {
  * last, so every existing module is a valid thing to put it after: nothing
  * here can come before a node that has not been added yet.
  */
+/**
+ * One roadmap the builder wrote: its modules, in order.
+ *
+ * The edit callbacks are only passed while this package is being hand-edited
+ * - their presence is what turns the per-module controls on, rather than a
+ * separate flag they could drift out of sync with.
+ *
+ * Defined out here rather than inside AdminRoadmaps. Nested, it was a new
+ * component type on every render, so React threw it away and rebuilt it -
+ * and once editing a module writes to the page's state, a single keystroke
+ * would re-render the parent and take the focus out of the field.
+ */
+function ProposedRoadmap({ result, heading, onDeleteNode, onAddNode, onEditNode }) {
+    const editable = !!onDeleteNode;
+
+    const [adding, setAdding] = useState(false);
+    const [editingId, setEditingId] = useState(null);
+
+    return (
+        <div className="rounded-2xl border border-white/10 bg-black/20 p-4">
+            <h5 className="font-semibold text-sm">{heading ?? result.title}</h5>
+            <p className="text-xs text-gray-400 mt-1">{result.description}</p>
+
+            <div className="mt-3 space-y-2">
+                {(result.nodes ?? []).map((n) => (
+                    <div key={n.node_id} className="rounded-xl border border-white/5 bg-black/20 p-3">
+                        {editingId === n.node_id ? (
+                            <EditNodeForm
+                                node={n}
+                                onCancel={() => setEditingId(null)}
+                                onSave={(draft) => { onEditNode(n.node_id, draft); setEditingId(null); }}
+                            />
+                        ) : (
+                        <>
+                        <div className="flex items-baseline gap-2 flex-wrap">
+                            <span className="text-xs text-gray-600">{n.order}</span>
+                            <span className="text-sm font-medium">{n.title}</span>
+
+                            {n.type === "choice" && (
+                                <span className="text-xs px-2 py-0.5 rounded-full bg-[#0097a7]/10 text-[#00b0c2]">
+                                    {n.choices?.length ?? 0} to choose from
+                                </span>
+                            )}
+
+                            {editable && (
+                                <span className="ml-auto flex items-center gap-2 shrink-0">
+                                    <button type="button" onClick={() => setEditingId(n.node_id)}
+                                        title="Edit this module"
+                                        className="text-gray-500 hover:text-[#00b0c2] transition">
+                                        <Pencil size={13} />
+                                    </button>
+
+                                    <button type="button" onClick={() => onDeleteNode(n.node_id)}
+                                        title="Delete this module"
+                                        className="text-red-400/70 hover:text-red-400 transition">
+                                        <Trash2 size={14} />
+                                    </button>
+                                </span>
+                            )}
+                        </div>
+
+                        <p className="text-xs text-gray-500 mt-1">{n.description}</p>
+
+                        {/* The choices, because a choice node is the shape of
+                            the roadmap and not a detail. */}
+                        {n.type === "choice" && (
+                            <div className="mt-2 space-y-1.5 pl-3 border-l border-white/10">
+                                {n.choices.map((c) => (
+                                    <div key={c.choice_id}>
+                                        <div className="flex items-center gap-2 flex-wrap">
+                                            <span className="text-xs font-medium">{c.title}</span>
+
+                                            {c.recommended && (
+                                                <span className="text-xs px-2 py-0.5 rounded-full bg-[#0097a7]/10 text-[#00b0c2]">
+                                                    recommended
+                                                </span>
+                                            )}
+
+                                            {c.separate_roadmap && (
+                                                <span className="text-xs text-gray-600">
+                                                    becomes its own roadmap
+                                                </span>
+                                            )}
+                                        </div>
+
+                                        <p className="text-xs text-gray-600">{c.description}</p>
+
+                                        {c.recommendation_reason && (
+                                            <p className="text-xs text-gray-600 italic">
+                                                {c.recommendation_reason}
+                                            </p>
+                                        )}
+                                    </div>
+                                ))}
+                            </div>
+                        )}
+                        </>
+                        )}
+                    </div>
+                ))}
+            </div>
+
+            {result.freshness_summary && (
+                <p className="text-xs text-gray-600 mt-3 pt-3 border-t border-white/5">
+                    {result.freshness_summary}
+                </p>
+            )}
+
+            {editable && (adding ? (
+                <AddNodeForm
+                    existingNodes={result.nodes}
+                    onCancel={() => setAdding(false)}
+                    onAdd={(draft) => { onAddNode(draft); setAdding(false); }}
+                />
+            ) : (
+                <button type="button" onClick={() => setAdding(true)}
+                    className="mt-3 flex items-center gap-1.5 text-xs text-[#00b0c2] hover:text-[#0097a7] transition">
+                    <Plus size={12} /> Add a module
+                </button>
+            ))}
+        </div>
+    );
+}
+
+
+/**
+ * Rewording a module the AI wrote.
+ *
+ * Title, description and outcomes only. Where a module sits, what it depends
+ * on and the choices hanging off it are the shape of the roadmap rather than
+ * its wording - changing those from here would mean renumbering and
+ * re-checking the graph, which is what the add and delete controls already
+ * do deliberately.
+ */
+function EditNodeForm({ node, onSave, onCancel }) {
+    const [title, setTitle] = useState(node.title);
+    const [description, setDescription] = useState(node.description);
+    const [outcomes, setOutcomes] = useState((node.learning_outcomes ?? []).join("\n"));
+
+    const outcomeList = outcomes.split("\n").map((s) => s.trim()).filter(Boolean);
+    const canSave = title.trim().length > 0 && description.trim().length > 0 && outcomeList.length > 0;
+
+    return (
+        <div className="space-y-2">
+            <div className="flex items-center gap-2">
+                <span className="text-xs text-gray-600">{node.order}</span>
+
+                <input
+                    value={title}
+                    onChange={(e) => setTitle(e.target.value)}
+                    placeholder="Module title"
+                    className="flex-1 p-2 rounded-lg bg-black/40 border border-white/10 text-white text-sm font-medium"
+                />
+            </div>
+
+            <textarea
+                value={description}
+                onChange={(e) => setDescription(e.target.value)}
+                rows={2}
+                placeholder="Description"
+                className="w-full p-2 rounded-lg bg-black/40 border border-white/10 text-white text-xs"
+            />
+
+            <textarea
+                value={outcomes}
+                onChange={(e) => setOutcomes(e.target.value)}
+                rows={2}
+                placeholder="Learning outcomes, one per line"
+                className="w-full p-2 rounded-lg bg-black/40 border border-white/10 text-white text-xs"
+            />
+
+            {node.type === "choice" && (
+                <p className="text-xs text-gray-600">
+                    The {node.choices?.length ?? 0} choices on this module are left as they are.
+                </p>
+            )}
+
+            <div className="flex gap-2 pt-1">
+                <button type="button" disabled={!canSave}
+                    onClick={() => onSave({
+                        title: title.trim(),
+                        description: description.trim(),
+                        outcomes: outcomeList,
+                    })}
+                    className="px-4 py-2 rounded-lg bg-[#0097a7] text-black text-xs font-semibold disabled:bg-gray-700 disabled:text-gray-400 transition">
+                    Save module
+                </button>
+
+                <button type="button" onClick={onCancel}
+                    className="px-4 py-2 rounded-lg border border-white/10 text-gray-300 text-xs">
+                    Cancel
+                </button>
+            </div>
+        </div>
+    );
+}
+
+
 function AddNodeForm({ existingNodes, onAdd, onCancel }) {
     const [title, setTitle] = useState("");
     const [description, setDescription] = useState("");
