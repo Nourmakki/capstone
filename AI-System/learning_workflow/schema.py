@@ -237,7 +237,7 @@ class TutorialAgentResult(BaseModel):
         self,
     ) -> "TutorialAgentResult":
 
-        if self.status == "ready_for_commit":
+        if self.status == "ready":
 
             if self.tutorial is None:
                 raise ValueError(
