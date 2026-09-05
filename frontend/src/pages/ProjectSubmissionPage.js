@@ -74,6 +74,12 @@ function ProjectSubmissionPage() {
     // submission is neither of them.
     const hasSomethingToHandIn = Boolean(githubUrl.trim() || file);
 
+    // Handing in again is allowed - a project can be resubmitted as often as
+    // the student likes, and each attempt is kept. Submitting clears the
+    // fields, which left the button grey and unclickable with nothing saying
+    // why, so it read as though the chance had been used up.
+    const hasSubmittedBefore = (project?.submissions?.length ?? 0) > 0;
+
     const handleSubmit = async () => {
         if (!hasSomethingToHandIn) {
             alert("Hand in a repository link, a file, or both.");
@@ -177,12 +183,16 @@ function ProjectSubmissionPage() {
                         <div className="rounded-3xl border border-white/10 bg-white/[0.03] p-8">
                             <div className="flex items-center gap-3 mb-6">
                                 <Code2 size={22} />
-                                <h2 className="text-2xl font-bold">Submit Your Work</h2>
+                                <h2 className="text-2xl font-bold">
+                                    {hasSubmittedBefore ? "Hand In Again" : "Submit Your Work"}
+                                </h2>
                             </div>
 
                             <p className="text-sm text-gray-400 -mt-3 mb-6">
                                 Give a repository link, attach a file, or both —
                                 whichever fits your work.
+                                {hasSubmittedBefore
+                                    && " Every attempt is kept and listed beside this one."}
                             </p>
 
                             <label className="block text-gray-300 mb-2">
@@ -241,8 +251,21 @@ function ProjectSubmissionPage() {
                                         : "bg-[#0097a7] text-black hover:scale-[1.01]"
                                 }`}
                             >
-                                {submitting ? "Submitting..." : "Submit Project"}
+                                {submitting
+                                    ? "Submitting..."
+                                    : hasSubmittedBefore ? "Submit again" : "Submit Project"}
                             </button>
+
+                            {/* Why the button is grey, when it is. It only
+                                ever means "there is nothing here to send" -
+                                never that submitting is finished with. */}
+                            {!submitting && !hasSomethingToHandIn && (
+                                <p className="text-xs text-gray-500 mt-3 text-center">
+                                    {hasSubmittedBefore
+                                        ? "Add a repository link or a file to hand in another attempt."
+                                        : "Add a repository link or a file to submit."}
+                                </p>
+                            )}
                         </div>
                     </div>
 
