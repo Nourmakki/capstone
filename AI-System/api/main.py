@@ -69,6 +69,26 @@ from roadmap_workflow.graph.state import (
     RoadmapBuilderState,
 )
 
+from api.workshop.schema import (
+    StartWorkshopWorkflowRequest,
+    WorkshopManagerDecisionRequest,
+    WorkshopWorkflowResponse,
+)
+
+from api.workshop.response_mapper import (
+    build_workshop_workflow_response,
+)
+
+from workshop_workflow.graph.workflow_options import (
+    get_workshop_workflow_state,
+    resume_workshop_workflow,
+    start_workshop_workflow,
+)
+
+from workshop_workflow.graph.state import (
+    WorkshopAgentState,
+)
+
 app = FastAPI(
     title="AI System API",
     version="1.0.0",
@@ -578,6 +598,132 @@ def get_roadmap_builder_endpoint(
 
     return (
         build_roadmap_builder_workflow_response(
+            thread_id=thread_id,
+            result=state,
+        )
+    )
+
+# =====================================================================
+# WORKSHOP WORKFLOW ENDPOINTS
+# =====================================================================
+
+@app.post(
+    "/workshop-workflows",
+    response_model=WorkshopWorkflowResponse,
+)
+def start_workshop_workflow_endpoint(
+    request: StartWorkshopWorkflowRequest,
+) -> WorkshopWorkflowResponse:
+    """
+    Start a new Workshop Recommendation Workflow.
+
+    Laravel sends:
+    - roadmap_topic
+    - optional student_location
+
+    The workflow performs the Workshop Agent search and either:
+    - pauses at manager review when workshops are found
+    - completes with an empty workshop list when no suitable result exists
+    - fails if generation encounters an error
+    """
+
+    initial_state: WorkshopAgentState = (
+        request.model_dump()
+    )
+
+    workflow_output = (
+        start_workshop_workflow(
+            initial_state
+        )
+    )
+
+    return (
+        build_workshop_workflow_response(
+            thread_id=workflow_output[
+                "thread_id"
+            ],
+            result=workflow_output[
+                "result"
+            ],
+        )
+    )
+
+
+@app.post(
+    "/workshop-workflows/{thread_id}/resume",
+    response_model=WorkshopWorkflowResponse,
+)
+def resume_workshop_workflow_endpoint(
+    thread_id: str,
+    decision: WorkshopManagerDecisionRequest,
+) -> WorkshopWorkflowResponse:
+    """
+    Resume a Workshop Workflow that is waiting
+    for manager review.
+
+    Supported decisions:
+    - approve all workshops
+    - approve selected workshops
+    - reject
+    """
+
+    try:
+        result = (
+            resume_workshop_workflow(
+                thread_id=thread_id,
+                manager_decision=(
+                    decision.model_dump(
+                        exclude_none=True
+                    )
+                ),
+            )
+        )
+
+    except ValueError as exc:
+        raise HTTPException(
+            status_code=409,
+            detail=str(exc),
+        ) from exc
+
+    return (
+        build_workshop_workflow_response(
+            thread_id=thread_id,
+            result=result,
+        )
+    )
+
+
+@app.get(
+    "/workshop-workflows/{thread_id}",
+    response_model=WorkshopWorkflowResponse,
+)
+def get_workshop_workflow_endpoint(
+    thread_id: str,
+) -> WorkshopWorkflowResponse:
+    """
+    Read the current saved state of one
+    Workshop Workflow.
+    """
+
+    try:
+        workflow_snapshot = (
+            get_workshop_workflow_state(
+                thread_id
+            )
+        )
+
+    except ValueError as exc:
+        raise HTTPException(
+            status_code=404,
+            detail=str(exc),
+        ) from exc
+
+    state = workflow_snapshot[
+        "state"
+    ]
+
+    return (
+        build_workshop_workflow_response(
             thread_id=thread_id,
             result=state,
         )
