@@ -3,6 +3,7 @@
 use App\Models\AiSchedule;
 use Illuminate\Foundation\Inspiring;
 use Illuminate\Support\Facades\Artisan;
+use Illuminate\Support\Facades\Cache;
 use Illuminate\Support\Facades\Schedule;
 
 Artisan::command('inspire', function () {
@@ -45,6 +46,25 @@ try {
 } catch (\Throwable) {
     // No table yet: the default stands until there is something to read.
 }
+
+/*
+| A heartbeat, so the app can tell whether any of this is running at all.
+|
+| Laravel's schedule is a definition. Something outside has to run
+| `schedule:run` every minute for a due task to fire - cron on Linux, Task
+| Scheduler or `schedule:work` on Windows. With nothing doing that, a daily
+| task simply never happens: no error, no log, no run, because no code
+| executes.
+|
+| That cost a night once. The switch said "Daily scan on - 07:00" while
+| nothing existed to honour it, and seven o'clock came and went in silence.
+| Writing the time on every tick lets the page say whether the scan can
+| actually fire, instead of reporting a setting as though it were a promise.
+*/
+Schedule::call(fn () => Cache::put('scheduler.last_tick', now()->toIso8601String(), now()->addDay()))
+    ->everyMinute()
+    ->name('scheduler-heartbeat')
+    ->withoutOverlapping();
 
 Schedule::command('ai-workflow:run')
     ->dailyAt($runAt)

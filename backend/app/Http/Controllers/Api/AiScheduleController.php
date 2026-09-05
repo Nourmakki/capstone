@@ -5,8 +5,10 @@ namespace App\Http\Controllers\Api;
 use App\Http\Controllers\Controller;
 use App\Models\AiSchedule;
 use App\Models\RoadmapVersion;
+use Carbon\Carbon;
 use Illuminate\Http\JsonResponse;
 use Illuminate\Http\Request;
+use Illuminate\Support\Facades\Cache;
 
 /**
  * The switch for the daily trend scan.
@@ -46,6 +48,34 @@ class AiScheduleController extends Controller
         ]);
     }
 
+    /**
+     * Is anything actually running the scheduler?
+     *
+     * Turning the switch on only records an intention. A due task fires when
+     * something outside runs `schedule:run` every minute - cron, Task
+     * Scheduler, or `schedule:work` in a terminal. With nothing doing that,
+     * the switch reads "on" and the scan never happens: no error, no log, no
+     * run, because no code executes.
+     *
+     * The heartbeat in routes/console.php writes a timestamp every tick, so
+     * a recent one is proof something is running. Two minutes of slack, since
+     * a tick is a minute apart and a slow one should not read as an outage.
+     */
+    private function schedulerRunning(): bool
+    {
+        $tick = Cache::get('scheduler.last_tick');
+
+        if (! $tick) {
+            return false;
+        }
+
+        try {
+            return Carbon::parse($tick)->gt(now()->subMinutes(2));
+        } catch (\Throwable) {
+            return false;
+        }
+    }
+
     private function payload(AiSchedule $schedule): array
     {
         return [
@@ -54,6 +84,10 @@ class AiScheduleController extends Controller
             'last_run_at'      => $schedule->last_run_at,
             'last_run_summary' => $schedule->last_run_summary,
             'updated_by'       => $schedule->updatedBy->name ?? null,
+
+            // Whether the switch can be honoured at all. On is a setting;
+            // this is whether anything exists to act on it.
+            'scheduler_running' => $this->schedulerRunning(),
 
             // What a run would actually do, so the switch is not flipped
             // blind: this many roadmaps would each be sent to the AI.

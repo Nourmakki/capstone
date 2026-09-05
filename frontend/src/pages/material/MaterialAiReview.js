@@ -454,6 +454,33 @@ function MaterialAiReview({ onChanged }) {
                                     <> Last run {new Date(schedule.last_run_at).toLocaleString()} — {schedule.last_run_summary}</>
                                 )}
                             </p>
+
+                            {/* On is a setting; this is whether anything
+                                exists to act on it. Without a process running
+                                the scheduler the switch is a note to nobody -
+                                the hour passes and nothing happens, with no
+                                error to find afterwards. */}
+                            {schedule.enabled && !schedule.scheduler_running && (
+                                <div className="mt-3 flex items-start gap-2 rounded-xl border border-red-400/30 bg-red-400/5 p-3">
+                                    <AlertTriangle size={15} className="text-red-400 shrink-0 mt-0.5" />
+
+                                    <div className="text-xs">
+                                        <p className="font-semibold text-red-300">
+                                            This scan cannot run - nothing is driving the scheduler.
+                                        </p>
+
+                                        <p className="text-gray-300 mt-1">
+                                            The switch is on, but a task only fires when something runs
+                                            Laravel's scheduler every minute. Leave this in a spare
+                                            terminal in the <span className="font-mono">backend</span> folder:
+                                        </p>
+
+                                        <p className="font-mono text-[#00b0c2] mt-2 break-all">
+                                            php artisan schedule:work
+                                        </p>
+                                    </div>
+                                </div>
+                            )}
                         </div>
                     </div>
 

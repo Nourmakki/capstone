@@ -4,6 +4,7 @@ namespace Tests\Feature;
 
 use App\Models\AiSchedule;
 use Illuminate\Foundation\Testing\RefreshDatabase;
+use Illuminate\Support\Facades\Cache;
 use Tests\Concerns\BuildsPlatform;
 use Tests\TestCase;
 
@@ -112,5 +113,59 @@ class AiScheduleTest extends TestCase
 
         AiSchedule::current()->update(['enabled' => true]);
         $this->assertTrue($event->filtersPass(app()));
+    }
+
+    // -----------------------------------------------------------------
+    // Whether anything is driving the scheduler at all
+    // -----------------------------------------------------------------
+
+    /**
+     * The switch being on is an intention, not a promise.
+     *
+     * A due task only fires when something outside runs schedule:run every
+     * minute. With nothing doing that the switch reads "on" and the hour
+     * passes in silence - no error, no log, no run, because no code executes.
+     * A night was lost to exactly that, so the page has to be able to say it.
+     */
+    public function test_the_scheduler_reads_as_stopped_when_nothing_has_ticked(): void
+    {
+        Cache::forget('scheduler.last_tick');
+
+        $this->actingAs($this->makeManager(), 'sanctum')
+            ->getJson('/api/ai-schedule')
+            ->assertOk()
+            ->assertJsonPath('scheduler_running', false);
+    }
+
+    public function test_a_recent_tick_means_the_scheduler_is_running(): void
+    {
+        Cache::put('scheduler.last_tick', now()->subSeconds(30)->toIso8601String(), now()->addDay());
+
+        $this->actingAs($this->makeManager(), 'sanctum')
+            ->getJson('/api/ai-schedule')
+            ->assertOk()
+            ->assertJsonPath('scheduler_running', true);
+    }
+
+    /** A tick that stopped arriving is a stopped scheduler, not a running one. */
+    public function test_a_stale_tick_reads_as_stopped(): void
+    {
+        Cache::put('scheduler.last_tick', now()->subMinutes(10)->toIso8601String(), now()->addDay());
+
+        $this->actingAs($this->makeManager(), 'sanctum')
+            ->getJson('/api/ai-schedule')
+            ->assertOk()
+            ->assertJsonPath('scheduler_running', false);
+    }
+
+    /** Whatever is in the cache, a value that is not a time is not proof. */
+    public function test_an_unreadable_tick_reads_as_stopped(): void
+    {
+        Cache::put('scheduler.last_tick', 'not a date', now()->addDay());
+
+        $this->actingAs($this->makeManager(), 'sanctum')
+            ->getJson('/api/ai-schedule')
+            ->assertOk()
+            ->assertJsonPath('scheduler_running', false);
     }
 }
