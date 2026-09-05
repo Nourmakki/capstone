@@ -194,10 +194,10 @@ def get_current_tutorial_resource_id(
 
     if (
         tutorial_result.get("status")
-        != "ready_for_commit"
+        != "ready"
     ):
         raise ValueError(
-            "Tutorial result is not ready_for_commit."
+            "Tutorial result is not ready."
         )
 
     tutorial = tutorial_result.get(
@@ -233,10 +233,10 @@ def get_tutorial_identity(
 
     if (
         tutorial_result.get("status")
-        != "ready_for_commit"
+        != "ready"
     ):
         raise ValueError(
-            "Tutorial result must be ready_for_commit."
+            "Tutorial result must be ready."
         )
 
     tutorial = tutorial_result.get(
@@ -339,7 +339,7 @@ def run_tutorial_once(
             None,
         )
 
-    if status != "ready_for_commit":
+    if status != "ready":
         raise ValueError(
             "Tutorial Agent returned an "
             "invalid status."
