@@ -29,6 +29,33 @@ import { Bot, Send, X, MessageCircle, BookOpen } from "lucide-react";
 function AssistantChat() {
     const { user } = useAuth();
 
+    // Students only, and only once signed in. Decided here rather than at the
+    // mount point so there is one place that decides, and no way to add a
+    // student page that forgets the assistant or a staff page that gets it.
+    //
+    // The split matters, and is the whole reason this component exists. The
+    // conversation used to live in the same component as this check, with the
+    // check written below the hooks - and a component that returns null is
+    // still mounted. It renders nothing and keeps every piece of its state.
+    // Since the panel sits above the router, signing out never took it down
+    // either: logging out is a state change, not a page load. So one student
+    // could sign out, the next sign in, and find the first one's conversation
+    // waiting for them.
+    //
+    // With the state one level down, returning null here unmounts the panel
+    // and React discards its state - all of it, not only the parts somebody
+    // remembered to clear.
+    if (user?.role !== "Student") {
+        return null;
+    }
+
+    // A second guard, for a change of student that never passes through the
+    // signed-out render above. Nothing does that today, but keying by the
+    // student means nothing can start to.
+    return <AssistantPanel key={user.id} />;
+}
+
+function AssistantPanel() {
     const [open, setOpen] = useState(false);
     const [question, setQuestion] = useState("");
     const [messages, setMessages] = useState([]);
@@ -81,13 +108,6 @@ function AssistantChat() {
             setBusy(false);
         }
     };
-
-    // Students only, and only once signed in. Checked here rather than at the
-    // mount point so there is one place that decides, and no way to add a
-    // student page that forgets the assistant or a staff page that gets it.
-    if (user?.role !== "Student") {
-        return null;
-    }
 
     if (!open) {
         return (
