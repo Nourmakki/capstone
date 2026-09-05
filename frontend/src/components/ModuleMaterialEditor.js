@@ -2,12 +2,21 @@ import React, { useCallback, useEffect, useState } from "react";
 import api from "../api";
 import {
     Brain, Code2, Plus, Pencil, Trash2, X, Save, Sparkles, AlertTriangle,
+    BookOpen, Video,
 } from "lucide-react";
 
 const QUESTION_TYPES = [
     { id: "multiple_choice", label: "Multiple choice" },
     { id: "true_false", label: "True / false" },
     { id: "short_answer", label: "Short answer" },
+];
+
+// Mirrors ExternalResourceController::TYPES. The server refuses anything else.
+const RESOURCE_TYPES = [
+    { id: "documentation", label: "Documentation" },
+    { id: "article", label: "Article" },
+    { id: "course", label: "Course" },
+    { id: "social_account", label: "Social account" },
 ];
 
 // Mirrors MaterialAuthoringController::OPTION_COUNT. Short answer has none.
@@ -32,27 +41,25 @@ const blankQuestion = () => ({
     explanation: "",
 });
 
-const blankQuiz = () => ({ id: null, title: "", questions: [blankQuestion()] });
-
-const blankProject = (difficulty = "beginner") => ({
-    id: null,
-    title: "",
-    description: "",
-    difficulty,
-    github_url: "",
-});
-
 /**
- * Correcting the quizzes and projects on one module.
+ * Correcting the quizzes, projects and reading list on one module.
  *
- * Most of this arrives from the AI, so a wrong answer or a clumsy sentence is
- * the common repair. Creating from scratch is here for the modules it has not
- * covered yet.
+ * All of this arrives from the AI, so a wrong answer or a clumsy sentence is
+ * the repair being made. Editing only: the learning workflow writes the
+ * material, and nothing here creates it from nothing. There were New Quiz and
+ * New Project buttons, but no route behind them - both saved with PUT to an
+ * id that did not exist yet, so the only thing either could do was 404.
  *
- * This used to be a page of its own with its own roadmap picker, which meant
- * generating material on one screen and fixing it on another, re-finding the
- * same module in a second set of dropdowns to get there. It takes the module
- * it is given now, so it can sit under whichever picker the page already has.
+ * Tutorials are absent on purpose. A tutorial is a video somebody else made,
+ * so the only things that can be changed about it are which video it is and
+ * whether it stays - regenerate and delete, both on the run. The server draws
+ * the same line by giving tutorials no update route at all, and so does
+ * Nour's service: her review stage allows an edit of quiz, project and
+ * external_resources, and answers a tutorial edit with "Tutorial cannot be
+ * edited. Use regenerate instead."
+ *
+ * It takes the module it is given rather than picking one, so it sits under
+ * whatever already names a module - today, the selected run.
  */
 function ModuleMaterialEditor({ versionNodeId, onChanged }) {
     const [material, setMaterial] = useState(null);
@@ -62,6 +69,7 @@ function ModuleMaterialEditor({ versionNodeId, onChanged }) {
     // half-finished project on screen together invites saving the wrong one.
     const [quizDraft, setQuizDraft] = useState(null);
     const [projectDraft, setProjectDraft] = useState(null);
+    const [resourceDraft, setResourceDraft] = useState(null);
 
     const loadMaterial = useCallback(async () => {
         if (!versionNodeId) {
@@ -84,6 +92,7 @@ function ModuleMaterialEditor({ versionNodeId, onChanged }) {
         loadMaterial();
         setQuizDraft(null);
         setProjectDraft(null);
+        setResourceDraft(null);
     }, [loadMaterial]);
 
     const fail = (err) => {
@@ -242,6 +251,61 @@ function ModuleMaterialEditor({ versionNodeId, onChanged }) {
     };
 
     // -----------------------------------------------------------------
+    // External resources
+    //
+    // A title, a link and what kind of thing it is - all of them things a
+    // person can sensibly correct, which is why these are editable where a
+    // tutorial is not.
+    // -----------------------------------------------------------------
+
+    const editResource = (resource) => {
+        setQuizDraft(null);
+        setProjectDraft(null);
+        setResourceDraft({
+            id: resource.id,
+            title: resource.title,
+            url: resource.url,
+            type: resource.type,
+        });
+    };
+
+    const saveResource = async () => {
+        setBusy(true);
+
+        try {
+            await api.put(`/external-resources/${resourceDraft.id}`, {
+                // The server validates this against the module it belongs to,
+                // so it travels with the edit even though it cannot change.
+                version_node_id: versionNodeId,
+                title: resourceDraft.title.trim(),
+                url: resourceDraft.url.trim(),
+                type: resourceDraft.type,
+            });
+
+            setResourceDraft(null);
+            await loadMaterial();
+            onChanged?.();
+        } catch (err) {
+            fail(err);
+        } finally {
+            setBusy(false);
+        }
+    };
+
+    const deleteResource = async (resource) => {
+        if (!window.confirm(`Remove "${resource.title}" from the reading list?\n\nThis cannot be undone.`)) return;
+
+        try {
+            await api.delete(`/external-resources/${resource.id}`);
+            if (resourceDraft?.id === resource.id) setResourceDraft(null);
+            await loadMaterial();
+            onChanged?.();
+        } catch (err) {
+            fail(err);
+        }
+    };
+
+    // -----------------------------------------------------------------
 
     const statusStyle = (s) =>
         s === "approved" ? "border-green-400/30 bg-green-400/10 text-green-300"
@@ -298,8 +362,14 @@ function ModuleMaterialEditor({ versionNodeId, onChanged }) {
         && projectDraft.title.trim()
         && projectDraft.description.trim();
 
+    // The server wants a real URL, and finding that out on save is worse than
+    // a button that stays out until the link is one.
+    const resourceValid = resourceDraft
+        && resourceDraft.title.trim()
+        && /^https?:\/\/\S+$/i.test(resourceDraft.url.trim());
+
     if (!versionNodeId) {
-        return <p className="text-sm text-gray-500">Pick a module to see its quizzes and projects.</p>;
+        return <p className="text-sm text-gray-500">Pick a module to see its material.</p>;
     }
 
     return (
@@ -313,21 +383,12 @@ function ModuleMaterialEditor({ versionNodeId, onChanged }) {
                 <span className="text-xs px-3 py-1 rounded-full bg-white/5 text-gray-400">
                     {material?.quizzes?.length ?? 0}
                 </span>
-
-                {!quizDraft && (
-                    <button onClick={() => { setProjectDraft(null); setQuizDraft(blankQuiz()); }}
-                        className="ml-auto flex items-center gap-2 px-5 py-2 rounded-xl border border-[#0097a7]/30 text-[#00b0c2] hover:bg-[#0097a7]/10 transition text-sm">
-                        <Plus size={16} /> New Quiz
-                    </button>
-                )}
             </div>
 
             {quizDraft && (
                 <div className="rounded-3xl border border-[#0097a7]/20 bg-[#0097a7]/5 p-6 mb-8">
                     <div className="flex items-center justify-between mb-5">
-                        <h3 className="text-xl font-bold">
-                            {quizDraft.id ? "Edit Quiz" : "New Quiz"}
-                        </h3>
+                        <h3 className="text-xl font-bold">Edit Quiz</h3>
 
                         <button onClick={() => setQuizDraft(null)}
                             className="flex items-center gap-2 text-sm text-gray-400 hover:text-white">
@@ -507,7 +568,7 @@ function ModuleMaterialEditor({ versionNodeId, onChanged }) {
                                     : "bg-[#0097a7] text-black hover:scale-105"
                             }`}>
                             <Save size={16} />
-                            {busy ? "Saving..." : quizDraft.id ? "Save Changes" : "Create Quiz"}
+                            {busy ? "Saving..." : "Save Changes"}
                         </button>
                     </div>
                 </div>
@@ -573,25 +634,12 @@ function ModuleMaterialEditor({ versionNodeId, onChanged }) {
                 <span className="text-xs px-3 py-1 rounded-full bg-white/5 text-gray-400">
                     {material?.projects?.length ?? 0}
                 </span>
-
-                {!projectDraft && (
-                    <button
-                        onClick={() => {
-                            setQuizDraft(null);
-                            setProjectDraft(blankProject(material?.module?.difficulty));
-                        }}
-                        className="ml-auto flex items-center gap-2 px-5 py-2 rounded-xl border border-[#0097a7]/30 text-[#00b0c2] hover:bg-[#0097a7]/10 transition text-sm">
-                        <Plus size={16} /> New Project
-                    </button>
-                )}
             </div>
 
             {projectDraft && (
                 <div className="rounded-3xl border border-[#0097a7]/20 bg-[#0097a7]/5 p-6 mb-8">
                     <div className="flex items-center justify-between mb-5">
-                        <h3 className="text-xl font-bold">
-                            {projectDraft.id ? "Edit Project" : "New Project"}
-                        </h3>
+                        <h3 className="text-xl font-bold">Edit Project</h3>
 
                         <button onClick={() => setProjectDraft(null)}
                             className="flex items-center gap-2 text-sm text-gray-400 hover:text-white">
@@ -631,7 +679,7 @@ function ModuleMaterialEditor({ versionNodeId, onChanged }) {
                                 : "bg-[#0097a7] text-black hover:scale-105"
                         }`}>
                         <Save size={16} />
-                        {busy ? "Saving..." : projectDraft.id ? "Save Changes" : "Create Project"}
+                        {busy ? "Saving..." : "Save Changes"}
                     </button>
                 </div>
             )}
@@ -689,8 +737,147 @@ function ModuleMaterialEditor({ versionNodeId, onChanged }) {
                 ))}
             </div>
 
-            {material && (
+            {/* ------------------------------------------------ */}
+            {/* External resources                               */}
+            {/* ------------------------------------------------ */}
+            <div className="flex items-center gap-3 mt-12 mb-5">
+                <BookOpen className="text-amber-400" />
+                <h2 className="text-2xl font-bold">External resources</h2>
+                <span className="text-xs px-3 py-1 rounded-full bg-white/5 text-gray-400">
+                    {material?.external_resources?.length ?? 0}
+                </span>
+            </div>
+
+            {resourceDraft && (
+                <div className="rounded-3xl border border-[#0097a7]/20 bg-[#0097a7]/5 p-6 mb-8">
+                    <div className="flex items-center justify-between mb-5">
+                        <h3 className="text-xl font-bold">Edit resource</h3>
+
+                        <button onClick={() => setResourceDraft(null)}
+                            className="flex items-center gap-2 text-sm text-gray-400 hover:text-white">
+                            <X size={16} /> Cancel
+                        </button>
+                    </div>
+
+                    <div className="grid md:grid-cols-2 gap-4">
+                        <input type="text" placeholder="Title"
+                            value={resourceDraft.title}
+                            onChange={(e) => setResourceDraft({ ...resourceDraft, title: e.target.value })}
+                            className="p-3 rounded-xl bg-black/40 border border-white/10 text-white" />
+
+                        <select value={resourceDraft.type}
+                            onChange={(e) => setResourceDraft({ ...resourceDraft, type: e.target.value })}
+                            className="p-3 rounded-xl bg-black/40 border border-white/10 text-white">
+                            {RESOURCE_TYPES.map((type) => (
+                                <option key={type.id} value={type.id}>{type.label}</option>
+                            ))}
+                        </select>
+                    </div>
+
+                    <input type="url" placeholder="https://..."
+                        value={resourceDraft.url}
+                        onChange={(e) => setResourceDraft({ ...resourceDraft, url: e.target.value })}
+                        className="w-full mt-4 p-3 rounded-xl bg-black/40 border border-white/10 text-white" />
+
+                    <button onClick={saveResource} disabled={busy || !resourceValid}
+                        className={`mt-6 flex items-center gap-2 font-bold px-8 py-3 rounded-xl transition ${
+                            busy || !resourceValid
+                                ? "bg-gray-700 text-gray-400 cursor-not-allowed"
+                                : "bg-[#0097a7] text-black hover:scale-105"
+                        }`}>
+                        <Save size={16} />
+                        {busy ? "Saving..." : "Save Changes"}
+                    </button>
+                </div>
+            )}
+
+            {material?.external_resources?.length === 0 && !resourceDraft && (
+                <p className="text-gray-500">This module has no reading list yet.</p>
+            )}
+
+            <div className="space-y-3">
+                {material?.external_resources?.map((resource) => (
+                    <div key={resource.id} className="rounded-2xl border border-white/10 bg-white/[0.03] p-5">
+                        <div className="flex flex-col lg:flex-row lg:items-start justify-between gap-4">
+                            <div className="min-w-0">
+                                <div className="flex items-center gap-3 flex-wrap mb-2">
+                                    <h3 className="text-lg font-bold">{resource.title}</h3>
+
+                                    <span className={`text-xs px-3 py-1 rounded-full border ${statusStyle(resource.review_status)}`}>
+                                        {resource.review_status}
+                                    </span>
+
+                                    <span className="text-xs text-gray-500">
+                                        {RESOURCE_TYPES.find((t) => t.id === resource.type)?.label ?? resource.type}
+                                    </span>
+
+                                    {resource.from_ai && (
+                                        <span className="text-xs px-3 py-1 rounded-full border border-[#0097a7]/30 bg-[#0097a7]/10 text-[#00b0c2] flex items-center gap-1">
+                                            <Sparkles size={12} /> from the AI
+                                        </span>
+                                    )}
+                                </div>
+
+                                <a href={resource.url} target="_blank" rel="noreferrer"
+                                   className="text-sm text-[#00b0c2] hover:underline break-all">
+                                    {resource.url}
+                                </a>
+
+                                {resource.review_notes && (
+                                    <p className="mt-2 text-xs text-gray-400 border-l-2 border-white/10 pl-3">
+                                        Reviewer said: {resource.review_notes}
+                                    </p>
+                                )}
+                            </div>
+
+                            <div className="flex gap-3 shrink-0">
+                                <button onClick={() => editResource(resource)}
+                                    className="p-3 rounded-xl border border-[#0097a7]/30 text-[#0097a7] hover:bg-[#0097a7]/10">
+                                    <Pencil size={18} />
+                                </button>
+                                <button onClick={() => deleteResource(resource)}
+                                    className="p-3 rounded-xl border border-red-400/30 text-red-400 hover:bg-red-400/10">
+                                    <Trash2 size={18} />
+                                </button>
+                            </div>
+                        </div>
+                    </div>
+                ))}
+            </div>
+
+            {/* Tutorials are deliberately absent, and this says so rather than
+                leaving a manager hunting for the section that edits them. A
+                tutorial is a video somebody else made: the only things that
+                can be changed about it are which video it is and whether it
+                stays, which are regenerate and delete on the run itself.
+                Nour's service takes the same line - her review stage allows an
+                edit of quiz, project and external_resources, and answers a
+                tutorial edit with "Tutorial cannot be edited. Use regenerate
+                instead." */}
+            {material?.tutorials?.length > 0 && (
                 <div className="mt-10 flex items-start gap-3 rounded-2xl border border-white/10 bg-white/[0.02] p-4">
+                    <Video size={18} className="text-gray-500 shrink-0 mt-0.5" />
+                    <div className="min-w-0">
+                        <p className="text-sm text-gray-400">
+                            The {material.tutorials.length === 1 ? "tutorial" : "tutorials"} on
+                            this module cannot be edited here - a tutorial is
+                            somebody else's video, so the choices are to keep it
+                            or ask for another one. Use regenerate on the run.
+                        </p>
+
+                        <ul className="mt-2 space-y-1">
+                            {material.tutorials.map((tutorial) => (
+                                <li key={tutorial.id} className="text-xs text-gray-500 truncate">
+                                    {tutorial.title}
+                                </li>
+                            ))}
+                        </ul>
+                    </div>
+                </div>
+            )}
+
+            {material && (
+                <div className="mt-4 flex items-start gap-3 rounded-2xl border border-white/10 bg-white/[0.02] p-4">
                     <AlertTriangle size={18} className="text-gray-500 shrink-0 mt-0.5" />
                     <p className="text-sm text-gray-400">
                         Editing approved material sends it back to the

@@ -1,6 +1,5 @@
 import React, { useCallback, useEffect, useState } from "react";
 import api from "../../api";
-import { firstRoadmapIn } from "../../components/RoadmapPicker";
 import ModuleMaterialEditor from "../../components/ModuleMaterialEditor";
 import {
     Sparkles, Video, Brain, Code2, BookOpen, Check, X, Pencil,
@@ -24,14 +23,6 @@ function MaterialLearningReview({ onChanged }) {
     const [loading, setLoading] = useState(true);
     const [busy, setBusy] = useState(false);
     const [serviceDown, setServiceDown] = useState(false);
-
-    // Starting a run needs a module to run against.
-    const [roadmaps, setRoadmaps] = useState([]);
-    const [roadmapId, setRoadmapId] = useState(null);
-    const [versions, setVersions] = useState([]);
-    const [versionId, setVersionId] = useState(null);
-    const [modules, setModules] = useState([]);
-    const [moduleId, setModuleId] = useState(null);
 
     // Modules the roadmap builder left empty. Which roadmap is expanded, and
     // which single module is generating - one at a time is the point of this
@@ -94,42 +85,6 @@ function MaterialLearningReview({ onChanged }) {
             setGenerating(null);
         }
     };
-
-    useEffect(() => {
-        api.get("/roadmaps")
-            .then((r) => {
-                const list = r.data.data ?? [];
-                setRoadmaps(list);
-                // A roadmap, never a subject: a subject holds no modules, so
-                // opening here offered nothing to generate material for.
-                setRoadmapId((prev) => prev ?? firstRoadmapIn(list));
-            })
-            .catch((err) => console.error(err));
-    }, []);
-
-    useEffect(() => {
-        if (!roadmapId) return;
-
-        api.get(`/roadmaps/${roadmapId}/versions`)
-            .then((r) => {
-                const list = r.data.data ?? [];
-                setVersions(list);
-                setVersionId(list[0]?.id ?? null);
-            })
-            .catch((err) => console.error(err));
-    }, [roadmapId]);
-
-    useEffect(() => {
-        if (!versionId) return;
-
-        api.get(`/roadmap-versions/${versionId}/graph`)
-            .then((r) => {
-                const list = r.data.nodes ?? [];
-                setModules(list);
-                setModuleId(list[0]?.version_node_id ?? null);
-            })
-            .catch((err) => console.error(err));
-    }, [versionId]);
 
     const openRun = async (run) => {
         setSelected(run);
@@ -259,97 +214,6 @@ function MaterialLearningReview({ onChanged }) {
                 The AI writes a tutorial, quiz, project and resources for one module.
                 Nothing reaches students until you approve it.
             </p>
-
-            {/* Fixing what a module already has, by hand. First on the
-                page: it is the one part always worth showing, since it works
-                whatever else is or is not waiting.
-
-                The generate form that used to stand here is gone - generation
-                is started from the awaiting list below, one module at a time,
-                which is the same call with the module already named. Its
-                dropdowns chose the module for this editor too, so the editor
-                keeps a picker of its own rather than losing the only way to
-                author a quiz question by hand. */}
-            <div className="rounded-3xl border border-white/10 bg-white/[0.03] p-6 mb-10">
-                <div className="flex items-center gap-3 mb-2">
-                    <Pencil size={20} className="text-[#0097a7]" />
-                    <h2 className="text-2xl font-bold">Edit a module's material</h2>
-                </div>
-
-                <p className="text-sm text-gray-400 mb-5">
-                    Correct what the AI wrote, or add a tutorial, quiz question
-                    or project by hand.
-                </p>
-
-                <div className="grid md:grid-cols-3 gap-4">
-                    <select value={roadmapId ?? ""}
-                        onChange={(e) => setRoadmapId(Number(e.target.value))}
-                        className="p-3 rounded-xl bg-black/30 border border-white/10 text-white">
-                        {/* A dropdown nests with optgroup rather than a second
-                            row, so a roadmap reads as belonging to its subject
-                            instead of sitting beside it as a peer.
-
-                            The subject is the group label and nothing more: it
-                            is a heading over Frontend and Backend with no
-                            modules of its own. optgroup cannot nest, so the
-                            third level is indented instead. */}
-                        {roadmaps
-                            .filter((r) => !r.parent_roadmap_id)
-                            .map((subject) => {
-                                const paths = roadmaps.filter(
-                                    (r) => r.parent_roadmap_id === subject.id
-                                );
-
-                                if (paths.length === 0) return null;
-
-                                return (
-                                    <optgroup key={subject.id} label={subject.title}>
-                                        {paths.flatMap((path) => [
-                                            <option key={path.id} value={path.id}>
-                                                {path.title}
-                                            </option>,
-
-                                            ...roadmaps
-                                                .filter((r) => r.parent_roadmap_id === path.id)
-                                                .map((child) => (
-                                                    <option key={child.id} value={child.id}>
-                                                        {"  — "}{child.title}
-                                                    </option>
-                                                )),
-                                        ])}
-                                    </optgroup>
-                                );
-                            })}
-                    </select>
-
-                    <select value={versionId ?? ""}
-                        onChange={(e) => setVersionId(Number(e.target.value))}
-                        className="p-3 rounded-xl bg-black/30 border border-white/10 text-white">
-                        {versions.map((v) => (
-                            <option key={v.id} value={v.id}>
-                                v{v.version_number}{v.title ? ` · ${v.title}` : ""} ({v.status})
-                            </option>
-                        ))}
-                    </select>
-
-                    <select value={moduleId ?? ""}
-                        onChange={(e) => setModuleId(Number(e.target.value))}
-                        className="p-3 rounded-xl bg-black/30 border border-white/10 text-white">
-                        {modules.length === 0 && <option value="">No modules</option>}
-                        {modules.map((m) => (
-                            <option key={m.version_node_id} value={m.version_node_id}>
-                                {m.title}
-                            </option>
-                        ))}
-                    </select>
-                </div>
-
-                {moduleId && (
-                    <div className="mt-6 pt-6 border-t border-white/10">
-                        <ModuleMaterialEditor versionNodeId={moduleId} onChanged={onChanged} />
-                    </div>
-                )}
-            </div>
 
             {/* Awaiting material: the worklist the roadmap builder leaves
                 behind, since it writes a subject of empty modules and starts
@@ -726,6 +590,39 @@ function MaterialLearningReview({ onChanged }) {
                                             {busy ? "Adding..." : "Add to the Module"}
                                         </button>
                                     )}
+                                </div>
+                            )}
+
+                            {/* Correcting what is on the module now.
+                                Everything above this is the proposal, which is
+                                read and answered; this is the material itself,
+                                once it has been added.
+
+                                No picker of its own any more: the run names the
+                                module, so asking again which module was meant
+                                was a second set of dropdowns to re-find
+                                something already on screen. Quizzes, projects
+                                and the reading list only - a tutorial is
+                                somebody else's video, and regenerate is how you
+                                change it. */}
+                            {committed && selected.version_node_id && (
+                                <div className="rounded-3xl border border-white/10 bg-white/[0.03] p-6">
+                                    <div className="flex items-center gap-3 mb-2">
+                                        <Pencil size={20} className="text-[#0097a7]" />
+                                        <h3 className="text-xl font-bold">
+                                            Edit what is on this module
+                                        </h3>
+                                    </div>
+
+                                    <p className="text-sm text-gray-400 mb-6">
+                                        Correct the quizzes, the project or the
+                                        reading list on {selected.module}.
+                                    </p>
+
+                                    <ModuleMaterialEditor
+                                        versionNodeId={selected.version_node_id}
+                                        onChanged={onChanged}
+                                    />
                                 </div>
                             )}
                         </div>

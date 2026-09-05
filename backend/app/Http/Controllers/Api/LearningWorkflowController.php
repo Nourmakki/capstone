@@ -49,6 +49,11 @@ class LearningWorkflowController extends Controller
                 'module'       => $w->versionNode->node->title ?? 'Unknown',
                 'roadmap'      => $w->versionNode->roadmapVersion->roadmap->title ?? 'Unknown',
                 'created_at'   => $w->created_at,
+
+                // Which module this run wrote for, so the page can offer its
+                // material for correction without asking again which module
+                // is meant - the run already said.
+                'version_node_id' => $w->version_node_id,
             ]);
 
         return response()->json([
