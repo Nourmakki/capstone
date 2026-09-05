@@ -13,8 +13,7 @@ from workshop_workflow.graph.workflow_options import (
 
 
 TEST_STATE: WorkshopAgentState = {
-    "roadmap_topic": "Cyber Security",
-    "student_location": "Lebanon",
+    "roadmap_topic": "AI engineering"
 }
 
 
