@@ -912,7 +912,96 @@ def text_is_supported_by_evidence(
         for token in value_tokens
     )
 
+def is_course_or_certificate(
+    text: str,
+) -> bool:
+    """
+    Detect educational programs that are not
+    standalone workshops/events.
 
+    If the evidence clearly describes a course,
+    certificate, certification, degree, or diploma,
+    reject it unless it also explicitly describes
+    itself as a workshop/event.
+    """
+
+    lower_text = text.lower()
+
+    event_terms = (
+        "workshop",
+        "webinar",
+        "meetup",
+        "conference",
+        "hackathon",
+        "seminar",
+        "summit",
+        "technical event",
+    )
+
+    # If the result explicitly identifies itself
+    # as a real event type, allow the LLM to evaluate it.
+    if any(
+        term in lower_text
+        for term in event_terms
+    ):
+        return False
+
+    non_event_terms = (
+        "certificate",
+        "certification",
+        "certificate program",
+        "degree program",
+        "diploma",
+        "course",
+        "course catalog",
+    )
+
+    return any(
+        term in lower_text
+        for term in non_event_terms
+    )
+
+# =====================================================================
+# GENERIC LISTING PAGE DETECTION
+# =====================================================================
+
+def is_generic_event_listing(
+    title: str,
+    snippet: str,
+) -> bool:
+    """
+    Detect search results that are general pages containing
+    many events rather than one specific workshop/event.
+
+    These pages should not be returned as a recommendation
+    because their URL does not belong to one specific event.
+    """
+
+    text = (
+        f"{title} {snippet}"
+    ).lower()
+
+    listing_patterns = (
+        "list of",
+        "ultimate list",
+        "events you can't miss",
+        "events you cant miss",
+        "upcoming events",
+        "upcoming conferences",
+        "events calendar",
+        "conferences and events",
+        "webinars & events",
+        "webinars and events",
+        "events and webinars",
+        "conferences in",
+        "workshops in",
+        "events in",
+    )
+
+    return any(
+        pattern in text
+        for pattern in listing_patterns
+    )
 # =====================================================================
 # NORMALIZE ONE SERPER RESULT
 # =====================================================================
@@ -981,6 +1070,12 @@ def normalize_serper_candidate(
     ):
         return None
 
+    if is_generic_event_listing(
+        title,
+        snippet,
+):
+        return None
+
     # Important:
     # result["date"] is deliberately NOT included.
     #
@@ -994,6 +1089,11 @@ def normalize_serper_candidate(
         )
         if value
     ).strip()
+
+    if is_course_or_certificate(
+    evidence
+):
+        return None
 
     event_date = (
         extract_future_event_date(
@@ -1734,13 +1834,64 @@ Reject candidates that are mainly:
 - generic event directories
 - broad conference listing pages
 - non-technical events
+- certificate programs
+- certification courses
+- long-term training programs
+- course catalogs
+- self-paced learning programs
 
+A generic directory page must not be selected merely because it mentions
+one or more relevant events.
 
-A generic directory page should not be selected merely because it
-mentions many conferences.
+Do NOT select educational programs or credentials such as:
+- certificate programs
+- certification courses
+- degree programs
+- diplomas
+- long-term academies
+- self-paced courses
+- prerecorded courses
 
-Prefer a concrete individual event whose link allows the student to
-learn more about that specific event.
+A workshop recommendation must represent a specific scheduled
+technical event, workshop, meetup, training session, webinar,
+bootcamp session, or conference session.
+
+A page advertising a certificate program or general course catalog
+is not a valid workshop, even if it has a start date.
+
+If the search result is a general article or list containing multiple events,
+do not extract one event from that article and return the article URL.
+Only select the event when the supplied candidate URL itself is dedicated
+to that specific event.
+==================================================
+LINK DESTINATION RULES
+==================================================
+
+The supplied link must lead to information for the specific workshop or
+event being returned. This is a mandatory eligibility rule, not merely a
+preference.
+
+Acceptable destinations include:
+- the specific event details page
+- the specific event registration or ticket page
+- an event-specific announcement or social-media post
+
+Reject a candidate when its link leads only to:
+- a website homepage
+- an organization's general homepage
+- a category, search-results, or archive
+- a general social-media profile or page
+
+Do not select one event from a general listing and return the listing's
+URL unless the candidate provides a link dedicated to that specific event.otherwise, reject it.
+Authentication exception:
+- If an event-specific link requires authentication and redirects the
+  student to a login page before opening that exact event, the link may
+  still be selected.
+- A bare or generic login page is not sufficient. The candidate evidence
+  must clearly identify the exact event and show that login is required
+  to reach it.
+- Never invent, replace, or rewrite a candidate URL.
 
 
 ==================================================
@@ -1755,14 +1906,26 @@ You may select:
 
 Try to provide a useful mix when strong candidates of both types exist.
 
+Geographic compatibility is a mandatory eligibility rule. Check it
+before considering how technically useful or prestigious an event is.
+
 Interpret the requested geographic scope carefully:
 - If the student supplied a country or broad region, physical events in
   cities or localities inside that country or region are eligible.
-- For example, when the requested location is Lebanon, an event whose
-  evidence says Beirut may be selected because Beirut is in Lebanon.
+- Specifically, when the requested location is Lebanon, physical events
+  in Beirut or other locations inside Lebanon are eligible. Physical
+  events in Washington, Paris, Dubai, or any other location outside
+  Lebanon are invalid for that Lebanon request and must not be selected.
+  This example is conditional on the requested location being Lebanon;
+  for every other request, evaluate the event relative to that requested
+  location instead.
 - If the student supplied a specific city, prefer events in that city.
   A nearby event may be selected only when the geographic relationship is
   reasonable and useful to the student.
+
+Technical relevance never overrides geographic incompatibility for a
+physical event. If you are uncertain whether a physical event is inside
+or reasonably near the student's requested area, reject that event.
 
 You may use geographic knowledge only to decide whether the location in
 the candidate evidence is inside or near the student's requested area.
@@ -1916,7 +2079,101 @@ If no candidate is strong enough, return:
 }
 """
 
+# =====================================================================
+# ROADMAP TOPIC VALIDATION
+# =====================================================================
 
+def validate_technology_topic(
+    roadmap_topic: str,
+) -> None:
+    """
+    Verify that roadmap_topic represents a Computer Science
+    or technology learning topic.
+
+    This validation runs before Serper so invalid topics do
+    not consume a workshop search request.
+    """
+
+    validation_prompt = f"""
+You are validating the topic of a Computer Science learning roadmap.
+
+Determine whether the supplied topic belongs to Computer Science,
+software development, information technology, computing, or a closely
+related technical field that a CS student could reasonably study.
+
+Valid examples include:
+- Web Development
+- Frontend Development
+- Backend Development
+- Cyber Security
+- Artificial Intelligence
+- Machine Learning
+- Data Science
+- Mobile Development
+- Software Engineering
+- Cloud Computing
+- DevOps
+- Databases
+- Computer Networks
+- Embedded Systems
+- Game Development
+- Computer Graphics
+- Internet of Things
+- Blockchain Development
+
+Invalid examples include unrelated non-technical subjects such as:
+- pizza
+- cooking
+- football
+- fashion
+- tourism
+- gardening
+
+TOPIC:
+{roadmap_topic}
+
+Return ONLY valid JSON:
+
+{{
+    "valid": true
+}}
+
+or:
+
+{{
+    "valid": false
+}}
+"""
+
+    result = llm.invoke([
+        {
+            "role": "user",
+            "content": validation_prompt,
+        }
+    ])
+
+    parsed = extract_json_object(
+        result.content
+    )
+
+    is_valid = parsed.get(
+        "valid"
+    )
+
+    if not isinstance(
+        is_valid,
+        bool,
+    ):
+        raise ValueError(
+            "Technology topic validation "
+            "returned an invalid response."
+        )
+
+    if not is_valid:
+        raise ValueError(
+            "roadmap_topic must be a "
+            "Computer Science or technology topic."
+        )
 # =====================================================================
 # PUBLIC RUNNER
 # =====================================================================
@@ -1967,6 +2224,10 @@ def run_workshop_agent(
         raise ValueError(
             "roadmap_topic is required."
         )
+    validate_technology_topic(
+         topic
+    )
+    
 
     location = None
 
