@@ -131,8 +131,11 @@ class LearningController extends Controller
     /** One roadmap a student is partway through. */
     private function progressSummary(UserRoadmapProgress $progress): array
     {
-        $version   = $progress->roadmapVersion;
-        $completed = $progress->completedNodes->pluck('node_id')->toArray();
+        $version = $progress->roadmapVersion;
+
+        // Across every version of this roadmap - see
+        // UserRoadmapProgress::completedNodeIdsFor.
+        $completed = $progress->completedNodeIds();
 
         $nodes = VersionNode::with('node')
             ->where('roadmap_version_id', $version->id)
@@ -324,12 +327,12 @@ class LearningController extends Controller
             return [];
         }
 
-        $progress = UserRoadmapProgress::where('student_id', $student->id)
-            ->where('roadmap_version_id', $versionId)
-            ->first();
+        // Asked of the roadmap rather than the one version, so a module
+        // finished before this version was published still reads as finished
+        // - see UserRoadmapProgress::completedNodeIdsFor. Looked up from the
+        // version because that is all the caller has.
+        $roadmapId = RoadmapVersion::where('id', $versionId)->value('roadmap_id');
 
-        return $progress
-            ? $progress->completedNodes->pluck('node_id')->toArray()
-            : [];
+        return UserRoadmapProgress::completedNodeIdsFor($student->id, $roadmapId);
     }
 }

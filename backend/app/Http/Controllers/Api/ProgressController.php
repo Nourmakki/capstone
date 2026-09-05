@@ -15,6 +15,7 @@ use App\Models\TutorialCompletion;
 use App\Models\VersionNode;
 use App\Models\VersionEdge;
 use App\Models\Submission;
+use App\Services\RailOrder;
 
 class ProgressController extends Controller
 {
@@ -53,14 +54,22 @@ class ProgressController extends Controller
             'node_id'                  => $versionNode->node_id,
         ]);
 
-        $completed = $progress->completedNodes()->pluck('node_id')->toArray();
-
         // Rail modules only. Counting choices too would mean a student who
         // picks React out of React/Vue/Angular can never reach 100%, because
         // the two they correctly skipped stay in the denominator forever.
-        $total = VersionNode::where('roadmap_version_id', $versionNode->roadmap_version_id)
+        $railNodeIds = VersionNode::where('roadmap_version_id', $versionNode->roadmap_version_id)
             ->inRail()
-            ->count();
+            ->pluck('node_id')
+            ->all();
+
+        // Counted across every version of this roadmap, so work done in v1
+        // still counts in v2 - but against this version's rail only. A module
+        // finished in v1 and since dropped from the roadmap is still
+        // finished, and still no part of what v2 asks for; counting it would
+        // put a student past 100% and call a roadmap done in the middle of it.
+        $completed = array_values(array_intersect($progress->completedNodeIds(), $railNodeIds));
+
+        $total = count($railNodeIds);
 
         $progress->update([
             'current_node_id' => $versionNode->node_id,
@@ -237,8 +246,11 @@ class ProgressController extends Controller
     ): array {
         $blockers = [];
 
+        // Every version's completions, so a prerequisite finished in v1 keeps
+        // the module behind it open in v2 - see
+        // UserRoadmapProgress::completedNodeIdsFor.
         $completed = $progress
-            ? $progress->completedNodes()->pluck('node_id')->toArray()
+            ? $progress->completedNodeIds()
             : [];
 
         // 1. Prerequisites, taken from the edges pointing at this node.
@@ -379,15 +391,27 @@ class ProgressController extends Controller
             ->where('roadmap_version_id', $version->id)
             ->first();
 
-        $completed = $progress
-            ? $progress->completedNodes->pluck('node_id')->toArray()
-            : [];
+        // Across every version of this roadmap, not just the one being read.
+        // A student who finished six modules of v1 has finished them, and a
+        // newly published v2 that shows them all as untouched is asking them
+        // to do the roadmap again because somebody added a module to it.
+        $completed = UserRoadmapProgress::completedNodeIdsFor($student->id, $version->roadmap_id);
 
         // A node is unlocked when every prerequisite is completed.
         $prerequisites = [];
         foreach ($edges as $edge) {
             $prerequisites[$edge['to_node_id']][] = $edge['from_node_id'];
         }
+
+        // The rail is read in the graph's order, not the order the rows were
+        // written. Without this a module added to an existing roadmap - which
+        // is every module an AI proposal places - read as the last one,
+        // whatever its placement said.
+        //
+        // Also what decides where the student is picked up below: the first
+        // unlocked module of the rail as it is read, rather than the first one
+        // the database happened to hand back.
+        $nodes = app(RailOrder::class)->sort($nodes, $prerequisites);
 
         // An announced version has nothing to enter, so it has no current
         // module either. Left null rather than pointing at the first one,

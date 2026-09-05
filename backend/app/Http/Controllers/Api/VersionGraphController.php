@@ -10,6 +10,7 @@ use App\Models\RoadmapVersion;
 use App\Models\VersionEdge;
 use App\Models\VersionNode;
 use App\Services\NodeChoiceRules;
+use App\Services\RailOrder;
 use App\Services\VersionGraphRules;
 use Illuminate\Http\Request;
 use Illuminate\Support\Facades\DB;
@@ -271,10 +272,15 @@ class VersionGraphController extends Controller
         // Rail modules only, each carrying its own choices. A choice is not a
         // step in the sequence, so listing it alongside one would put "HTML"
         // beside "Fundamentals" as though they were the same kind of thing.
-        return VersionNode::with(['node', 'choices.node', 'choices.linksToRoadmap', 'linksToRoadmap'])
+        $rail = VersionNode::with(['node', 'choices.node', 'choices.linksToRoadmap', 'linksToRoadmap'])
             ->where('roadmap_version_id', $version->id)
             ->inRail()
-            ->get()
+            ->get();
+
+        // The same order the student will read, so the editor and the roadmap
+        // agree about where a module sits - see RailOrder.
+        return app(RailOrder::class)
+            ->sort($rail, $prerequisites)
             ->map(fn ($vn) => $this->modulePayload($vn, $prerequisites))
             ->values();
     }

@@ -100,11 +100,17 @@ class AiRoadmapCommitService
                 // started for it below; until that material is approved the
                 // module is visible to students but cannot be entered, and
                 // the publish gate lets the version go live regardless.
+                //
+                // It joins the stage of the module it comes after. She knows
+                // nothing about stages - they are a grouping a manager adds
+                // here - so a module placed inside "Fundamentals" would
+                // otherwise carry no stage at all and break the group it was
+                // put in the middle of.
                 $newVersionNodes[] = VersionNode::create([
                     'roadmap_version_id' => $version->id,
                     'node_id'            => $node->id,
                     'coming_soon'        => true,
-                ]);
+                ] + $this->stageAfter($version, $placement, $suggestedById));
             }
 
             // Every node exists now, so references in either direction resolve.
@@ -220,6 +226,42 @@ class AiRoadmapCommitService
         foreach ($versionNodes as $versionNode) {
             StartLearningRun::dispatch($versionNode->id);
         }
+    }
+
+    /**
+     * The stage a newly placed module belongs to, if any.
+     *
+     * Taken from the module it comes directly after. A roadmap nobody has
+     * grouped has no stages at all, in which case this finds nothing and the
+     * module carries none - which is right, and is the common case.
+     *
+     * Only existing modules are consulted: another module from the same
+     * proposal has no stage of its own to lend, and reading one mid-loop
+     * would depend on which of them happened to be created first. Membership
+     * of the suggestion list is what tells the two apart - the same test
+     * resolve() makes, and for the same reason: her temporary ids are real
+     * ids from somewhere else on the platform.
+     *
+     * @return array{stage?:int,stage_title?:string}
+     */
+    private function stageAfter(RoadmapVersion $version, array $placement, array $suggestedById): array
+    {
+        foreach ($placement['direct_prerequisite_node_ids'] ?? [] as $id) {
+            if (isset($suggestedById[(int) $id])) {
+                continue;
+            }
+
+            $before = VersionNode::where('roadmap_version_id', $version->id)
+                ->where('node_id', (int) $id)
+                ->whereNotNull('stage')
+                ->first();
+
+            if ($before) {
+                return ['stage' => $before->stage, 'stage_title' => $before->stage_title];
+            }
+        }
+
+        return [];
     }
 
     /**

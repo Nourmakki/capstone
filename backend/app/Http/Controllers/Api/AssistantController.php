@@ -93,8 +93,13 @@ class AssistantController extends Controller
     /** One roadmap: how far through it, and what is open now. */
     private function roadmapProgress(UserRoadmapProgress $progress): array
     {
-        $version   = $progress->roadmapVersion;
-        $completed = $progress->completedNodes->pluck('node_id')->toArray();
+        $version = $progress->roadmapVersion;
+
+        // Across every version of this roadmap - see
+        // UserRoadmapProgress::completedNodeIdsFor. The assistant answers from
+        // a student's own progress, so it has to read it the same way the
+        // roadmap does or it will tell them to redo work they have done.
+        $completed = $progress->completedNodeIds();
 
         $nodes = VersionNode::with('node')
             ->where('roadmap_version_id', $version->id)

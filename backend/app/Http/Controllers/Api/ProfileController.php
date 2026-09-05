@@ -75,9 +75,33 @@ class ProfileController extends Controller
         return UserRoadmapProgress::with('roadmapVersion.roadmap')
             ->where('student_id', $student->id)
             ->get()
+            // One line per roadmap, not per version of one. A student who was
+            // reading v1 when v2 was published has a progress row against
+            // each, and now that both are counted the same way they would
+            // list the same roadmap twice with the same number beside it. The
+            // newest version wins, being the one they are shown.
+            ->sortByDesc('roadmap_version_id')
+            ->unique(fn ($progress) => $progress->roadmapVersion?->roadmap_id)
             ->map(function ($progress) {
-                $total = VersionNode::where('roadmap_version_id', $progress->roadmap_version_id)->count();
-                $done  = CompletedNode::where('user_roadmap_progress_id', $progress->id)->count();
+                // Rail modules only, as everywhere else - a choice a student
+                // correctly skipped is not work outstanding. Counted with the
+                // choices, this page disagreed with the roadmap it described.
+                $railNodeIds = VersionNode::where('roadmap_version_id', $progress->roadmap_version_id)
+                    ->inRail()
+                    ->pluck('node_id')
+                    ->all();
+
+                $total = count($railNodeIds);
+
+                // Counted the way the roadmap page counts it: every version's
+                // completions, against this version's modules. Read off this
+                // one progress row alone, the profile said 0% for a roadmap
+                // the student had all but finished, because a new version had
+                // been published and their work was filed under the old one.
+                $done = count(array_intersect(
+                    $progress->completedNodeIds(),
+                    $railNodeIds
+                ));
 
                 return [
                     'roadmap_id' => $progress->roadmapVersion->roadmap->id ?? null,

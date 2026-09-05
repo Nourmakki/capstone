@@ -18,6 +18,7 @@ use App\Models\UserRoadmapProgress;
 use App\Models\VersionEdge;
 use App\Models\VersionNode;
 use App\Models\Workshop;
+use App\Services\RailOrder;
 use App\Services\VersionPublishRules;
 use Illuminate\Http\Request;
 use Illuminate\Support\Facades\DB;
@@ -234,10 +235,16 @@ class RoadmapController extends Controller
     {
         // Rail modules only. A choice belongs to the module offering it, and
         // travels nested inside it rather than as a step of its own.
-        return VersionNode::with(['node', 'choices.node', 'choices.linksToRoadmap', 'linksToRoadmap'])
+        $rail = VersionNode::with(['node', 'choices.node', 'choices.linksToRoadmap', 'linksToRoadmap'])
             ->where('roadmap_version_id', $version->id)
             ->inRail()
-            ->get()
+            ->get();
+
+        // In the graph's order, not the order the rows were written - see
+        // RailOrder. A module added to an existing roadmap is written last and
+        // would otherwise read as the last step of it.
+        return app(RailOrder::class)
+            ->forVersion($version, $rail)
             ->map(fn ($vn) => $this->nodePayload($vn));
     }
 
