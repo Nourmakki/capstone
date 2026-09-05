@@ -12,6 +12,148 @@ const STAGES = [
     { id: "placement", label: "placement" },
 ];
 
+/**
+ * Times worth a single click. A daily scan gets parked where nobody is
+ * watching, so: early, before the day starts, lunch, after it ends, and late.
+ */
+const PRESET_TIMES = ["06:00", "07:00", "12:00", "18:00", "22:00"];
+
+/**
+ * Read a time written the way a person writes one.
+ *
+ * Takes 7, 07, 7am, 7 AM, 7:30, 7.30, 730, 19:30, 1930, 7:30 pm. Gives back
+ * "HH:MM", which is what the API wants, or null when it is not a time.
+ *
+ * A bare number is read on a 24-hour clock, so 7 is morning and 19 is
+ * evening. Reading a bare 7 as the afternoon would be a guess, and a scan
+ * that runs twelve hours from where somebody meant it is worse than one they
+ * had to be explicit about.
+ */
+function parseTime(text) {
+    const cleaned = String(text ?? "").trim().toLowerCase();
+
+    if (!cleaned) return null;
+
+    const match = cleaned.match(/^(\d{1,2})\s*[:.h]?\s*(\d{2})?\s*(am|pm)?$/);
+
+    if (!match) return null;
+
+    let hour = Number(match[1]);
+    const minute = match[2] === undefined ? 0 : Number(match[2]);
+    const meridiem = match[3];
+
+    if (minute > 59) return null;
+
+    if (meridiem) {
+        if (hour < 1 || hour > 12) return null;
+        if (meridiem === "am" && hour === 12) hour = 0;
+        if (meridiem === "pm" && hour !== 12) hour += 12;
+    } else if (hour > 23) {
+        return null;
+    }
+
+    return `${String(hour).padStart(2, "0")}:${String(minute).padStart(2, "0")}`;
+}
+
+/** "19:00" as "7:00 PM" - for reading, where the 24-hour form is for typing. */
+function formatTime(value) {
+    const [hour, minute] = String(value ?? "").split(":").map(Number);
+
+    if (Number.isNaN(hour) || Number.isNaN(minute)) return value;
+
+    const twelve = hour % 12 === 0 ? 12 : hour % 12;
+
+    return `${twelve}:${String(minute).padStart(2, "0")} ${hour < 12 ? "AM" : "PM"}`;
+}
+
+/**
+ * When the daily scan runs.
+ *
+ * This was a bare <input type="time">, which was the wrong control twice
+ * over. It rendered on the dark card as flat text with no border a person
+ * could see, so it read as a label rather than something to click. And being
+ * a segment stepper, it saved on every complete time passed through on the
+ * way to the wanted one - dragging 07:00 to 19:30 wrote 17:00 and 19:00 to
+ * the server first.
+ *
+ * So: the usual times one click away, and a box that takes a time written the
+ * way people write them, saved once, when asked for.
+ *
+ * At module level, not nested in the page. A component declared inside
+ * another is a new type on every render, which remounts it - and remounting a
+ * text input mid-sentence takes the caret with it.
+ */
+function ScheduleTime({ value, saving, onSave }) {
+    const [draft, setDraft] = useState(value);
+
+    // Follow the saved value. After a preset click or a save landing, the box
+    // should agree with the server rather than sit on a stale draft.
+    useEffect(() => { setDraft(value); }, [value]);
+
+    const parsed  = parseTime(draft);
+    const changed = parsed !== null && parsed !== value;
+    const broken  = draft.trim() !== "" && parsed === null;
+
+    const save = () => { if (changed) onSave(parsed); };
+
+    return (
+        <div>
+            <p className="text-[11px] uppercase tracking-wider text-gray-500 mb-2">
+                Runs at
+            </p>
+
+            <div className="flex flex-wrap gap-1.5 mb-2">
+                {PRESET_TIMES.map((preset) => (
+                    <button
+                        key={preset}
+                        type="button"
+                        onClick={() => onSave(preset)}
+                        disabled={saving}
+                        className={`px-2.5 py-1 rounded-lg text-xs font-semibold transition disabled:opacity-40 ${
+                            preset === value
+                                ? "bg-[#0097a7] text-black"
+                                : "bg-white/5 border border-white/10 text-gray-300 hover:border-[#0097a7]/50"
+                        }`}
+                    >
+                        {formatTime(preset)}
+                    </button>
+                ))}
+            </div>
+
+            <div className="flex items-center gap-2">
+                <input
+                    value={draft}
+                    onChange={(e) => setDraft(e.target.value)}
+                    onKeyDown={(e) => { if (e.key === "Enter") { e.preventDefault(); save(); } }}
+                    disabled={saving}
+                    placeholder="7am, 19:30, 7.30 pm"
+                    aria-label="Time of day the daily scan runs"
+                    className={`w-44 p-2 rounded-xl bg-black/30 border text-white text-sm placeholder:text-gray-600 ${
+                        broken ? "border-red-400/50" : "border-white/10"
+                    }`}
+                />
+
+                <button
+                    type="button"
+                    onClick={save}
+                    disabled={!changed || saving}
+                    className="px-3.5 py-2 rounded-xl text-sm font-semibold transition bg-[#0097a7] text-black disabled:bg-white/5 disabled:text-gray-600"
+                >
+                    {saving ? "Saving..." : "Save"}
+                </button>
+            </div>
+
+            <p className={`text-xs mt-1.5 ${broken ? "text-red-300" : "text-gray-500"}`}>
+                {broken
+                    ? "Not a time. Try 7am, 19:30, or 7.30 pm."
+                    : changed
+                    ? `Save to move it to ${formatTime(parsed)}.`
+                    : `Set to ${formatTime(value)}.`}
+            </p>
+        </div>
+    );
+}
+
 function MaterialAiReview({ onChanged }) {
     const [workflows, setWorkflows] = useState([]);
     const [selected, setSelected] = useState(null);
@@ -65,9 +207,10 @@ function MaterialAiReview({ onChanged }) {
     /**
      * Turn the daily scan on or off, or move when it runs.
      *
-     * Saved immediately rather than behind a Save button: there is one switch
-     * and one time, and someone reaching for this before a demo wants it off
-     * now, not after confirming a form.
+     * The switch and the preset times save the moment they are clicked -
+     * someone reaching for this before a demo wants it off now, not after
+     * confirming a form. A typed time waits for Save, because half-written is
+     * a state a click does not have and 1 is a real time on the way to 19.
      */
     const saveSchedule = async (change) => {
         setSavingSchedule(true);
@@ -442,13 +585,13 @@ function MaterialAiReview({ onChanged }) {
                             <p className="font-semibold">
                                 Daily scan{" "}
                                 <span className={schedule.enabled ? "text-[#00b0c2]" : "text-gray-500"}>
-                                    {schedule.enabled ? `on · ${schedule.run_at}` : "off"}
+                                    {schedule.enabled ? `on · ${formatTime(schedule.run_at)}` : "off"}
                                 </span>
                             </p>
 
                             <p className="text-xs text-gray-500 mt-1">
                                 {schedule.enabled
-                                    ? `Every day at ${schedule.run_at}, all ${schedule.roadmaps_in_scope} published roadmaps go to the AI.`
+                                    ? `Every day at ${formatTime(schedule.run_at)}, all ${schedule.roadmaps_in_scope} published roadmaps go to the AI.`
                                     : `Off. Turning it on sends all ${schedule.roadmaps_in_scope} published roadmaps to the AI each day.`}
                                 {schedule.last_run_at && (
                                     <> Last run {new Date(schedule.last_run_at).toLocaleString()} — {schedule.last_run_summary}</>
@@ -484,13 +627,11 @@ function MaterialAiReview({ onChanged }) {
                         </div>
                     </div>
 
-                    <div className="flex items-center gap-3 shrink-0">
-                        <input
-                            type="time"
+                    <div className="flex flex-wrap items-center gap-4 shrink-0">
+                        <ScheduleTime
                             value={schedule.run_at}
-                            disabled={savingSchedule}
-                            onChange={(e) => saveSchedule({ run_at: e.target.value })}
-                            className="p-2 rounded-xl bg-black/30 border border-white/10 text-white text-sm"
+                            saving={savingSchedule}
+                            onSave={(run_at) => saveSchedule({ run_at })}
                         />
 
                         <button
