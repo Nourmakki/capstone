@@ -1,6 +1,7 @@
 import React, { useCallback, useEffect, useState } from "react";
 import api from "../../api";
 import ModuleMaterialEditor from "../../components/ModuleMaterialEditor";
+import LearningProposalEditor from "../../components/LearningProposalEditor";
 import {
     Sparkles, Video, Brain, Code2, BookOpen, Check, X, Pencil,
     RefreshCw, AlertTriangle, Inbox, ChevronRight, ExternalLink,
@@ -35,6 +36,10 @@ function MaterialLearningReview({ onChanged }) {
     // Folded away until asked for. The header carries the count, so the page
     // still says how much is waiting without unrolling all of it.
     const [awaitingOpen, setAwaitingOpen] = useState(false);
+
+    // Which stage of the proposal is open for editing - one at a time,
+    // because that is how her edit action takes it.
+    const [editingStage, setEditingStage] = useState(null);
 
     const loadRuns = useCallback(async () => {
         try {
@@ -90,6 +95,7 @@ function MaterialLearningReview({ onChanged }) {
         setSelected(run);
         setResult(null);
         setFeedback("");
+        setEditingStage(null);
         setServiceDown(false);
         setBusy(true);
 
@@ -138,6 +144,23 @@ function MaterialLearningReview({ onChanged }) {
         } finally {
             setBusy(false);
         }
+    };
+
+    /**
+     * Send one stage back to her, edited.
+     *
+     * The key is hers: quiz -> quiz_result, project -> project_result,
+     * external_resources -> external_resources_result. Her models forbid
+     * extra keys and forbid feedback on an edit, so nothing else travels.
+     */
+    const saveStage = async (stage, edited) => {
+        await decide({
+            action: "edit",
+            stage,
+            data: { [`${stage}_result`]: edited },
+        });
+
+        setEditingStage(null);
     };
 
     const commit = async () => {
@@ -200,6 +223,23 @@ function MaterialLearningReview({ onChanged }) {
     const ready = result?.status === "ready_for_commit";
 
     const committed = !!runs.find((r) => r.id === selected?.id)?.committed;
+
+    /**
+     * The Edit button on one stage of the proposal.
+     *
+     * Only while the run is awaiting review: an edit is a decision on a
+     * proposal, and once the material has been committed to the module it is
+     * the module's own editor that changes it, not hers.
+     */
+    const editButton = (stage) => (awaitingReview ? (
+        <button
+            onClick={() => setEditingStage(editingStage === stage ? null : stage)}
+            disabled={busy}
+            className="flex items-center gap-1.5 px-3 py-1.5 rounded-lg border border-[#0097a7]/30 text-[#00b0c2] hover:bg-[#0097a7]/10 transition text-xs disabled:opacity-50"
+        >
+            <Pencil size={13} /> {editingStage === stage ? "Close" : "Edit"}
+        </button>
+    ) : null);
 
     return (
         <div className="p-8">
@@ -421,7 +461,18 @@ function MaterialLearningReview({ onChanged }) {
                             </Section>
 
                             <Section icon={<Brain size={18} className="text-purple-400" />}
-                                     title="Quiz" count={data.quiz_result?.questions?.length}>
+                                     title="Quiz" count={data.quiz_result?.questions?.length}
+                                     action={data.quiz_result && editButton("quiz")}>
+                                {editingStage === "quiz" && data.quiz_result && (
+                                    <LearningProposalEditor
+                                        stage="quiz"
+                                        value={data.quiz_result}
+                                        busy={busy}
+                                        onCancel={() => setEditingStage(null)}
+                                        onSave={(edited) => saveStage("quiz", edited)}
+                                    />
+                                )}
+
                                 {data.quiz_result?.questions?.map((q, i) => (
                                     <div key={i} className="rounded-2xl border border-white/10 bg-black/30 p-4">
                                         <p className="font-semibold">{i + 1}. {q.question}</p>
@@ -446,7 +497,18 @@ function MaterialLearningReview({ onChanged }) {
                                 ))}
                             </Section>
 
-                            <Section icon={<Code2 size={18} className="text-green-400" />} title="Project">
+                            <Section icon={<Code2 size={18} className="text-green-400" />} title="Project"
+                                     action={data.project_result?.title && editButton("project")}>
+                                {editingStage === "project" && data.project_result && (
+                                    <LearningProposalEditor
+                                        stage="project"
+                                        value={data.project_result}
+                                        busy={busy}
+                                        onCancel={() => setEditingStage(null)}
+                                        onSave={(edited) => saveStage("project", edited)}
+                                    />
+                                )}
+
                                 {data.project_result?.title && (
                                     <div className="rounded-2xl border border-white/10 bg-black/30 p-4">
                                         <h4 className="font-semibold">{data.project_result.title}</h4>
@@ -491,7 +553,18 @@ function MaterialLearningReview({ onChanged }) {
 
                             <Section icon={<BookOpen size={18} className="text-blue-400" />}
                                      title="Resources"
-                                     count={data.external_resources_result?.resources?.length}>
+                                     count={data.external_resources_result?.resources?.length}
+                                     action={data.external_resources_result && editButton("external_resources")}>
+                                {editingStage === "external_resources" && data.external_resources_result && (
+                                    <LearningProposalEditor
+                                        stage="external_resources"
+                                        value={data.external_resources_result}
+                                        busy={busy}
+                                        onCancel={() => setEditingStage(null)}
+                                        onSave={(edited) => saveStage("external_resources", edited)}
+                                    />
+                                )}
+
                                 {data.external_resources_result?.resources?.map((r, i) => (
                                     <div key={i} className="rounded-2xl border border-white/10 bg-black/30 p-4">
                                         <h4 className="font-semibold">{r.title}</h4>
@@ -633,7 +706,7 @@ function MaterialLearningReview({ onChanged }) {
     );
 }
 
-function Section({ icon, title, count, children }) {
+function Section({ icon, title, count, action, children }) {
     return (
         <div className="rounded-3xl border border-white/10 bg-white/[0.03] p-6">
             <div className="flex items-center gap-3 mb-4">
@@ -644,6 +717,7 @@ function Section({ icon, title, count, children }) {
                         {count ?? 0}
                     </span>
                 )}
+                {action && <div className="ml-auto">{action}</div>}
             </div>
 
             <div className="space-y-3">{children}</div>
