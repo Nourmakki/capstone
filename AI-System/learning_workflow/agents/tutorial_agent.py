@@ -38,7 +38,7 @@ class TutorialShortlistResult(BaseModel):
     selected_candidates: list[
         TutorialShortlistItem
     ] = Field(
-        min_length=1,
+        min_length=0,
         max_length=SHORTLIST_SIZE,
     )
 
@@ -150,7 +150,7 @@ def validate_shortlist_against_evidence(
         len(candidate_metadata),
     )
 
-    if not 1 <= selected_count <= max_allowed:
+    if (selected_count != 0 and not 1 <= selected_count <= max_allowed):
         raise ValueError(
             "Tutorial shortlist must contain "
             f"between 1 and {max_allowed} resources."
@@ -187,7 +187,9 @@ A candidate may be:
 
 SHORTLIST SIZE
 
-Select up to 3 of the strongest candidate resources.
+SHORTLIST SIZE
+
+Normally, select between 1 and 3 of the strongest candidate resources.
 
 If 3 or more candidates are genuinely relevant and educationally
 promising, select the best 3.
@@ -195,30 +197,16 @@ promising, select the best 3.
 If only 1 or 2 candidates are genuinely relevant and educationally
 promising, select only those candidates.
 
+Return an empty selected_candidates array only when none of the
+supplied candidates appears relevant and educationally suitable.
+
+Do not return an empty array merely because fewer than 3 strong
+candidates are available.
+
 Do not include a weak, irrelevant, or poorly matched resource merely
 to reach 3 candidates.
 
 Never select more than 3 candidates.
-CORE OBJECTIVE
-
-Shortlist only the candidates that appear most likely to provide
-genuine educational value for the student.
-
-The goal is not merely to find videos that mention the roadmap topic.
-
-The strongest candidates should appear capable of helping the student
-develop real understanding, useful knowledge, and practical ability in
-the concepts required by the roadmap node.
-
-Do not shortlist a resource merely because:
-- its title contains the node name
-- it is popular
-- it has many views or likes
-- it comes from a popular channel
-- it claims to be complete
-
-Prefer resources whose available metadata strongly suggests meaningful,
-substantial, and educational teaching.
 
 
 EVALUATION CRITERIA
@@ -339,6 +327,8 @@ OUTPUT
 Return ONLY valid JSON.
 
 The selected_candidates array must contain between 1 and 3 candidates.
+It may be empty only when none of the supplied candidates is relevant
+and educationally suitable.
 
 It may contain only 1 or 2 candidates when fewer than 3 supplied
 resources are strong enough to justify deeper transcript evaluation, but maxiumum is 3.
@@ -364,6 +354,11 @@ Return:
   ]
 }
 
+When no supplied candidate is suitable, return:
+
+{
+  "selected_candidates": []
+}
 """
 
 # =====================================================================
@@ -845,6 +840,23 @@ YOUTUBE CANDIDATE METADATA
         shortlist,
         candidate_metadata,
     )
+
+    if not shortlist.selected_candidates:
+        tutorial_result = TutorialAgentResult(
+            node_id=agent_input.node.id,
+            status="learning_failed",
+            tutorial=None,
+            coverage=None,
+            failure_reason=(
+                "YouTube candidates and metadata were found, but none "
+                "appeared sufficiently relevant and educational for "
+                "this roadmap node."
+            ),
+        ).model_dump()
+
+        return {
+            "tutorial_result": tutorial_result,
+        }
 
     metadata_by_resource = {
         (

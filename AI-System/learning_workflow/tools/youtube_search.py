@@ -59,12 +59,16 @@ def build_tutorial_search_query(
     agent_input: TutorialAgentInput,
 ) -> str:
 
+    roadmap_topic = (
+        agent_input.roadmap_topic.strip()
+    )
+
     node_title = (
         agent_input.node.title.strip()
     )
 
     return (
-        f"{node_title} tutorial course"
+        f"{roadmap_topic} {node_title}"
     )
 
 def search_youtube_candidates(
