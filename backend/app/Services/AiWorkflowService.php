@@ -226,4 +226,59 @@ class AiWorkflowService
                 $decision
             );
     }
+
+    /**
+     * Ask the workshop agent what is on near a student, for a topic.
+     *
+     * A web search and a read of what it finds, so minutes rather than the
+     * quarter-hour a roadmap takes - but well past a request's usual patience.
+     *
+     * student_location is sent only when there is one. Her model forbids
+     * extra keys but allows this one to be absent, and a null would be a
+     * claim that the student has no location rather than that we were not
+     * told one.
+     */
+    public function startWorkshopWorkflow(string $topic, ?string $location = null): Response
+    {
+        $this->allowTimeFor(300);
+
+        return Http::acceptJson()
+            ->connectTimeout(5)
+            ->timeout(300)
+            ->post($this->baseUrl . '/workshop-workflows', array_filter([
+                'roadmap_topic'    => $topic,
+                'student_location' => $location,
+            ], fn ($value) => $value !== null));
+    }
+
+    public function getWorkshopWorkflow(string $threadId): Response
+    {
+        $this->allowTimeFor(30);
+
+        return Http::acceptJson()
+            ->connectTimeout(5)
+            ->timeout(30)
+            ->get($this->baseUrl . '/workshop-workflows/' . $threadId);
+    }
+
+    /**
+     * Approve or reject what it found.
+     *
+     * Her workshop review takes only those two - no edit, no regenerate -
+     * and an approve may carry a list of links to approve only some.
+     *
+     * @param array{action: string, data?: array, feedback?: string} $decision
+     */
+    public function resumeWorkshopWorkflow(string $threadId, array $decision): Response
+    {
+        $this->allowTimeFor(300);
+
+        return Http::acceptJson()
+            ->connectTimeout(5)
+            ->timeout(300)
+            ->post(
+                $this->baseUrl . '/workshop-workflows/' . $threadId . '/resume',
+                $decision
+            );
+    }
 }

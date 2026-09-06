@@ -4,7 +4,7 @@ import api from "../api";
 import { useAuth } from "../context/AuthContext";
 import {
     Bot, ClipboardCheck, History, UserRound, LogOut, Menu, X, Map,
-    Sparkles,
+    Sparkles, CalendarDays,
 } from "lucide-react";
 
 import MaterialAiReview from "./material/MaterialAiReview";
@@ -13,6 +13,7 @@ import MaterialHistory from "./material/MaterialHistory";
 import AdminRoadmaps from "./admin/AdminRoadmaps";
 import ProfilePage from "./ProfilePage";
 import MaterialLearningReview from "./material/MaterialLearningReview";
+import MaterialWorkshops from "./material/MaterialWorkshops";
 
 function MaterialManagerDashboard() {
     const navigate = useNavigate();
@@ -67,6 +68,7 @@ function MaterialManagerDashboard() {
         { id: "learning", label: "Learning Material", icon: <Sparkles size={20} /> },
         { id: "queue", label: "Content Queue", icon: <ClipboardCheck size={20} />, badge: pending },
         { id: "roadmaps", label: "Roadmaps", icon: <Map size={20} /> },
+        { id: "workshops", label: "Workshops", icon: <CalendarDays size={20} /> },
         { id: "history", label: "History", icon: <History size={20} /> },
         { id: "profile", label: "My Profile", icon: <UserRound size={20} /> },
     ];
@@ -184,6 +186,7 @@ function MaterialManagerDashboard() {
                 {activePage === "learning" && <MaterialLearningReview onChanged={loadStats} />}
                 {activePage === "queue" && <MaterialQueue onChanged={loadStats} />}
                 {activePage === "roadmaps" && <AdminRoadmaps onChanged={loadStats} />}
+                {activePage === "workshops" && <MaterialWorkshops onChanged={loadStats} />}
                 {activePage === "history" && <MaterialHistory />}
                 {activePage === "profile" && <ProfilePage />}
             </main>

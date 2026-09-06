@@ -102,6 +102,14 @@ class WorkshopController extends Controller
             'is_online'        => $workshop->country === null,
             'url'              => $workshop->url,
             'topic'            => $workshop->versionNode->node->title ?? null,
+
+            // What the workshop agent finds on a listing and a person filling
+            // the form in rarely knows: who is running it, who is speaking,
+            // and whether it costs anything.
+            'organizer'        => $workshop->organizer,
+            'speaker'          => $workshop->speaker,
+            'cost_type'        => $workshop->cost_type,
+            'price'            => $workshop->price,
         ];
     }
 }

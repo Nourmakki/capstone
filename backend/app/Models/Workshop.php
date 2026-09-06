@@ -16,17 +16,29 @@ class Workshop extends Model
         'version_node_id',
         'title',
         'description',
+        'organizer',
+        'speaker',
         'scheduled_at',
         'duration_minutes',
         'location',
         'country',
         'url',
+        'cost_type',
+        'price',
+        'ai_metadata',
     ];
 
     protected $casts = [
         'scheduled_at'     => 'datetime',
         'duration_minutes' => 'integer',
+        'ai_metadata'      => 'array',
     ];
+
+    /** Written by the workshop agent rather than typed in by a person. */
+    public function isFromAi(): bool
+    {
+        return $this->ai_metadata !== null;
+    }
 
     public function roadmapVersion()
     {

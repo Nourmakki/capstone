@@ -17,6 +17,7 @@ use App\Http\Controllers\Api\ProjectController;
 use App\Http\Controllers\Api\TeamController;
 use App\Http\Controllers\Api\TodoController;
 use App\Http\Controllers\Api\WorkshopController;
+use App\Http\Controllers\Api\WorkshopWorkflowController;
 use App\Http\Controllers\Api\ProfileController;
 use App\Http\Controllers\Api\VersionGraphController;
 use App\Http\Controllers\Api\LearningWorkflowController;
@@ -238,6 +239,18 @@ Route::middleware('auth:sanctum')->group(function () {
 
         // Same again: the receipt goes, the roadmap it built stays.
         Route::delete('/roadmap-builder-runs/{run}', [RoadmapBuilderController::class, 'destroy']);
+
+        /*
+        | The workshop agent. Asked for a version's subject, answered with
+        | approve or reject - her review takes no edit and no regenerate,
+        | because there is nothing to rewrite about a listing off the web.
+        */
+        Route::get('/workshop-runs', [WorkshopWorkflowController::class, 'index']);
+        Route::post('/roadmap-versions/{version}/workshop-runs', [WorkshopWorkflowController::class, 'store']);
+        Route::get('/workshop-runs/{run}', [WorkshopWorkflowController::class, 'show']);
+        Route::post('/workshop-runs/{run}/resume', [WorkshopWorkflowController::class, 'resume']);
+        Route::post('/workshop-runs/{run}/commit', [WorkshopWorkflowController::class, 'commit']);
+        Route::delete('/workshop-runs/{run}', [WorkshopWorkflowController::class, 'destroy']);
 
         // The daily trend scan's switch. Off until somebody turns it on.
         Route::get('/ai-schedule', [AiScheduleController::class, 'show']);
