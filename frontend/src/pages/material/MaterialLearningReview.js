@@ -41,6 +41,11 @@ function MaterialLearningReview({ onChanged }) {
     // because that is how her edit action takes it.
     const [editingStage, setEditingStage] = useState(null);
 
+    // Which roadmap's runs are unrolled. The list only ever grows - a run per
+    // module per attempt - so it is folded the same way the worklist above it
+    // is, and for the same reason.
+    const [openRunGroup, setOpenRunGroup] = useState(null);
+
     const loadRuns = useCallback(async () => {
         try {
             const response = await api.get("/learning-runs");
@@ -249,6 +254,37 @@ function MaterialLearningReview({ onChanged }) {
         }
     };
 
+    /**
+     * The runs, in folders, by the roadmap their module belongs to.
+     *
+     * Grouped here rather than on the server: the list already carries the
+     * roadmap on every run, and the order the server sends - newest first -
+     * is the order to keep inside each folder.
+     *
+     * A Map, so the folders come out in the order their first run appeared:
+     * the roadmap somebody generated for most recently is the one at the top,
+     * which is nearly always the one they are working through.
+     */
+    const runGroups = (() => {
+        const byRoadmap = new Map();
+
+        for (const run of runs) {
+            const roadmap = run.roadmap ?? "Unknown";
+
+            if (!byRoadmap.has(roadmap)) {
+                byRoadmap.set(roadmap, { roadmap, runs: [], awaiting: 0 });
+            }
+
+            const group = byRoadmap.get(roadmap);
+
+            group.runs.push(run);
+
+            if (run.awaiting) group.awaiting += 1;
+        }
+
+        return [...byRoadmap.values()];
+    })();
+
     const data = result?.data;
     const awaitingReview = result?.status === "awaiting_review";
     // The envelope, which now ends at "ready_for_commit" like the roadmap
@@ -424,48 +460,91 @@ function MaterialLearningReview({ onChanged }) {
                             </p>
                         </div>
                     ) : (
-                        <div className="space-y-3">
-                            {/* The row is two controls side by side rather than
-                                one inside the other: a button nested in a
-                                button is markup a browser will not honour. */}
-                            {runs.map((run) => (
-                                <div key={run.id}
-                                     className={`flex items-start rounded-2xl border transition ${
-                                         selected?.id === run.id
-                                             ? "border-[#0097a7]/40 bg-[#0097a7]/10"
-                                             : "border-white/10 bg-white/[0.03] hover:border-[#0097a7]/30"
-                                     }`}>
-                                    <button onClick={() => openRun(run)}
-                                        className="flex-1 min-w-0 text-left p-4">
-                                        <div className="flex items-center justify-between gap-2">
-                                            <span className="font-semibold truncate">{run.module}</span>
-                                            <ChevronRight size={16} className="text-gray-500 shrink-0" />
-                                        </div>
+                        <div className="space-y-2">
+                            {runGroups.map((group) => {
+                                // Until a folder is picked, the one holding
+                                // whatever is open on the right stands open -
+                                // a run being read with its own folder shut
+                                // reads as though it came from nowhere.
+                                const open = openRunGroup !== null
+                                    ? openRunGroup === group.roadmap
+                                    : group.runs.some((r) => r.id === selected?.id);
 
-                                        <p className="text-xs text-gray-500 mt-1">{run.roadmap}</p>
+                                return (
+                                    <div key={group.roadmap}
+                                         className="rounded-2xl border border-white/10 bg-white/[0.03] overflow-hidden">
+                                        <button
+                                            onClick={() => setOpenRunGroup(open ? null : group.roadmap)}
+                                            className="w-full flex items-center gap-3 p-4 text-left hover:bg-white/[0.02] transition">
+                                            <ChevronRight size={16} className={`text-gray-600 shrink-0 transition-transform ${
+                                                open ? "rotate-90" : ""
+                                            }`} />
 
-                                        <span className={`inline-block mt-2 text-xs px-3 py-1 rounded-full border ${
-                                            run.committed
-                                                ? "border-green-400/30 bg-green-400/10 text-green-300"
-                                                : run.awaiting
-                                                ? "border-yellow-400/30 bg-yellow-400/10 text-yellow-300"
-                                                : "border-white/10 bg-white/5 text-gray-400"
-                                        }`}>
-                                            {run.committed ? "committed" : run.status.replace(/_/g, " ")}
-                                        </span>
-                                    </button>
+                                            <span className="font-semibold truncate">{group.roadmap}</span>
 
-                                    <button
-                                        onClick={() => deleteRun(run)}
-                                        disabled={busy}
-                                        title="Remove this run from the list"
-                                        aria-label={`Remove the run for ${run.module}`}
-                                        className="shrink-0 m-3 p-1.5 rounded-lg text-gray-600 hover:text-red-400 hover:bg-red-400/10 transition disabled:opacity-30"
-                                    >
-                                        <X size={14} />
-                                    </button>
-                                </div>
-                            ))}
+                                            {/* What is actually wanted in here.
+                                                A folder of committed runs needs
+                                                nobody; one with something
+                                                waiting does. */}
+                                            {group.awaiting > 0 && (
+                                                <span className="shrink-0 text-xs px-2.5 py-0.5 rounded-full border border-yellow-400/30 bg-yellow-400/10 text-yellow-300">
+                                                    {group.awaiting} to review
+                                                </span>
+                                            )}
+
+                                            <span className="ml-auto shrink-0 text-xs text-gray-500">
+                                                {group.runs.length}
+                                            </span>
+                                        </button>
+
+                                        {open && (
+                                            <div className="px-3 pb-3 space-y-2">
+                                                {/* The row is two controls side by
+                                                    side rather than one inside the
+                                                    other: a button nested in a
+                                                    button is markup a browser will
+                                                    not honour. */}
+                                                {group.runs.map((run) => (
+                                                    <div key={run.id}
+                                                         className={`flex items-start rounded-xl border transition ${
+                                                             selected?.id === run.id
+                                                                 ? "border-[#0097a7]/40 bg-[#0097a7]/10"
+                                                                 : "border-white/10 bg-black/20 hover:border-[#0097a7]/30"
+                                                         }`}>
+                                                        <button onClick={() => openRun(run)}
+                                                            className="flex-1 min-w-0 text-left p-4">
+                                                            <div className="flex items-center justify-between gap-2">
+                                                                <span className="font-semibold truncate">{run.module}</span>
+                                                                <ChevronRight size={16} className="text-gray-500 shrink-0" />
+                                                            </div>
+
+                                                            <span className={`inline-block mt-2 text-xs px-3 py-1 rounded-full border ${
+                                                                run.committed
+                                                                    ? "border-green-400/30 bg-green-400/10 text-green-300"
+                                                                    : run.awaiting
+                                                                    ? "border-yellow-400/30 bg-yellow-400/10 text-yellow-300"
+                                                                    : "border-white/10 bg-white/5 text-gray-400"
+                                                            }`}>
+                                                                {run.committed ? "committed" : run.status.replace(/_/g, " ")}
+                                                            </span>
+                                                        </button>
+
+                                                        <button
+                                                            onClick={() => deleteRun(run)}
+                                                            disabled={busy}
+                                                            title="Remove this run from the list"
+                                                            aria-label={`Remove the run for ${run.module}`}
+                                                            className="shrink-0 m-3 p-1.5 rounded-lg text-gray-600 hover:text-red-400 hover:bg-red-400/10 transition disabled:opacity-30"
+                                                        >
+                                                            <X size={14} />
+                                                        </button>
+                                                    </div>
+                                                ))}
+                                            </div>
+                                        )}
+                                    </div>
+                                );
+                            })}
                         </div>
                     )}
                 </div>
