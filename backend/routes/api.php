@@ -224,6 +224,10 @@ Route::middleware('auth:sanctum')->group(function () {
         Route::post('/learning-runs/{run}/commit', [LearningWorkflowController::class, 'commit']);
         Route::post('/version-nodes/{versionNode}/learning-runs', [LearningWorkflowController::class, 'store']);
 
+        // Clearing the list. The row only - the material a committed run
+        // wrote stays on its module.
+        Route::delete('/learning-runs/{run}', [LearningWorkflowController::class, 'destroy']);
+
         // The roadmap builder: a whole subject from a topic name. Unlike the
         // other roadmap workflow, it needs no existing graph to extend.
         Route::get('/roadmap-builder-runs', [RoadmapBuilderController::class, 'index']);
@@ -231,6 +235,9 @@ Route::middleware('auth:sanctum')->group(function () {
         Route::get('/roadmap-builder-runs/{run}', [RoadmapBuilderController::class, 'show']);
         Route::post('/roadmap-builder-runs/{run}/resume', [RoadmapBuilderController::class, 'resume']);
         Route::post('/roadmap-builder-runs/{run}/commit', [RoadmapBuilderController::class, 'commit']);
+
+        // Same again: the receipt goes, the roadmap it built stays.
+        Route::delete('/roadmap-builder-runs/{run}', [RoadmapBuilderController::class, 'destroy']);
 
         // The daily trend scan's switch. Off until somebody turns it on.
         Route::get('/ai-schedule', [AiScheduleController::class, 'show']);

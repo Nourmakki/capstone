@@ -233,6 +233,33 @@ class LearningWorkflowController extends Controller
         });
     }
 
+    /**
+     * Take a run off the list.
+     *
+     * The row and nothing else. A committed run has already written its
+     * tutorial, quiz, project and resources onto the module, and those are
+     * rows of their own with no link back to this one - version_node_id runs
+     * the other way, cascading when the module goes, not when the run does.
+     * So a manager clearing a year of runs off this page keeps every piece of
+     * material those runs produced.
+     *
+     * The thread stays in her checkpointer, orphaned. Nothing reads it once
+     * the row naming it is gone.
+     */
+    public function destroy(NodeLearningWorkflow $run): JsonResponse
+    {
+        $module    = $run->versionNode->node->title ?? 'a module';
+        $committed = $run->committed_at !== null;
+
+        $run->delete();
+
+        return response()->json([
+            'message' => $committed
+                ? "Removed the run for {$module}. The material it wrote is still on the module."
+                : "Removed the run for {$module}.",
+        ]);
+    }
+
     private function proxy(callable $callback): JsonResponse
     {
         try {

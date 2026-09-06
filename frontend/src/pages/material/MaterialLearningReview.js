@@ -91,6 +91,40 @@ function MaterialLearningReview({ onChanged }) {
         }
     };
 
+    /**
+     * Take a run off the list.
+     *
+     * The row only. A committed run has already written its tutorial, quiz,
+     * project and resources onto the module, and those stay - so this clears
+     * a list that grows by one every time material is generated, and costs
+     * nothing but the record of the generating. The confirm says so, because
+     * a cross beside a module's name reads like it deletes the module.
+     */
+    const deleteRun = async (run) => {
+        if (!window.confirm(
+            `Remove the run for ${run.module} from this list?\n\n`
+            + (run.committed
+                ? "The material it wrote stays on the module. This clears the record of the run, nothing else."
+                : "This clears the record of the run. Nothing else is affected.")
+        )) return;
+
+        try {
+            await api.delete(`/learning-runs/${run.id}`);
+
+            // It may be the one open on the right.
+            if (selected?.id === run.id) {
+                setSelected(null);
+                setResult(null);
+                setEditingStage(null);
+            }
+
+            await Promise.all([loadRuns(), loadPending()]);
+            onChanged?.();
+        } catch (err) {
+            alert(err.response?.data?.message ?? "Could not remove that run.");
+        }
+    };
+
     const openRun = async (run) => {
         setSelected(run);
         setResult(null);
@@ -391,30 +425,46 @@ function MaterialLearningReview({ onChanged }) {
                         </div>
                     ) : (
                         <div className="space-y-3">
+                            {/* The row is two controls side by side rather than
+                                one inside the other: a button nested in a
+                                button is markup a browser will not honour. */}
                             {runs.map((run) => (
-                                <button key={run.id} onClick={() => openRun(run)}
-                                    className={`w-full text-left rounded-2xl border p-4 transition ${
-                                        selected?.id === run.id
-                                            ? "border-[#0097a7]/40 bg-[#0097a7]/10"
-                                            : "border-white/10 bg-white/[0.03] hover:border-[#0097a7]/30"
-                                    }`}>
-                                    <div className="flex items-center justify-between gap-2">
-                                        <span className="font-semibold truncate">{run.module}</span>
-                                        <ChevronRight size={16} className="text-gray-500 shrink-0" />
-                                    </div>
+                                <div key={run.id}
+                                     className={`flex items-start rounded-2xl border transition ${
+                                         selected?.id === run.id
+                                             ? "border-[#0097a7]/40 bg-[#0097a7]/10"
+                                             : "border-white/10 bg-white/[0.03] hover:border-[#0097a7]/30"
+                                     }`}>
+                                    <button onClick={() => openRun(run)}
+                                        className="flex-1 min-w-0 text-left p-4">
+                                        <div className="flex items-center justify-between gap-2">
+                                            <span className="font-semibold truncate">{run.module}</span>
+                                            <ChevronRight size={16} className="text-gray-500 shrink-0" />
+                                        </div>
 
-                                    <p className="text-xs text-gray-500 mt-1">{run.roadmap}</p>
+                                        <p className="text-xs text-gray-500 mt-1">{run.roadmap}</p>
 
-                                    <span className={`inline-block mt-2 text-xs px-3 py-1 rounded-full border ${
-                                        run.committed
-                                            ? "border-green-400/30 bg-green-400/10 text-green-300"
-                                            : run.awaiting
-                                            ? "border-yellow-400/30 bg-yellow-400/10 text-yellow-300"
-                                            : "border-white/10 bg-white/5 text-gray-400"
-                                    }`}>
-                                        {run.committed ? "committed" : run.status.replace(/_/g, " ")}
-                                    </span>
-                                </button>
+                                        <span className={`inline-block mt-2 text-xs px-3 py-1 rounded-full border ${
+                                            run.committed
+                                                ? "border-green-400/30 bg-green-400/10 text-green-300"
+                                                : run.awaiting
+                                                ? "border-yellow-400/30 bg-yellow-400/10 text-yellow-300"
+                                                : "border-white/10 bg-white/5 text-gray-400"
+                                        }`}>
+                                            {run.committed ? "committed" : run.status.replace(/_/g, " ")}
+                                        </span>
+                                    </button>
+
+                                    <button
+                                        onClick={() => deleteRun(run)}
+                                        disabled={busy}
+                                        title="Remove this run from the list"
+                                        aria-label={`Remove the run for ${run.module}`}
+                                        className="shrink-0 m-3 p-1.5 rounded-lg text-gray-600 hover:text-red-400 hover:bg-red-400/10 transition disabled:opacity-30"
+                                    >
+                                        <X size={14} />
+                                    </button>
+                                </div>
                             ))}
                         </div>
                     )}

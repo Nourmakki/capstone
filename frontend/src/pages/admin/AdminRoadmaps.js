@@ -89,6 +89,39 @@ function AdminRoadmaps({ onChanged }) {
         }
     }, []);
 
+    /**
+     * Take a run off the list.
+     *
+     * The row only. A run is the record of an asking, and the roadmap it
+     * built is a thing of its own - so this clears a page that fills up with
+     * every attempt, successful or not, and takes nothing real with it. The
+     * confirm says so, because a cross next to a roadmap's name reads like it
+     * deletes the roadmap.
+     */
+    const deleteRun = async (run) => {
+        if (!window.confirm(
+            `Remove the run for "${run.topic}" from this list?\n\n`
+            + (run.roadmap
+                ? `The ${run.roadmap.title} roadmap it built is not touched - this clears the record of the run, nothing else.`
+                : "This clears the record of the run. Nothing else is affected.")
+        )) return;
+
+        try {
+            await api.delete(`/roadmap-builder-runs/${run.id}`);
+
+            // It may be the one open below.
+            if (openRun === run.id) {
+                setOpenRun(null);
+                setProposal(null);
+            }
+
+            await loadRuns();
+            onChanged?.();
+        } catch (err) {
+            fail(err);
+        }
+    };
+
     const startBuild = async () => {
         if (!topic.trim()) return;
 
@@ -935,7 +968,7 @@ function AdminRoadmaps({ onChanged }) {
                         {runs.map((run) => (
                             <div key={run.id}
                                  className="rounded-2xl border border-white/10 bg-black/30 p-4">
-                            <div className="flex flex-col md:flex-row md:items-center justify-between gap-3">
+                            <div className="flex flex-col md:flex-row md:items-start justify-between gap-3">
                                 <div className="min-w-0">
                                     <div className="flex items-center gap-2 flex-wrap">
                                         <span className="font-semibold">{run.topic}</span>
@@ -1011,6 +1044,21 @@ function AdminRoadmaps({ onChanged }) {
                                         )}
                                     </div>
                                 )}
+
+                                {/* Outside the block above, which only draws
+                                    for a run still being decided on. This one
+                                    is for every row - a committed run and a
+                                    failed one are exactly what fills the page
+                                    up, and neither has anything else to do. */}
+                                <button
+                                    onClick={() => deleteRun(run)}
+                                    disabled={!!working}
+                                    title="Remove this run from the list"
+                                    aria-label={`Remove the run for ${run.topic}`}
+                                    className="shrink-0 self-start p-1.5 rounded-lg text-gray-600 hover:text-red-400 hover:bg-red-400/10 transition disabled:opacity-30"
+                                >
+                                    <X size={14} />
+                                </button>
                             </div>
 
                             {openRun === run.id && (

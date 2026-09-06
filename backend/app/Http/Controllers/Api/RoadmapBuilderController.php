@@ -266,6 +266,31 @@ class RoadmapBuilderController extends Controller
         return $body;
     }
 
+    /**
+     * Take a run off the list.
+     *
+     * The row and nothing else. A run is a receipt - what was asked for, and
+     * what it became - so throwing one away loses the record of the asking,
+     * never the roadmap it built: committed_roadmap_id points at the roadmap
+     * with nullOnDelete, which fires when a roadmap goes, not when a run does.
+     *
+     * The thread stays in her checkpointer, orphaned. Nothing reads it once
+     * the row naming it is gone, and it is hers to keep.
+     */
+    public function destroy(RoadmapBuilderRun $run): JsonResponse
+    {
+        $topic   = $run->topic;
+        $roadmap = $run->committedRoadmap?->title;
+
+        $run->delete();
+
+        return response()->json([
+            'message' => $roadmap
+                ? "Removed the run for \"{$topic}\". The {$roadmap} roadmap it built is untouched."
+                : "Removed the run for \"{$topic}\".",
+        ]);
+    }
+
     private function summary(RoadmapBuilderRun $run): array
     {
         return [
