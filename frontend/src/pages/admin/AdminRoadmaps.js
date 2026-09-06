@@ -2,7 +2,7 @@ import React, { useCallback, useEffect, useRef, useState } from "react";
 import api from "../../api";
 import ModuleMaterial from "../../components/ModuleMaterial";
 import {
-    Upload, Network, AlertTriangle, Sparkles, Check, X, ChevronRight,
+    Network, AlertTriangle, Sparkles, Check, X, ChevronRight,
     Inbox, GitBranch, Layers, ArrowLeft, RefreshCw, Trash2, Plus, Pencil,
 } from "lucide-react";
 
@@ -19,8 +19,9 @@ const STATUS_STYLE = {
  * Nothing here creates a roadmap by hand.
  *
  * The bottom half is a reader. Pick a roadmap, pick one of its modules, see
- * what is on it. Version handling is down to publishing: drafts come from the
- * AI, and approving one in the Content Queue is the other way to make it live.
+ * what is on it. Nothing here makes a version live: a committed AI proposal
+ * publishes itself when it is ready to, and approving the material in the
+ * Content Queue is what releases the rest.
  */
 function AdminRoadmaps({ onChanged }) {
     // --- the builder -------------------------------------------------
@@ -596,21 +597,6 @@ function AdminRoadmaps({ onChanged }) {
             .catch((err) => console.error(err));
     }, [versionId]);
 
-    const publish = async (id) => {
-        setBusy(true);
-
-        try {
-            await api.post(`/roadmap-versions/${id}/publish`);
-            const r = await api.get(`/roadmaps/${selectedId}/versions`);
-            setVersions(r.data.data ?? []);
-            onChanged?.();
-        } catch (err) {
-            fail(err);
-        } finally {
-            setBusy(false);
-        }
-    };
-
     const openRoadmap = (id) => {
         setSelectedId(id);
         setOpenModule(null);
@@ -1140,34 +1126,25 @@ function AdminRoadmaps({ onChanged }) {
                                     </p>
                                 )}
 
-                                {/* Which version is being read, and the one
-                                    control left here: making a draft live. */}
+                                {/* Which version is being read. Picking one
+                                    only changes what is shown - nothing on
+                                    this page changes what a version is. */}
                                 {versions.length > 0 && (
                                     <div className="flex flex-wrap items-center gap-2 mb-6">
                                         {versions.map((v) => (
-                                            <div key={v.id} className="flex items-center gap-1">
-                                                <button onClick={() => setVersionId(v.id)}
-                                                    className={`px-4 py-2 rounded-xl text-sm border transition ${
-                                                        versionId === v.id
-                                                            ? "border-[#0097a7]/40 bg-[#0097a7]/10 text-[#00b0c2]"
-                                                            : "border-white/10 text-gray-400 hover:border-white/20"
-                                                    }`}>
-                                                    v{v.version_number}
-                                                    <span className={`ml-2 text-xs px-2 py-0.5 rounded-full border ${
-                                                        STATUS_STYLE[v.status] ?? "border-white/10 text-gray-500"
-                                                    }`}>
-                                                        {v.status}
-                                                    </span>
-                                                </button>
-
-                                                {v.status !== "Published" && (
-                                                    <button onClick={() => publish(v.id)} disabled={busy}
-                                                        title={`Publish v${v.version_number}`}
-                                                        className="p-2 rounded-xl border border-green-400/20 bg-green-500/10 text-green-300 hover:bg-green-500/20 transition">
-                                                        <Upload size={14} />
-                                                    </button>
-                                                )}
-                                            </div>
+                                            <button key={v.id} onClick={() => setVersionId(v.id)}
+                                                className={`px-4 py-2 rounded-xl text-sm border transition ${
+                                                    versionId === v.id
+                                                        ? "border-[#0097a7]/40 bg-[#0097a7]/10 text-[#00b0c2]"
+                                                        : "border-white/10 text-gray-400 hover:border-white/20"
+                                                }`}>
+                                                v{v.version_number}
+                                                <span className={`ml-2 text-xs px-2 py-0.5 rounded-full border ${
+                                                    STATUS_STYLE[v.status] ?? "border-white/10 text-gray-500"
+                                                }`}>
+                                                    {v.status}
+                                                </span>
+                                            </button>
                                         ))}
                                     </div>
                                 )}
@@ -1179,7 +1156,7 @@ function AdminRoadmaps({ onChanged }) {
                                             No published version, so students cannot open this roadmap.
                                             {versions.length === 0
                                                 ? " The AI builder is what fills it."
-                                                : " Publish a draft, or approve one in the Content Queue."}
+                                                : " Approve its material in the Content Queue to release it."}
                                         </p>
                                     </div>
                                 )}
