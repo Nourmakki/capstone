@@ -2,9 +2,9 @@ import React, { useCallback, useEffect, useState } from "react";
 import { useNavigate, useParams } from "react-router-dom";
 import api from "../api";
 import ProjectBrief from "../components/ProjectBrief";
+import SubmissionCard from "../components/SubmissionCard";
 import {
-    ArrowLeft, GitBranch, Trophy, Code2, CheckCircle2,
-    UserRound, Clock3, AlertCircle, Brain, ClipboardList,
+    ArrowLeft, GitBranch, Trophy, Code2, ClipboardList,
 } from "lucide-react";
 
 // PHP's own upload_max_filesize caps this well below Laravel's validation
@@ -56,6 +56,10 @@ function ProjectSubmissionPage() {
     const [loading, setLoading] = useState(true);
     const [submitting, setSubmitting] = useState(false);
     const [error, setError] = useState(null);
+
+    // Which hand-in is open. One at a time - the point of folding them is to
+    // be able to see the list, and four open cards is the list again.
+    const [openSubmission, setOpenSubmission] = useState(null);
 
     const load = useCallback(async () => {
         try {
@@ -287,93 +291,17 @@ function ProjectSubmissionPage() {
                             {project.submissions.length === 0 ? (
                                 <p className="text-gray-500 text-sm">Nothing submitted yet.</p>
                             ) : (
-                                <div className="space-y-5">
+                                <div className="space-y-3">
                                     {project.submissions.map((s) => (
-                                        <div key={s.id} className="rounded-2xl border border-white/10 bg-black/30 p-5">
-                                            <div className="flex items-center justify-between mb-3">
-                                                <span className="text-xs text-gray-500 flex items-center gap-2">
-                                                    <Clock3 size={13} />
-                                                    {new Date(s.created_at).toLocaleDateString()}
-                                                </span>
-
-                                                {s.human_reviewed ? (
-                                                    <span className="text-xs text-green-400 flex items-center gap-1">
-                                                        <CheckCircle2 size={13} /> Professor reviewed
-                                                    </span>
-                                                ) : s.ai_score !== null ? (
-                                                    <span className="text-xs text-[#00b0c2] flex items-center gap-1">
-                                                        <Brain size={13} /> AI estimate
-                                                    </span>
-                                                ) : (
-                                                    <span className="text-xs text-yellow-400 flex items-center gap-1">
-                                                        <AlertCircle size={13} /> {s.status}
-                                                    </span>
-                                                )}
-                                            </div>
-
-                                            {s.github_url && (
-                                                <a href={s.github_url} target="_blank" rel="noreferrer"
-                                                   className="text-[#00b0c2] text-sm break-all hover:underline">
-                                                    {s.github_url}
-                                                </a>
+                                        <SubmissionCard
+                                            key={s.id}
+                                            submission={s}
+                                            expanded={openSubmission === s.id}
+                                            onToggle={() => setOpenSubmission(
+                                                openSubmission === s.id ? null : s.id
                                             )}
-
-                                            {s.has_file && (
-                                                <p className="text-xs text-gray-400 mt-2">File attached</p>
-                                            )}
-
-                                            {/* Appears automatically once the AI service fills ai_score. */}
-                                            {s.ai_score !== null && (
-                                                <div className="mt-4 rounded-xl border border-[#0097a7]/20 bg-[#0097a7]/5 p-4">
-                                                    <div className="flex items-center justify-between">
-                                                        <span className="text-xs text-gray-400 flex items-center gap-2">
-                                                            <Brain size={14} className="text-[#0097a7]" />
-                                                            Estimated grade
-                                                        </span>
-                                                        {/* Not a percentage: the grader adds up to 10
-                                                            bonus points, so this can exceed 100. */}
-                                                        <span className="text-2xl font-black text-[#0097a7]">
-                                                            {s.ai_score}
-                                                            <span className="text-sm text-gray-500 font-normal"> / 100</span>
-                                                        </span>
-                                                    </div>
-                                                    {s.ai_feedback && (
-                                                        <p className="mt-3 text-xs text-gray-300 leading-relaxed whitespace-pre-line">
-                                                            {s.ai_feedback}
-                                                        </p>
-                                                    )}
-                                                </div>
-                                            )}
-
-                                            {s.human_reviewed && (
-                                                <div className="mt-4 rounded-xl border border-green-400/20 bg-green-400/5 p-4">
-                                                    <div className="flex items-center justify-between">
-                                                        <span className="text-xs text-gray-400 flex items-center gap-2">
-                                                            <UserRound size={14} className="text-green-400" />
-                                                            Professor grade
-                                                        </span>
-                                                        <span className="text-2xl font-black text-green-400">
-                                                            {s.score}%
-                                                        </span>
-                                                    </div>
-                                                    {s.comments && (
-                                                        <p className="mt-3 text-xs text-gray-300 leading-relaxed whitespace-pre-line">
-                                                            {s.comments}
-                                                        </p>
-                                                    )}
-                                                </div>
-                                            )}
-
-                                            {!s.human_reviewed && (
-                                                <button
-                                                    onClick={() => requestReview(s.id)}
-                                                    className="mt-4 w-full flex items-center justify-center gap-2 py-2 rounded-xl border border-[#0097a7]/20 bg-[#0097a7]/10 text-[#00b0c2] text-sm hover:bg-[#0097a7]/20 transition"
-                                                >
-                                                    <UserRound size={16} />
-                                                    Request Professor Review
-                                                </button>
-                                            )}
-                                        </div>
+                                            onRequestReview={() => requestReview(s.id)}
+                                        />
                                     ))}
                                 </div>
                             )}
