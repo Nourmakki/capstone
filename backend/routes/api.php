@@ -256,6 +256,9 @@ Route::middleware('auth:sanctum')->group(function () {
         Route::get('/ai-schedule', [AiScheduleController::class, 'show']);
         Route::put('/ai-schedule', [AiScheduleController::class, 'update']);
 
+        // Without waiting for the hour, and without a terminal.
+        Route::post('/ai-schedule/run', [AiScheduleController::class, 'runNow']);
+
         // Material that reached the database and still needs a decision.
         Route::prefix('material')->group(function () {
             Route::get('/stats', [MaterialController::class, 'stats']);

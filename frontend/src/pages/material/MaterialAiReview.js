@@ -174,6 +174,11 @@ function MaterialAiReview({ onChanged }) {
     const [schedule, setSchedule] = useState(null);
     const [savingSchedule, setSavingSchedule] = useState(false);
 
+    // Running it by hand, and choosing how much it takes on.
+    const [runningNow, setRunningNow] = useState(false);
+    const [scopeOpen, setScopeOpen] = useState(false);
+    const [publishedVersions, setPublishedVersions] = useState([]);
+
     // Unsaved edits, one pair per editable stage. Null while not editing, so
     // each list falls back to what the AI actually sent.
     const [editingNodes, setEditingNodes] = useState(false);
@@ -209,6 +214,51 @@ function MaterialAiReview({ onChanged }) {
             .then((r) => setSchedule(r.data))
             .catch((err) => console.error(err));
     }, []);
+
+    // What the scan could reach, so a roadmap can be picked by name rather
+    // than by the version id the setting is actually stored as.
+    useEffect(() => {
+        api.get("/roadmaps")
+            .then(async (r) => {
+                const roadmaps = (r.data.data ?? []).filter((x) => x.parent_roadmap_id);
+
+                const lists = await Promise.all(roadmaps.map((roadmap) =>
+                    api.get(`/roadmaps/${roadmap.id}/versions`)
+                        .then((v) => (v.data.data ?? [])
+                            .filter((version) => version.status === "Published")
+                            .map((version) => ({
+                                id: version.id,
+                                label: `${roadmap.title} v${version.version_number}`,
+                            })))
+                        .catch(() => [])
+                ));
+
+                setPublishedVersions(lists.flat());
+            })
+            .catch((err) => console.error(err));
+    }, []);
+
+    /**
+     * Run the scan now.
+     *
+     * Held open for as long as it takes - it is calling the AI once per
+     * roadmap in scope, which is why the cap beside it matters.
+     */
+    const runNow = async () => {
+        setRunningNow(true);
+
+        try {
+            const response = await api.post("/ai-schedule/run");
+            setSchedule(response.data.schedule);
+            await loadList();
+            alert(response.data.message);
+            onChanged?.();
+        } catch (err) {
+            alert(err.response?.data?.message ?? "Could not run the scan.");
+        } finally {
+            setRunningNow(false);
+        }
+    };
 
     /**
      * Turn the daily scan on or off, or move when it runs.
@@ -654,6 +704,129 @@ function MaterialAiReview({ onChanged }) {
                         >
                             {savingSchedule ? "Saving..." : schedule.enabled ? "Turn off" : "Turn on"}
                         </button>
+                    </div>
+                </div>
+            )}
+
+            {/* How much a run takes on, and running one without waiting.
+                Every published roadmap at once is right for a nightly job and
+                unusable in front of an audience: fifteen roadmaps is fifteen
+                calls to the AI and a queue nobody can read through. */}
+            {schedule && (
+                <div className="rounded-3xl border border-white/10 bg-white/[0.03] mb-10 overflow-hidden">
+                    <button
+                        onClick={() => setScopeOpen((was) => !was)}
+                        className="w-full flex items-center gap-3 p-5 text-left hover:bg-white/[0.02] transition flex-wrap">
+                        <ChevronRight size={16} className={`text-gray-600 shrink-0 transition-transform ${
+                            scopeOpen ? "rotate-90" : ""
+                        }`} />
+
+                        <span className="font-semibold">How much a run takes on</span>
+
+                        <span className="text-xs px-3 py-1 rounded-full bg-white/5 text-gray-400">
+                            {schedule.in_scope} of {schedule.roadmaps_in_scope} roadmaps
+                        </span>
+                    </button>
+
+                    {scopeOpen && (
+                        <div className="px-5 pb-5 space-y-5">
+                            <div>
+                                <p className="text-[11px] uppercase tracking-wider text-gray-500 mb-2">
+                                    At most
+                                </p>
+
+                                <div className="flex items-center gap-2 flex-wrap">
+                                    {[1, 2, 3, 5, null].map((cap) => (
+                                        <button
+                                            key={cap ?? "all"}
+                                            onClick={() => saveSchedule({ max_roadmaps: cap })}
+                                            disabled={savingSchedule}
+                                            className={`px-3 py-1.5 rounded-lg text-xs font-semibold transition disabled:opacity-40 ${
+                                                (schedule.max_roadmaps ?? null) === cap
+                                                    ? "bg-[#0097a7] text-black"
+                                                    : "bg-white/5 border border-white/10 text-gray-300 hover:border-[#0097a7]/50"
+                                            }`}
+                                        >
+                                            {cap === null ? "No limit" : `${cap} roadmap${cap === 1 ? "" : "s"}`}
+                                        </button>
+                                    ))}
+                                </div>
+                            </div>
+
+                            <div>
+                                <p className="text-[11px] uppercase tracking-wider text-gray-500 mb-2">
+                                    Which roadmaps
+                                </p>
+
+                                <p className="text-xs text-gray-500 mb-2">
+                                    None picked means every published one, in order,
+                                    up to the limit above.
+                                </p>
+
+                                <div className="flex flex-wrap gap-1.5">
+                                    {publishedVersions.map((version) => {
+                                        const picked = (schedule.only_version_ids ?? []).includes(version.id);
+
+                                        return (
+                                            <button
+                                                key={version.id}
+                                                onClick={() => saveSchedule({
+                                                    only_version_ids: picked
+                                                        ? (schedule.only_version_ids ?? []).filter((id) => id !== version.id)
+                                                        : [...(schedule.only_version_ids ?? []), version.id],
+                                                })}
+                                                disabled={savingSchedule}
+                                                className={`px-3 py-1.5 rounded-lg text-xs transition disabled:opacity-40 ${
+                                                    picked
+                                                        ? "bg-[#0097a7] text-black font-semibold"
+                                                        : "bg-white/5 border border-white/10 text-gray-300 hover:border-[#0097a7]/50"
+                                                }`}
+                                            >
+                                                {version.label}
+                                            </button>
+                                        );
+                                    })}
+
+                                    {publishedVersions.length === 0 && (
+                                        <span className="text-xs text-gray-600">
+                                            No published roadmap for the scan to reach.
+                                        </span>
+                                    )}
+                                </div>
+
+                                {(schedule.only_version_ids ?? []).length > 0 && (
+                                    <button
+                                        onClick={() => saveSchedule({ only_version_ids: [] })}
+                                        disabled={savingSchedule}
+                                        className="mt-3 text-xs text-gray-500 hover:text-[#00b0c2] transition">
+                                        Clear the picks
+                                    </button>
+                                )}
+                            </div>
+                        </div>
+                    )}
+
+                    <div className="px-5 pb-5 flex flex-wrap items-center gap-3 border-t border-white/10 pt-4">
+                        <button
+                            onClick={runNow}
+                            disabled={runningNow || schedule.in_scope === 0}
+                            className={`flex items-center gap-2 px-5 py-2.5 rounded-2xl font-semibold text-sm transition ${
+                                runningNow || schedule.in_scope === 0
+                                    ? "bg-gray-700 text-gray-400 cursor-not-allowed"
+                                    : "bg-[#0097a7] text-black hover:scale-[1.02]"
+                            }`}
+                        >
+                            {runningNow
+                                ? <RefreshCw size={15} className="animate-spin" />
+                                : <TrendingUp size={15} />}
+                            {runningNow ? "Scanning..." : "Run the scan now"}
+                        </button>
+
+                        <p className="text-xs text-gray-500">
+                            {runningNow
+                                ? "Sending each roadmap to the AI - this takes a few minutes."
+                                : `Sends ${schedule.in_scope} roadmap${schedule.in_scope === 1 ? "" : "s"} to the AI straight away, without waiting for ${formatTime(schedule.run_at)}.`}
+                        </p>
                     </div>
                 </div>
             )}
