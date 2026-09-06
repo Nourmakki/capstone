@@ -53,9 +53,8 @@ class WorkshopWorkflowController extends Controller
     public function store(Request $request, RoadmapVersion $version): JsonResponse
     {
         $data = $request->validate([
-            'topic'            => ['sometimes', 'string', 'min:2', 'max:255'],
-            'student_location' => ['sometimes', 'nullable', 'string', 'max:255'],
-            'version_node_id'  => ['sometimes', 'nullable', 'integer', 'exists:version_nodes,id'],
+            'topic'           => ['sometimes', 'string', 'min:2', 'max:255'],
+            'version_node_id' => ['sometimes', 'nullable', 'integer', 'exists:version_nodes,id'],
         ]);
 
         $version->loadMissing('roadmap');
@@ -80,8 +79,13 @@ class WorkshopWorkflowController extends Controller
             ], 422);
         }
 
-        return $this->proxy(function () use ($request, $version, $topic, $data, $nodeId) {
-            $response = $this->ai->startWorkshopWorkflow($topic, $data['student_location'] ?? null);
+        return $this->proxy(function () use ($request, $version, $topic, $nodeId) {
+            // No location. A manager approves what is worth approving and
+            // the student page is what narrows it: its For You tab matches a
+            // workshop's country against the student's own. Searching
+            // near one place here would decide for every student at once,
+            // and quietly hide an online conference from all of them.
+            $response = $this->ai->startWorkshopWorkflow($topic);
 
             if (! $response->successful()) {
                 return response()->json($response->json(), $response->status());
@@ -94,7 +98,6 @@ class WorkshopWorkflowController extends Controller
                 'version_node_id'    => $nodeId,
                 'thread_id'          => $body['thread_id'],
                 'topic'              => $topic,
-                'student_location'   => $data['student_location'] ?? null,
                 'status'             => $body['status'] ?? 'awaiting_review',
                 'review_stage'       => $body['review_stage'] ?? null,
                 'started_by'         => $request->user()->id,
@@ -268,7 +271,6 @@ class WorkshopWorkflowController extends Controller
             'roadmap'      => $run->roadmapVersion->roadmap->title ?? 'Unknown',
             'version_id'   => $run->roadmap_version_id,
             'module'       => $run->versionNode->node->title ?? null,
-            'location'     => $run->student_location,
             'started_by'   => $run->starter->name ?? null,
             'created_at'   => $run->created_at,
         ];

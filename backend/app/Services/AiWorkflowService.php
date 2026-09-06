@@ -233,10 +233,12 @@ class AiWorkflowService
      * A web search and a read of what it finds, so minutes rather than the
      * quarter-hour a roadmap takes - but well past a request's usual patience.
      *
-     * student_location is sent only when there is one. Her model forbids
-     * extra keys but allows this one to be absent, and a null would be a
-     * claim that the student has no location rather than that we were not
-     * told one.
+     * student_location is part of her contract and this client can send it,
+     * but nothing on the platform does: a manager approves what is worth
+     * approving, and the student page narrows it per student. Searching near
+     * one place would decide for everybody at once. Sent only when given,
+     * because her model forbids extra keys and a null would claim the student
+     * has no location rather than that we were not told one.
      */
     public function startWorkshopWorkflow(string $topic, ?string $location = null): Response
     {

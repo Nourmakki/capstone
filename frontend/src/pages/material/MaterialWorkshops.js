@@ -30,7 +30,6 @@ function MaterialWorkshops({ onChanged }) {
     const [roadmapId, setRoadmapId] = useState(null);
     const [versions, setVersions] = useState([]);
     const [versionId, setVersionId] = useState(null);
-    const [location, setLocation] = useState("");
     const [starting, setStarting] = useState(false);
 
     // Which listings are ticked, while deciding. Empty means all of them,
@@ -95,10 +94,8 @@ function MaterialWorkshops({ onChanged }) {
         setServiceDown(false);
 
         try {
-            await api.post(`/roadmap-versions/${versionId}/workshop-runs`,
-                location.trim() ? { student_location: location.trim() } : {});
+            await api.post(`/roadmap-versions/${versionId}/workshop-runs`, {});
 
-            setLocation("");
             await loadRuns();
             onChanged?.();
         } catch (err) {
@@ -220,11 +217,13 @@ function MaterialWorkshops({ onChanged }) {
                 </div>
 
                 <p className="text-sm text-gray-400 mb-5">
-                    Searched on the roadmap's own subject. A location narrows it
-                    to what is near your students - leave it blank for anywhere.
+                    Searched on the roadmap's own subject, anywhere in the world.
+                    Approve everything worth approving - a student's Workshops
+                    page has a For You tab that narrows it to their own country,
+                    and shows every online one to all of them.
                 </p>
 
-                <div className="grid md:grid-cols-[1fr_1fr_1fr_auto] gap-3">
+                <div className="grid md:grid-cols-[1fr_1fr_auto] gap-3">
                     <select value={roadmapId ?? ""}
                         onChange={(e) => setRoadmapId(Number(e.target.value))}
                         className="p-3 rounded-xl bg-black/30 border border-white/10 text-white text-sm">
@@ -255,13 +254,6 @@ function MaterialWorkshops({ onChanged }) {
                             </option>
                         ))}
                     </select>
-
-                    <input
-                        value={location}
-                        onChange={(e) => setLocation(e.target.value)}
-                        placeholder="Beirut, Lebanon (optional)"
-                        className="p-3 rounded-xl bg-black/30 border border-white/10 text-white text-sm placeholder:text-gray-600"
-                    />
 
                     <button onClick={start} disabled={starting || !versionId}
                         className={`px-6 py-3 rounded-xl font-semibold text-sm transition ${
@@ -310,7 +302,7 @@ function MaterialWorkshops({ onChanged }) {
                                         </div>
 
                                         <p className="text-xs text-gray-500 mt-1 truncate">
-                                            {run.roadmap}{run.location ? ` · ${run.location}` : ""}
+                                            {run.roadmap}
                                         </p>
 
                                         <span className={`inline-block mt-2 text-xs px-3 py-1 rounded-full border ${

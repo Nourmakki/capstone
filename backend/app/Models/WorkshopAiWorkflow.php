@@ -19,7 +19,6 @@ class WorkshopAiWorkflow extends Model
         'version_node_id',
         'thread_id',
         'topic',
-        'student_location',
         'status',
         'review_stage',
         'committed_at',

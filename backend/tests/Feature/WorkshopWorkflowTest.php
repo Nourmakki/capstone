@@ -71,7 +71,7 @@ class WorkshopWorkflowTest extends TestCase
     // Starting one
     // -----------------------------------------------------------------
 
-    public function test_starting_a_run_sends_her_the_roadmap_topic(): void
+    public function test_starting_a_run_asks_only_for_the_roadmap_topic(): void
     {
         ['version' => $version] = $this->makeRoadmap(['Basics']);
 
@@ -84,20 +84,15 @@ class WorkshopWorkflowTest extends TestCase
         ]);
 
         $this->actingAs($this->makeManager(), 'sanctum')
-            ->postJson("/api/roadmap-versions/{$version->id}/workshop-runs", [
-                'student_location' => 'Beirut, Lebanon',
-            ])
+            ->postJson("/api/roadmap-versions/{$version->id}/workshop-runs")
             ->assertCreated();
 
+        // The topic and nothing else. Her model forbids extra keys, and a
+        // location would narrow the search for every student at once - which
+        // is the student page's decision, made per student, not this one.
         Http::assertSent(function ($request) {
-            $body = $request->data();
-
-            // Her model forbids extra keys, and takes exactly these two.
             return $request->url() === config('services.ai_system.url') . '/workshop-workflows'
-                && $body === [
-                    'roadmap_topic'    => 'Test Roadmap',
-                    'student_location' => 'Beirut, Lebanon',
-                ];
+                && $request->data() === ['roadmap_topic' => 'Test Roadmap'];
         });
 
         $this->assertDatabaseHas('workshop_ai_workflows', [
@@ -109,10 +104,10 @@ class WorkshopWorkflowTest extends TestCase
     }
 
     /**
-     * Absent, not null. Her model allows the key to be missing; a null would
-     * claim the student has no location rather than that we were not told.
+     * And a client that sends one anyway does not get it honoured. The field
+     * is gone from the request rules, so it never reaches her.
      */
-    public function test_no_location_means_the_key_is_left_out(): void
+    public function test_a_location_sent_by_a_client_is_ignored(): void
     {
         ['version' => $version] = $this->makeRoadmap(['Basics']);
 
@@ -124,7 +119,9 @@ class WorkshopWorkflowTest extends TestCase
         ]);
 
         $this->actingAs($this->makeManager(), 'sanctum')
-            ->postJson("/api/roadmap-versions/{$version->id}/workshop-runs")
+            ->postJson("/api/roadmap-versions/{$version->id}/workshop-runs", [
+                'student_location' => 'Beirut, Lebanon',
+            ])
             ->assertCreated();
 
         Http::assertSent(fn ($request) => $request->data() === ['roadmap_topic' => 'Test Roadmap']);
@@ -446,6 +443,68 @@ class WorkshopWorkflowTest extends TestCase
             ->assertForbidden();
 
         Http::assertNothingSent();
+    }
+
+    /**
+     * The half of the arrangement the manager is freed from.
+     *
+     * They approve everything worth approving, from anywhere; For You is what
+     * narrows it, per student, against their own country - and shows an online
+     * one to all of them because it is nobody's country and everybody's.
+     */
+    public function test_for_you_narrows_by_the_students_own_country(): void
+    {
+        ['version' => $version] = $this->makeRoadmap(['Basics']);
+
+        $near = Workshop::create([
+            'roadmap_version_id' => $version->id,
+            'title'              => 'Beirut JS',
+            'scheduled_at'       => now()->addMonth(),
+            'location'           => 'Beirut, Lebanon',
+            'country'            => 'Lebanon',
+            'url'                => 'https://beirutjs.example',
+        ]);
+
+        $far = Workshop::create([
+            'roadmap_version_id' => $version->id,
+            'title'              => 'Amsterdam React',
+            'scheduled_at'       => now()->addMonth(),
+            'location'           => 'Amsterdam, Netherlands',
+            'country'            => 'Netherlands',
+            'url'                => 'https://reactsummit.example',
+        ]);
+
+        $online = Workshop::create([
+            'roadmap_version_id' => $version->id,
+            'title'              => 'Anywhere Online',
+            'scheduled_at'       => now()->addMonth(),
+            'location'           => 'Online',
+            'country'            => null,
+            'url'                => 'https://online.example',
+        ]);
+
+        $student = $this->makeStudent(['location' => 'Beirut, Lebanon']);
+
+        $forYou = collect($this->actingAs($student, 'sanctum')
+            ->getJson('/api/workshops/recommended')
+            ->assertOk()
+            ->json('workshops'))
+            ->pluck('title');
+
+        $this->assertContains('Beirut JS', $forYou);
+        $this->assertContains('Anywhere Online', $forYou);
+        $this->assertNotContains('Amsterdam React', $forYou);
+
+        // All Upcoming still carries everything the manager approved - the
+        // filtering is a view, not a deletion.
+        $all = collect($this->actingAs($student, 'sanctum')
+            ->getJson('/api/workshops')
+            ->assertOk()
+            ->json('workshops'))
+            ->pluck('title');
+
+        $this->assertCount(3, $all);
+        $this->assertContains('Amsterdam React', $all);
     }
 
     /** A committed workshop reaches the student page with its new fields. */
