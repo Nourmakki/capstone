@@ -40,7 +40,15 @@ return [
             'connection' => env('DB_QUEUE_CONNECTION'),
             'table' => env('DB_QUEUE_TABLE', 'jobs'),
             'queue' => env('DB_QUEUE', 'default'),
-            'retry_after' => (int) env('DB_QUEUE_RETRY_AFTER', 90),
+            /*
+             * Longer than the longest job, or the queue hands a job that is
+             * still running to a second worker and it is done twice. The
+             * ceiling here is AssessSubmission at 660s - it waits on the AI
+             * to grade a project - so 90 was short enough to double-grade a
+             * submission, and the 210 that covers the reindex would still
+             * have been.
+             */
+            'retry_after' => (int) env('DB_QUEUE_RETRY_AFTER', 720),
             'after_commit' => false,
         ],
 

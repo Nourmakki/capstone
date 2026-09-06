@@ -2,6 +2,7 @@
 
 namespace App\Jobs;
 
+use Illuminate\Contracts\Queue\ShouldBeUnique;
 use Illuminate\Contracts\Queue\ShouldQueue;
 use Illuminate\Foundation\Queue\Queueable;
 use Illuminate\Support\Facades\Http;
@@ -24,7 +25,7 @@ use Illuminate\Support\Facades\Log;
  * problem, not a leak. That is why it is logged and swallowed rather than
  * retried into a queue full of failures.
  */
-class RebuildAssistantIndex implements ShouldQueue
+class RebuildAssistantIndex implements ShouldBeUnique, ShouldQueue
 {
     use Queueable;
 

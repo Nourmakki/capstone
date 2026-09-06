@@ -130,10 +130,18 @@ class AssistantController extends Controller
             }
         }
 
+        // Counted against this version's rail, not against everything the
+        // student has ever finished. Two things otherwise push the first
+        // number above the second: a choice they picked inside a module is a
+        // completion but not a step, and a module completed in an older
+        // version may not be in this one at all. Either way the assistant
+        // would tell somebody they had done six of five.
+        $railNodeIds = $nodes->pluck('node_id')->all();
+
         return [
             'title'             => $version->roadmap->title ?? 'a roadmap',
-            'completed_modules' => count($completed),
-            'total_modules'     => $nodes->count(),
+            'completed_modules' => count(array_intersect($completed, $railNodeIds)),
+            'total_modules'     => count($railNodeIds),
             'current_module'    => $current,
         ];
     }
