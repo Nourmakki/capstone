@@ -1,9 +1,10 @@
 import React, { useCallback, useEffect, useState } from "react";
 import { useNavigate, useParams } from "react-router-dom";
 import api from "../api";
+import ProjectBrief from "../components/ProjectBrief";
 import {
     ArrowLeft, GitBranch, Trophy, Code2, CheckCircle2,
-    UserRound, Clock3, AlertCircle, Brain,
+    UserRound, Clock3, AlertCircle, Brain, ClipboardList,
 } from "lucide-react";
 
 // PHP's own upload_max_filesize caps this well below Laravel's validation
@@ -164,7 +165,6 @@ function ProjectSubmissionPage() {
                             {project.node_title}
                         </div>
                         <h1 className="text-3xl lg:text-5xl font-black">{project.title}</h1>
-                        <p className="mt-5 text-lg text-gray-400 max-w-3xl">{project.description}</p>
                     </div>
 
                     <div className="rounded-3xl border border-[#0097a7]/20 bg-[#0097a7]/10 p-6 min-w-[240px]">
@@ -179,7 +179,18 @@ function ProjectSubmissionPage() {
 
             <main className="relative z-10 px-8 lg:px-20 py-10">
                 <div className="grid lg:grid-cols-[1fr_360px] gap-8">
-                    <div>
+                    <div className="space-y-8">
+                        {/* What to build. Read before anything is typed into
+                            the form below, so it comes first. */}
+                        <div className="rounded-3xl border border-white/10 bg-white/[0.03] p-8">
+                            <div className="flex items-center gap-3 mb-6">
+                                <ClipboardList size={22} className="text-[#0097a7]" />
+                                <h2 className="text-2xl font-bold">The brief</h2>
+                            </div>
+
+                            <ProjectBrief text={project.description} />
+                        </div>
+
                         <div className="rounded-3xl border border-white/10 bg-white/[0.03] p-8">
                             <div className="flex items-center gap-3 mb-6">
                                 <Code2 size={22} />

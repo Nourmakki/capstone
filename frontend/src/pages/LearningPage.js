@@ -1,6 +1,7 @@
 import { useEffect, useState } from "react";
 import { useNavigate, useParams } from "react-router-dom";
 import api from "../api";
+import ProjectBrief from "../components/ProjectBrief";
 import {
     ArrowLeft, PlayCircle, CheckCircle2, Lock,
     BookOpen, Code2, FileText, GitBranch,
@@ -310,7 +311,11 @@ function LearningPage() {
                                         <div key={project.id} className="rounded-3xl border border-white/10 bg-white/[0.03] p-8">
                                             <h2 className="text-3xl font-bold mb-2">{project.title}</h2>
                                             <p className="text-[#00b0c2] mb-4 capitalize">{project.difficulty}</p>
-                                            <p className="text-gray-400 mb-6">{project.description}</p>
+
+                                            {/* Sections, not one paragraph -
+                                                the brief is written with
+                                                headings and bullets. */}
+                                            <ProjectBrief text={project.description} className="mb-6" />
                                             <button
                                                 onClick={() => navigate(`/project/${project.id}`)}
                                                 className="px-6 py-3 rounded-2xl bg-[#0097a7] text-black font-semibold"
