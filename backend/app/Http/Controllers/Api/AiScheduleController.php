@@ -85,6 +85,11 @@ class AiScheduleController extends Controller
             'last_run_summary' => $schedule->last_run_summary,
             'updated_by'       => $schedule->updatedBy->name ?? null,
 
+            // Which clock run_at is read against. On screen because it is
+            // the difference between a scan at seven and one at ten, and
+            // there is nothing in "07:00" that says which was meant.
+            'timezone'          => config('app.schedule_timezone'),
+
             // Whether the switch can be honoured at all. On is a setting;
             // this is whether anything exists to act on it.
             'scheduler_running' => $this->schedulerRunning(),

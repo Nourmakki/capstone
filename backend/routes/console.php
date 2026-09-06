@@ -66,8 +66,23 @@ Schedule::call(fn () => Cache::put('scheduler.last_tick', now()->toIso8601String
     ->name('scheduler-heartbeat')
     ->withoutOverlapping();
 
+/*
+| Read against the manager's own clock, not the app's.
+|
+| Timestamps are UTC and stay UTC. This is only about what the time on the
+| page means: somebody in Beirut asking for 07:00 was scheduling 07:00 UTC,
+| which is 10:00 to them, and nothing on the screen said which of the two it
+| meant. The scan then ran three hours after they expected it and looked like
+| it had ignored them.
+|
+| SCHEDULE_TIMEZONE sets it. Unset, it falls back to the app timezone, so an
+| installation that never thought about this behaves exactly as before - and
+| the page names the zone either way, so the answer is on screen rather than
+| in a config file.
+*/
 Schedule::command('ai-workflow:run')
     ->dailyAt($runAt)
+    ->timezone(config('app.schedule_timezone'))
     ->withoutOverlapping()
     ->skip(fn () => ! AiSchedule::current()->enabled)
     ->onSuccess(fn () => AiSchedule::current()->update([

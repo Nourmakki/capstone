@@ -83,7 +83,7 @@ function formatTime(value) {
  * another is a new type on every render, which remounts it - and remounting a
  * text input mid-sentence takes the caret with it.
  */
-function ScheduleTime({ value, saving, onSave }) {
+function ScheduleTime({ value, timezone, saving, onSave }) {
     const [draft, setDraft] = useState(value);
 
     // Follow the saved value. After a preset click or a save landing, the box
@@ -149,6 +149,12 @@ function ScheduleTime({ value, saving, onSave }) {
                     : changed
                     ? `Save to move it to ${formatTime(parsed)}.`
                     : `Set to ${formatTime(value)}.`}
+                {/* Which clock. Without it, 07:00 on a UTC install is a scan
+                    at ten to somebody in Beirut, and the page reads as though
+                    it had ignored them. */}
+                {!broken && timezone && (
+                    <span className="text-gray-600"> {timezone}</span>
+                )}
             </p>
         </div>
     );
@@ -591,7 +597,7 @@ function MaterialAiReview({ onChanged }) {
 
                             <p className="text-xs text-gray-500 mt-1">
                                 {schedule.enabled
-                                    ? `Every day at ${formatTime(schedule.run_at)}, all ${schedule.roadmaps_in_scope} published roadmaps go to the AI.`
+                                    ? `Every day at ${formatTime(schedule.run_at)}${schedule.timezone ? ` ${schedule.timezone}` : ""}, all ${schedule.roadmaps_in_scope} published roadmaps go to the AI.`
                                     : `Off. Turning it on sends all ${schedule.roadmaps_in_scope} published roadmaps to the AI each day.`}
                                 {schedule.last_run_at && (
                                     <> Last run {new Date(schedule.last_run_at).toLocaleString()} — {schedule.last_run_summary}</>
@@ -630,6 +636,7 @@ function MaterialAiReview({ onChanged }) {
                     <div className="flex flex-wrap items-center gap-4 shrink-0">
                         <ScheduleTime
                             value={schedule.run_at}
+                            timezone={schedule.timezone}
                             saving={savingSchedule}
                             onSave={(run_at) => saveSchedule({ run_at })}
                         />

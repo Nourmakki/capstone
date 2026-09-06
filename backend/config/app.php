@@ -69,6 +69,26 @@ return [
 
     /*
     |--------------------------------------------------------------------------
+    | Scheduler Timezone
+    |--------------------------------------------------------------------------
+    |
+    | The wall clock the daily scan's time is read against. Timestamps stay
+    | UTC, as they should - this is only about what "07:00" means to the
+    | person who typed it.
+    |
+    | Without it the two are the same, and a manager in Beirut asking for
+    | 07:00 got a scan at 10:00: the time was taken as UTC and fired three
+    | hours later by their clock, with nothing on the page saying so.
+    |
+    | Defaults to the app timezone, so nothing moves for an installation that
+    | has not set it.
+    |
+    */
+
+    'schedule_timezone' => env('SCHEDULE_TIMEZONE', env('APP_TIMEZONE', 'UTC')),
+
+    /*
+    |--------------------------------------------------------------------------
     | Application Locale Configuration
     |--------------------------------------------------------------------------
     |
