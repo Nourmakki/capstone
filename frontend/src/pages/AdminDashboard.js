@@ -3,11 +3,12 @@ import { useNavigate } from "react-router-dom";
 import api from "../api";
 import { useAuth } from "../context/AuthContext";
 import {
-    LayoutDashboard, Users, LogOut, Menu, X,
+    LayoutDashboard, Users, LogOut, Menu, X, ChartNoAxesColumnIncreasing,
 } from "lucide-react";
 
 import AdminOverview from "./admin/AdminOverview";
 import AdminProfessors from "./admin/AdminProfessors";
+import AdminStatistics from "./admin/AdminStatistics";
 
 function AdminDashboard() {
     const navigate = useNavigate();
@@ -44,6 +45,7 @@ function AdminDashboard() {
 
     const navItems = [
         { id: "overview", label: "Overview", icon: <LayoutDashboard size={20} /> },
+        { id: "statistics", label: "Statistics", icon: <ChartNoAxesColumnIncreasing size={20} /> },
         { id: "professors", label: "Professors", icon: <Users size={20} />, badge: stats.pendingProfessors },
     ];
 
@@ -147,6 +149,7 @@ function AdminDashboard() {
                 collapsed ? "lg:ml-24" : "lg:ml-72"
             }`}>
                 {activePage === "overview" && <AdminOverview stats={stats} onGo={setActivePage} />}
+                {activePage === "statistics" && <AdminStatistics />}
                 {activePage === "professors" && <AdminProfessors onChanged={loadStats} />}
             </main>
         </div>

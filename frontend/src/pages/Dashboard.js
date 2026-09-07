@@ -8,6 +8,7 @@ import {
     X,
     UserRound,
     CalendarDays,
+    ChartNoAxesColumnIncreasing,
 } from "lucide-react";
 import React, { useState } from "react";
 import { useNavigate } from "react-router-dom";
@@ -19,6 +20,7 @@ import TeamsPage from "./TeamsPage";
 import ContinueLearningPage from "./ContinueLearningPage";
 import ProfilePage from "./ProfilePage";
 import WorkshopsPage from "./WorkshopsPage";
+import StudentStatistics from "./StudentStatistics";
 
 function Dashboard() {
     const [activePage, setActivePage] = useState("dashboard");
@@ -144,6 +146,21 @@ function Dashboard() {
                         </button>
 
                         <button
+                            title="Statistics"
+                            onClick={() => go("statistics")}
+                            className={`w-full flex items-center ${
+                                collapsed ? "justify-center px-0" : "gap-3 px-4"
+                            } py-2.5 rounded-2xl transition ${
+                                activePage === "statistics"
+                                    ? "bg-[#0097a7]/10 border border-[#0097a7]/20 text-[#00b0c2]"
+                                    : "hover:bg-white/5 text-gray-300"
+                            }`}
+                        >
+                            <ChartNoAxesColumnIncreasing size={20} className="shrink-0" />
+                            {!collapsed && "Statistics"}
+                        </button>
+
+                        <button
                             title="My Learning"
                             onClick={() => go("learning")}
                             className={`w-full flex items-center ${
@@ -244,6 +261,7 @@ function Dashboard() {
                 }`}
             >
                 {activePage === "dashboard" && <StudentHomePage />}
+                {activePage === "statistics" && <StudentStatistics />}
                 {activePage === "learning" && <ContinueLearningPage />}
                 {activePage === "todo" && <TodoPage />}
                 {activePage === "teams" && <TeamsPage />}

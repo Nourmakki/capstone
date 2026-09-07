@@ -4,7 +4,7 @@ import api from "../api";
 import { useAuth } from "../context/AuthContext";
 import {
     Bot, ClipboardCheck, History, UserRound, LogOut, Menu, X, Map,
-    Sparkles, CalendarDays,
+    Sparkles, CalendarDays, ChartNoAxesColumnIncreasing,
 } from "lucide-react";
 
 import MaterialAiReview from "./material/MaterialAiReview";
@@ -14,6 +14,7 @@ import AdminRoadmaps from "./admin/AdminRoadmaps";
 import ProfilePage from "./ProfilePage";
 import MaterialLearningReview from "./material/MaterialLearningReview";
 import MaterialWorkshops from "./material/MaterialWorkshops";
+import MaterialStatistics from "./material/MaterialStatistics";
 
 function MaterialManagerDashboard() {
     const navigate = useNavigate();
@@ -61,6 +62,7 @@ function MaterialManagerDashboard() {
     };
 
     const navItems = [
+        { id: "statistics", label: "Statistics", icon: <ChartNoAxesColumnIncreasing size={20} /> },
         { id: "ai", label: "AI-detected trends", icon: <Bot size={20} />, badge: awaitingAi },
         // Roadmap shape comes from AI-detected trends; what fills each module
         // comes from here - including fixing what is already on it, which had
@@ -183,6 +185,7 @@ function MaterialManagerDashboard() {
                 collapsed ? "lg:ml-24" : "lg:ml-72"
             }`}>
                 {activePage === "ai" && <MaterialAiReview onChanged={loadStats} />}
+                {activePage === "statistics" && <MaterialStatistics />}
                 {activePage === "learning" && <MaterialLearningReview onChanged={loadStats} />}
                 {activePage === "queue" && <MaterialQueue onChanged={loadStats} />}
                 {activePage === "roadmaps" && <AdminRoadmaps onChanged={loadStats} />}
