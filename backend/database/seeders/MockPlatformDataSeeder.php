@@ -548,12 +548,11 @@ class MockPlatformDataSeeder extends Seeder
 
     private function seedQuiz(VersionNode $versionNode, User $reviewer): void
     {
-        if (
-            $versionNode->quizzes()
-                ->approved()
-                ->whereHas('questions')
-                ->exists()
-        ) {
+        $approvedQuizzes = $versionNode->quizzes()->approved()->get();
+
+        // AI-generated material remains the source of truth. Only quizzes
+        // previously created by this demo seeder are expanded or rewritten.
+        if ($approvedQuizzes->contains(fn (Quiz $quiz) => ! $this->isMockGenerated($quiz))) {
             return;
         }
 
@@ -611,6 +610,66 @@ class MockPlatformDataSeeder extends Seeder
                 ],
                 'answer' => 'Use clear structure, testing, and documentation',
             ],
+            [
+                'question' => "What is the best first step when solving a new {$title} problem?",
+                'options' => [
+                    'Clarify the requirements and expected result',
+                    'Start changing unrelated code immediately',
+                    'Ignore the intended users',
+                    'Choose tools before understanding the problem',
+                ],
+                'answer' => 'Clarify the requirements and expected result',
+            ],
+            [
+                'question' => "How should a learner validate an implementation involving {$title}?",
+                'options' => [
+                    'Test expected behavior and important edge cases',
+                    'Assume it works because it runs once',
+                    'Remove validation to reduce code size',
+                    'Check only the visual appearance',
+                ],
+                'answer' => 'Test expected behavior and important edge cases',
+            ],
+            [
+                'question' => "Which documentation is most useful for a {$title} project?",
+                'options' => [
+                    'Setup steps, usage instructions, and design decisions',
+                    'A title with no further explanation',
+                    'Only a list of file names',
+                    'Private notes that users cannot access',
+                ],
+                'answer' => 'Setup steps, usage instructions, and design decisions',
+            ],
+            [
+                'question' => "When an error occurs while working with {$title}, what should happen?",
+                'options' => [
+                    'Handle it clearly and provide useful feedback',
+                    'Hide every error without recording it',
+                    'Delete the affected feature',
+                    'Treat every error as a successful result',
+                ],
+                'answer' => 'Handle it clearly and provide useful feedback',
+            ],
+            [
+                'question' => "What makes a {$title} solution easier to improve later?",
+                'options' => [
+                    'Modular structure and clear responsibilities',
+                    'Duplicating the same logic everywhere',
+                    'Using unexplained shortcuts',
+                    'Combining every feature into one unit',
+                ],
+                'answer' => 'Modular structure and clear responsibilities',
+            ],
+            [
+                'question' => "What is the strongest evidence that {$title} has been understood?",
+                'options' => [
+                    'A working project whose decisions can be explained',
+                    'Recognizing the topic name',
+                    'Watching a video without practicing',
+                    'Copying an answer without reviewing it',
+                ],
+                'answer' => 'A working project whose decisions can be explained',
+            ],
         ];
 
         foreach ($questions as $question) {
@@ -627,11 +686,19 @@ class MockPlatformDataSeeder extends Seeder
                 ],
             );
         }
+
+        // The mock contract is exactly ten questions. Removing only questions
+        // belonging to this mock quiz cannot affect genuine AI material.
+        $quiz->questions()
+            ->whereNotIn('question', collect($questions)->pluck('question'))
+            ->delete();
     }
 
     private function seedProject(VersionNode $versionNode, User $reviewer): void
     {
-        if ($versionNode->projects()->approved()->exists()) {
+        $approvedProjects = $versionNode->projects()->approved()->get();
+
+        if ($approvedProjects->contains(fn (Project $project) => ! $this->isMockGenerated($project))) {
             return;
         }
 
@@ -643,21 +710,55 @@ class MockPlatformDataSeeder extends Seeder
                 'title' => 'Build a Practical '.$title.' Project',
             ],
             [
-                'description' => "Create a small but complete project that demonstrates {$title}.\n\n"
-                    ."Tasks\n"
-                    ."- Define a clear use case and expected outcome.\n"
-                    ."- Implement the core concepts introduced in the tutorial.\n"
-                    ."- Test the important behavior and handle common errors.\n"
-                    ."- Document how to run the project and explain the main decisions.\n\n"
-                    ."Deliverables\n"
-                    ."- Source code or a public repository link.\n"
-                    ."- A short README with setup and usage instructions.\n"
-                    .'- Evidence that the main requirements work.',
+                'description' => $this->projectDescription($title),
                 'difficulty' => $versionNode->node->difficulty,
                 'github_url' => null,
                 ...$this->approvedContentFields($reviewer, $versionNode),
             ],
         );
+    }
+
+    private function projectDescription(string $title): string
+    {
+        return "Apply your knowledge of {$title} to build a focused, working application. "
+            ."The project should demonstrate the topic's core concepts through a realistic use case and a clear implementation.\n\n"
+            .'You are building this project as portfolio-quality evidence of your practical ability. '
+            ."It must be understandable, testable, and complete enough for another developer to run and review.\n\n"
+            ."What you will learn\n"
+            ."Reinforce the main {$title} concepts, translate requirements into an implementation, test important behavior, and communicate technical decisions.\n\n"
+            ."Tasks\n"
+            ."- Define the problem, intended users, and expected outcome.\n"
+            ."- Design a clear structure before implementing the main features.\n"
+            ."- Apply the core {$title} concepts introduced in the learning material.\n"
+            ."- Validate inputs and handle common failure cases clearly.\n"
+            ."- Test the main behavior and at least two important edge cases.\n"
+            ."- Keep the implementation readable and avoid duplicated logic.\n"
+            ."- Document the setup, usage, and important design decisions.\n\n"
+            ."Requirements\n"
+            ."- A working implementation of the main use case\n"
+            ."- Clear and maintainable project structure\n"
+            ."- Appropriate validation and error handling\n"
+            ."- Evidence of testing\n"
+            ."- Setup and usage documentation\n\n"
+            ."Constraints\n"
+            ."- Use the concepts and technologies covered by this roadmap node.\n"
+            ."- Do not submit copied code that you cannot explain.\n"
+            ."- Do not include credentials, API keys, or private information.\n\n"
+            ."Deliverables\n"
+            ."- A public repository link or a ZIP file containing the source code.\n"
+            ."- A README with installation and execution instructions.\n"
+            ."- Screenshots, sample output, or tests proving the main requirements work.\n\n"
+            ."Done when\n"
+            ."- The main use case works from start to finish.\n"
+            ."- The required {$title} concepts are clearly demonstrated.\n"
+            ."- Invalid or unexpected input is handled without breaking the application.\n"
+            ."- Another developer can run the project by following the README.\n"
+            .'- The submitted evidence shows that the implementation was tested.';
+    }
+
+    private function isMockGenerated(mixed $model): bool
+    {
+        return data_get($model->ai_metadata, 'source') === self::SEED_SOURCE;
     }
 
     private function seedResources(VersionNode $versionNode, User $reviewer): void
@@ -806,148 +907,307 @@ class MockPlatformDataSeeder extends Seeder
     private function seedStudentActivity(Collection $students, Professor $professor): void
     {
         $studyPlans = [
-            'demo.lina@capstone.test' => ['roadmap' => 'Generative AI Engineering', 'version' => '3'],
-            'demo.omar@capstone.test' => ['roadmap' => 'Frontend Development'],
-            'demo.rana@capstone.test' => ['roadmap' => 'iOS Development'],
-            'nourmakki@gmail.com' => ['roadmap' => 'Generative AI Engineering', 'version' => '3'],
-            'fatimazoghaib@gmail.com' => ['roadmap' => 'Frontend Development'],
-            'nourshahine@gmail.com' => ['roadmap' => 'Offensive Security'],
+            'demo.lina@capstone.test' => [
+                ['roadmap' => 'Generative AI Engineering', 'version' => '3', 'completed' => 9, 'start_days_ago' => 29],
+                ['roadmap' => 'Frontend Development', 'completed' => 4, 'start_days_ago' => 20],
+                ['roadmap' => 'Machine Learning Engineering', 'completed' => 3, 'start_days_ago' => 12],
+            ],
+            'demo.omar@capstone.test' => [
+                ['roadmap' => 'Frontend Development', 'completed' => 7, 'start_days_ago' => 28],
+                ['roadmap' => 'Backend Development', 'completed' => 4, 'start_days_ago' => 19],
+                ['roadmap' => 'Full-Stack Development', 'completed' => 3, 'start_days_ago' => 11],
+            ],
+            'demo.rana@capstone.test' => [
+                ['roadmap' => 'iOS Development', 'completed' => 6, 'start_days_ago' => 27],
+                ['roadmap' => 'Cross-Platform Mobile Development', 'completed' => 4, 'start_days_ago' => 18],
+                ['roadmap' => 'Flutter', 'completed' => 3, 'start_days_ago' => 10],
+            ],
+            'nourmakki@gmail.com' => [
+                ['roadmap' => 'Generative AI Engineering', 'version' => '3', 'completed' => 7, 'start_days_ago' => 29],
+                ['roadmap' => 'Machine Learning Engineering', 'completed' => 5, 'start_days_ago' => 21],
+                ['roadmap' => 'MLOps Engineering', 'completed' => 3, 'start_days_ago' => 12],
+            ],
+            'fatimazoghaib@gmail.com' => [
+                ['roadmap' => 'Frontend Development', 'completed' => 6, 'start_days_ago' => 28],
+                ['roadmap' => 'Backend Development', 'completed' => 3, 'start_days_ago' => 18],
+                ['roadmap' => 'Full-Stack Development', 'completed' => 2, 'start_days_ago' => 9],
+            ],
+            'nourshahine@gmail.com' => [
+                ['roadmap' => 'Offensive Security', 'completed' => 7, 'start_days_ago' => 29],
+                ['roadmap' => 'Defensive Security', 'completed' => 4, 'start_days_ago' => 19],
+                ['roadmap' => 'Cloud Security', 'completed' => 3, 'start_days_ago' => 11],
+            ],
         ];
 
-        foreach ($students as $index => $student) {
-            $plan = $studyPlans[$student->user->email] ?? null;
-            $version = $plan
-                ? $this->publishedVersion(
-                    $plan['roadmap'],
-                    $plan['version'] ?? null,
-                )
-                : null;
+        // Earlier versions of this seeder represented a quiz and a project in
+        // the same submission row. Real controllers create separate rows, so
+        // remove only those obsolete mock rows before adding realistic data.
+        Submission::whereIn('student_id', $students->pluck('id'))
+            ->whereNotNull('quiz_id')
+            ->whereNotNull('project_id')
+            ->get()
+            ->filter(fn (Submission $submission) => $this->isMockGenerated($submission))
+            ->each->delete();
 
-            if (! $version) {
-                continue;
-            }
-
-            $standardRailNodes = $version->versionNodes()
-                ->inRail()
-                ->whereNull('links_to_roadmap_id')
-                ->whereDoesntHave('choices')
-                ->with('node')
-                ->orderByRaw('COALESCE(stage, 999), id')
-                ->take(4)
-                ->get();
-
-            if ($standardRailNodes->isEmpty()) {
-                continue;
-            }
-
-            $completed = $standardRailNodes->take(min(2, $standardRailNodes->count()));
-            $current = $standardRailNodes->get($completed->count()) ?: $standardRailNodes->last();
-
-            $progress = UserRoadmapProgress::updateOrCreate(
-                [
-                    'student_id' => $student->id,
-                    'roadmap_version_id' => $version->id,
-                ],
-                [
-                    'current_node_id' => $current->node_id,
-                    'status' => 'in_progress',
-                ],
-            );
-
-            foreach ($completed as $versionNode) {
-                CompletedNode::updateOrCreate(
-                    [
-                        'user_roadmap_progress_id' => $progress->id,
-                        'node_id' => $versionNode->node_id,
-                    ],
-                    ['completed_at' => now()->subDays(8 - $index)],
-                );
-
-                $tutorial = $versionNode->tutorials()->approved()->first();
-
-                if ($tutorial) {
-                    TutorialCompletion::updateOrCreate(
-                        [
-                            'student_id' => $student->id,
-                            'tutorial_id' => $tutorial->id,
-                        ],
-                        ['completed_at' => now()->subDays(9 - $index)],
-                    );
-                }
-            }
-
-            $project = $completed->last()?->projects()->approved()->first();
-            $quiz = $completed->last()?->quizzes()->approved()->first();
-
-            if ($project) {
-                $this->seedSubmission(
+        foreach ($students as $studentIndex => $student) {
+            foreach ($studyPlans[$student->user->email] ?? [] as $planIndex => $plan) {
+                $this->seedStudyPlan(
                     $student,
-                    $project,
-                    $quiz,
-                    $index,
+                    $plan,
+                    $studentIndex,
+                    $planIndex,
                     $professor,
                 );
             }
-
-            $this->seedTodoTasks($student->user, $version->roadmap->title, $index);
         }
 
         $this->seedTeams($students);
     }
 
-    private function seedSubmission(
+    /** @param array<string, int|string> $plan */
+    private function seedStudyPlan(
+        Student $student,
+        array $plan,
+        int $studentIndex,
+        int $planIndex,
+        Professor $professor,
+    ): void {
+        $version = $this->publishedVersion(
+            $plan['roadmap'],
+            $plan['version'] ?? null,
+        );
+
+        if (! $version) {
+            return;
+        }
+
+        $railNodes = $version->versionNodes()
+            ->inRail()
+            ->with([
+                'node',
+                'tutorials',
+                'quizzes',
+                'projects',
+                'choices.node',
+                'choices.tutorials',
+                'choices.quizzes',
+                'choices.projects',
+            ])
+            ->orderByRaw('COALESCE(stage, 999), id')
+            ->get();
+
+        if ($railNodes->isEmpty()) {
+            return;
+        }
+
+        $completedCount = min((int) $plan['completed'], $railNodes->count());
+        $completedNodes = $railNodes->take($completedCount);
+        $current = $railNodes->get($completedCount) ?? $railNodes->last();
+
+        $progress = UserRoadmapProgress::updateOrCreate(
+            [
+                'student_id' => $student->id,
+                'roadmap_version_id' => $version->id,
+            ],
+            [
+                'current_node_id' => $current?->node_id,
+                'status' => $completedCount >= $railNodes->count()
+                    ? 'completed'
+                    : 'in_progress',
+            ],
+        );
+
+        $startDaysAgo = (int) $plan['start_days_ago'];
+        $interval = max(1, intdiv(max(1, $startDaysAgo - 2), max(1, $completedCount - 1)));
+
+        foreach ($completedNodes as $nodeIndex => $railNode) {
+            $daysAgo = max(1, $startDaysAgo - ($nodeIndex * $interval));
+            $completedAt = now()->subDays($daysAgo)->setTime(19, 0);
+
+            CompletedNode::updateOrCreate(
+                [
+                    'user_roadmap_progress_id' => $progress->id,
+                    'node_id' => $railNode->node_id,
+                ],
+                ['completed_at' => $completedAt],
+            );
+
+            // A choice rail is completed by finishing one of its child
+            // modules. That selected child carries the actual material.
+            $learningNode = $railNode->choices->first() ?? (
+                $railNode->links_to_roadmap_id === null ? $railNode : null
+            );
+
+            if (! $learningNode) {
+                continue;
+            }
+
+            if ($learningNode->id !== $railNode->id) {
+                CompletedNode::updateOrCreate(
+                    [
+                        'user_roadmap_progress_id' => $progress->id,
+                        'node_id' => $learningNode->node_id,
+                    ],
+                    ['completed_at' => $completedAt->copy()->subHours(2)],
+                );
+            }
+
+            $tutorial = $learningNode->tutorials->first(
+                fn (Tutorial $item) => $item->review_status === 'approved',
+            );
+            $quiz = $learningNode->quizzes->first(
+                fn (Quiz $item) => $item->review_status === 'approved',
+            );
+            $project = $learningNode->projects->first(
+                fn (Project $item) => $item->review_status === 'approved',
+            );
+            $activityIndex = ($studentIndex * 30) + ($planIndex * 10) + $nodeIndex;
+
+            if ($tutorial) {
+                TutorialCompletion::updateOrCreate(
+                    [
+                        'student_id' => $student->id,
+                        'tutorial_id' => $tutorial->id,
+                    ],
+                    ['completed_at' => $completedAt->copy()->subDays(2)],
+                );
+            }
+
+            if ($quiz) {
+                $this->seedQuizAttempt(
+                    $student,
+                    $quiz,
+                    $activityIndex,
+                    $completedAt->copy()->subDay(),
+                );
+            }
+
+            if ($project) {
+                $this->seedProjectSubmission(
+                    $student,
+                    $project,
+                    $activityIndex,
+                    $completedAt->copy()->subHours(4),
+                    $professor,
+                );
+            }
+        }
+
+        $this->seedTodoTasks(
+            $student->user,
+            $version->roadmap->title,
+            $studentIndex + $planIndex,
+        );
+    }
+
+    private function seedQuizAttempt(
+        Student $student,
+        Quiz $quiz,
+        int $activityIndex,
+        $submittedAt,
+    ): void {
+        $scores = [76, 82, 89, 94, 78, 86, 91, 97, 84, 88];
+        $score = $scores[$activityIndex % count($scores)];
+
+        $submission = Submission::updateOrCreate(
+            [
+                'quiz_id' => $quiz->id,
+                'student_id' => $student->id,
+                'project_id' => null,
+            ],
+            [
+                'content' => json_encode([
+                    'mock_attempt' => true,
+                    'answered_questions' => $quiz->questions()->count(),
+                ]),
+                'github_url' => null,
+                'file_path' => null,
+                'status' => 'submitted',
+                'score' => $score,
+                'ai_score' => null,
+                'ai_feedback' => null,
+                'ai_reviewed_at' => null,
+                'comments' => null,
+                'ai_metadata' => [
+                    'source' => self::SEED_SOURCE,
+                    'mock' => true,
+                ],
+            ],
+        );
+
+        $submission->forceFill([
+            'created_at' => $submittedAt,
+            'updated_at' => $submittedAt,
+        ])->saveQuietly();
+    }
+
+    private function seedProjectSubmission(
         Student $student,
         Project $project,
-        ?Quiz $quiz,
-        int $index,
+        int $activityIndex,
+        $submittedAt,
         Professor $professor,
     ): void {
         $states = [
             [
                 'status' => 'human_reviewed',
-                'score' => 92,
-                'ai_score' => 87,
+                'score' => 94,
+                'ai_score' => 89,
                 'ai_feedback' => 'Strong implementation and clear documentation. '
                     .'Add one more edge-case test for production readiness.',
                 'comments' => 'Professor confirmed the solution and improved the final score.',
+                'review' => 'reviewed',
             ],
             [
                 'status' => 'ai_reviewed',
                 'score' => null,
-                'ai_score' => 84,
+                'ai_score' => 86,
                 'ai_feedback' => 'The main requirements are satisfied. Error handling '
                     .'and README setup instructions could be more detailed.',
                 'comments' => null,
+                'review' => 'pending',
             ],
             [
-                'status' => 'submitted',
+                'status' => 'ai_reviewed',
                 'score' => null,
-                'ai_score' => null,
-                'ai_feedback' => null,
+                'ai_score' => 79,
+                'ai_feedback' => 'The solution works, but testing and explanation of '
+                    .'design decisions should be strengthened.',
                 'comments' => null,
+                'review' => null,
+            ],
+            [
+                'status' => 'human_reviewed',
+                'score' => 88,
+                'ai_score' => 83,
+                'ai_feedback' => 'Good coverage of the required features and a clear project structure.',
+                'comments' => null,
+                'review' => 'reviewed',
             ],
         ];
 
-        $state = $states[$index % count($states)];
+        $state = $states[$activityIndex % count($states)];
 
         $submission = Submission::updateOrCreate(
             [
                 'project_id' => $project->id,
                 'student_id' => $student->id,
+                'quiz_id' => null,
             ],
             [
-                'quiz_id' => $quiz?->id,
                 'content' => 'Completed the project requirements and documented the '
                     .'implementation, testing approach, and design decisions.',
                 'github_url' => 'https://github.com/cs-mastery-demo/'
                     .str($student->user->name)->slug()
-                    .'-project',
+                    .'-'.str($project->title)->slug(),
                 'file_path' => null,
                 'status' => $state['status'],
                 'score' => $state['score'],
                 'ai_score' => $state['ai_score'],
                 'ai_feedback' => $state['ai_feedback'],
-                'ai_reviewed_at' => $state['ai_score'] !== null ? now()->subDays(2) : null,
+                'ai_reviewed_at' => $state['ai_score'] !== null
+                    ? $submittedAt->copy()->addHours(2)
+                    : null,
                 'comments' => $state['comments'],
                 'ai_metadata' => [
                     'source' => self::SEED_SOURCE,
@@ -956,17 +1216,24 @@ class MockPlatformDataSeeder extends Seeder
             ],
         );
 
-        if ($state['status'] === 'human_reviewed') {
+        $submission->forceFill([
+            'created_at' => $submittedAt,
+            'updated_at' => $submittedAt,
+        ])->saveQuietly();
+
+        HumanReviewRequest::where('submission_id', $submission->id)->delete();
+
+        if ($state['review'] === 'reviewed') {
             HumanReviewRequest::updateOrCreate(
                 ['submission_id' => $submission->id],
                 [
                     'professor_id' => $professor->id,
                     'status' => 'reviewed',
                     'feedback' => 'Good work. The final score reflects the clear '
-                        .'implementation and the improvements made after feedback.',
+                    .'implementation and the improvements made after feedback.',
                 ],
             );
-        } elseif ($state['status'] === 'ai_reviewed') {
+        } elseif ($state['review'] === 'pending') {
             HumanReviewRequest::updateOrCreate(
                 ['submission_id' => $submission->id],
                 [

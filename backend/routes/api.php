@@ -25,6 +25,7 @@ use App\Http\Controllers\Api\MaterialAuthoringController;
 use App\Http\Controllers\Api\AiScheduleController;
 use App\Http\Controllers\Api\RoadmapBuilderController;
 use App\Http\Controllers\Api\SubmissionAssessmentController;
+use App\Http\Controllers\Api\DashboardStatisticsController;
 use Illuminate\Support\Facades\Route;
 
 /*
@@ -87,7 +88,7 @@ Route::middleware('auth:sanctum')->group(function () {
     Route::post('/projects/{project}/submit', [ProjectController::class, 'submit']);
     Route::post('/submissions/{submission}/request-review', [ProjectController::class, 'requestReview']);
     Route::get('/submissions/{submission}/download', [ProjectController::class, 'download']);
-    
+
     /*
     |----------------------------------------------------------------------
     | Progress
@@ -101,6 +102,10 @@ Route::middleware('auth:sanctum')->group(function () {
     // tell, and until now nothing recorded it at all.
     Route::post('/tutorials/{tutorial}/complete', [ProgressController::class, 'completeTutorial']);
     Route::delete('/tutorials/{tutorial}/complete', [ProgressController::class, 'uncompleteTutorial']);
+
+    Route::middleware('role:Student')->group(function () {
+        Route::get('/student/statistics', [DashboardStatisticsController::class, 'student']);
+    });
 
         // To-do tasks
     Route::get('/todos', [TodoController::class, 'index']);
@@ -125,7 +130,7 @@ Route::middleware('auth:sanctum')->group(function () {
     Route::get('/workshops', [WorkshopController::class, 'index']);
     Route::get('/workshops/recommended', [WorkshopController::class, 'recommended']);
 
-    /*
+        /*
     |----------------------------------------------------------------------
     | Admin only
     |----------------------------------------------------------------------
@@ -139,6 +144,7 @@ Route::middleware('auth:sanctum')->group(function () {
             Route::put('/approve-professor/{id}', [AdminController::class, 'approveProfessor']);
             Route::delete('/reject-professor/{id}', [AdminController::class, 'rejectProfessor']);
             Route::get('/dashboard-stats', [AdminController::class, 'dashboardStats']);
+            Route::get('/statistics', [DashboardStatisticsController::class, 'admin']);
         });
     });
 
@@ -169,7 +175,7 @@ Route::middleware('auth:sanctum')->group(function () {
 
         Route::put('/projects/{project}', [MaterialAuthoringController::class, 'updateProject']);
         Route::delete('/projects/{project}', [MaterialAuthoringController::class, 'destroyProject']);
-        
+
         // No 'update'. A tutorial is a video somebody else made - the only
         // things a manager can change about it are which video it is and
         // whether it stays, and both of those are covered by regenerate and
@@ -195,7 +201,7 @@ Route::middleware('auth:sanctum')->group(function () {
     | Admin and Professor
     |----------------------------------------------------------------------
     */
-        /*
+    /*
     |----------------------------------------------------------------------
     | Professors
     |----------------------------------------------------------------------
@@ -262,6 +268,7 @@ Route::middleware('auth:sanctum')->group(function () {
         // Material that reached the database and still needs a decision.
         Route::prefix('material')->group(function () {
             Route::get('/stats', [MaterialController::class, 'stats']);
+            Route::get('/statistics', [DashboardStatisticsController::class, 'material']);
             Route::get('/pending', [MaterialController::class, 'pending']);
             Route::get('/history', [MaterialController::class, 'history']);
 
